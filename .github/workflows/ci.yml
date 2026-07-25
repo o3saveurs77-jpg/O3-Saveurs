@@ -1,0 +1,50 @@
+name: CI
+
+# Rien ne garantissait qu'un commit compile : `tsc --noEmit` n'était jamais
+# lancé, et `next build` ne vérifie que les fichiers atteints par le graphe de
+# modules. Ces quelques lignes auraient attrapé la dérive de documentation et
+# les incohérences de types relevées à l'audit.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` et non `npm install` : le lockfile est la référence, sinon un
+      # rebuild peut installer une beta plus récente de next-auth et casser
+      # l'authentification sans qu'une ligne de code ait changé.
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Générer le client Prisma
+        run: npx prisma generate
+
+      - name: Vérifier les types
+        run: npm run typecheck
+
+      - name: Linter
+        run: npm run lint
+
+      - name: Tests
+        run: npm test
+
+      - name: Build
+        run: npx next build
+        env:
+          # Valeurs factices : le build ne se connecte pas à la base, mais
+          # Prisma exige que les variables soient définies.
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db
+          DIRECT_URL: postgresql://user:pass@localhost:5432/db
+          AUTH_SECRET: ci-secret-non-utilise-en-production-0000

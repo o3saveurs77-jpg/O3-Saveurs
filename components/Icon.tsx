@@ -1,6 +1,12 @@
-/* Jeu d'icônes (paths portés de ui.jsx) */
+/* Jeu d'icônes.
+ *
+ * `as const` puis `IconName = keyof typeof ICONS` : le nom était auparavant un
+ * `string` libre et le composant retombait sur une chaîne vide, donc une faute
+ * de frappe produisait un `<svg>` vide sans la moindre erreur. Le compilateur
+ * les attrape désormais.
+ */
 
-export const ICONS: Record<string, string> = {
+export const ICONS = {
   cart: "M3 4h2l2.4 12.3a1 1 0 0 0 1 .8h9.7a1 1 0 0 0 1-.8L21.5 8H7M9 21a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm9 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z",
   plus: "M12 5v14M5 12h14",
   minus: "M5 12h14",
@@ -34,7 +40,21 @@ export const ICONS: Record<string, string> = {
   image: "M4 5h16v14H4zM4 15l4-4 4 4 3-3 5 5M9 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z",
   upload: "M12 16V4M8 8l4-4 4 4M5 20h14",
   lock: "M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3",
-};
+  box: "M3 8l9-4 9 4v8l-9 4-9-4V8Zm0 0 9 4 9-4M12 12v8",
+  tag: "M4 12V5a1 1 0 0 1 1-1h7l8 8-8 8-8-8Zm4-4h.01",
+  chat: "M4 5h16v10H9l-5 4V5Z",
+  mail: "M3 6h18v12H3zM3 7l9 6 9-6",
+  scooter: "M6 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm12 0a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM8.5 15.5h7L14 7h-3M14 7h3l1.5 6",
+  settings:
+    "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-3-1.8-.6.6-1.8-1.4-1.4-1.8.6L15 7l-1.9-.6L12 8l-1.1-1.6L9 7l-.6 1.8-1.8-.6L5.2 9.6l.6 1.8L4 12l1.8.6-.6 1.8 1.4 1.4 1.8-.6L9 17l1.9.6L12 16l1.1 1.6L15 17l.6-1.8 1.8.6 1.4-1.4-.6-1.8L20 12Z",
+  warning: "M12 4l9 16H3l9-16Zm0 6v4m0 3h.01",
+  print: "M7 8V4h10v4M7 16H5V9h14v7h-2M8 13h8v7H8v-7Z",
+  download: "M12 4v12M8 12l4 4 4-4M5 20h14",
+  refresh: "M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4",
+  megaphone: "M4 10v4l10 4V6L4 10Zm10 0h3a3 3 0 0 1 0 6h-3M7 15v4",
+} as const;
+
+export type IconName = keyof typeof ICONS;
 
 export function Icon({
   name,
@@ -43,13 +63,13 @@ export function Icon({
   strokeWidth = 1.8,
   fill = false,
 }: {
-  name: string;
+  name: IconName;
   size?: number;
   className?: string;
   strokeWidth?: number;
   fill?: boolean;
 }) {
-  const paths = (ICONS[name] || "").split("|");
+  const paths = ICONS[name].split("|");
   return (
     <svg
       width={size}

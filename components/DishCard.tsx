@@ -1,32 +1,38 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import type { Dish } from "@/lib/menu";
-import { fmtPrice } from "@/lib/menu";
+import { fmtPrice, isOrderable } from "@/lib/menu";
+import { ALLERGEN_LABEL } from "@/lib/types";
 import { Icon } from "./Icon";
 import { DishBadge } from "./DishBadge";
-import { useCart } from "./cart/CartContext";
+import { useCartActions } from "./cart/CartContext";
 import { useAuth } from "./providers/AuthContext";
 import { DishModal } from "./DishModal";
 
-export function DishCard({ dish }: { dish: Dish }) {
-  const { add } = useCart();
+/** Seuil d'affichage de « Plus que N » quand le plat n'a pas son propre seuil. */
+const LOW_STOCK_DEFAULT = 5;
+
+export function DishCard({ dish, priority = false }: { dish: Dish; priority?: boolean }) {
+  const { add } = useCartActions();
   const { user, toggleFavorite } = useAuth();
   const [modal, setModal] = useState(false);
   const isFav = !!user?.favorites.includes(dish.id);
 
-  const soon = dish.badge === "Bientôt" || dish.price == null;
-  const epuise = dish.available === false;
+  const soon = dish.badge === "Bientôt" || dish.priceCents === null;
+  const epuise = !soon && !isOrderable(dish);
   const blocked = soon || epuise;
   const needsChoice = dish.options.length > 0 || (dish.formules?.length ?? 0) > 0;
 
+  const lowStockThreshold = dish.stockAlert ?? LOW_STOCK_DEFAULT;
+  const lowStock =
+    !blocked && dish.stock !== null && dish.stock > 0 && dish.stock <= lowStockThreshold;
+
   const onAdd = () => {
     if (blocked) return;
-    if (needsChoice) {
-      setModal(true);
-    } else {
-      add(dish);
-    }
+    if (needsChoice) setModal(true);
+    else add(dish);
   };
 
   return (
@@ -35,14 +41,15 @@ export function DishCard({ dish }: { dish: Dish }) {
         {/* visuel */}
         <div className="relative aspect-[4/3] overflow-hidden">
           {dish.photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={dish.photo}
               alt={dish.name}
-              className={`h-full w-full object-cover transition duration-500 group-hover:scale-105 ${
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+              priority={priority}
+              className={`object-cover transition duration-500 group-hover:scale-105 ${
                 epuise ? "grayscale" : ""
               }`}
-              loading="lazy"
             />
           ) : (
             <div className="ph h-full w-full">
@@ -67,11 +74,15 @@ export function DishCard({ dish }: { dish: Dish }) {
           {/* favori (connecté uniquement) */}
           {user && (
             <button
+              type="button"
               onClick={() => toggleFavorite(dish.id)}
               className={`absolute right-2.5 top-2.5 grid h-9 w-9 place-items-center rounded-full bg-white/85 backdrop-blur transition hover:scale-105 ${
                 isFav ? "text-brick" : "text-ink-2"
               }`}
-              aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+              aria-pressed={isFav}
+              aria-label={
+                isFav ? `Retirer ${dish.name} des favoris` : `Ajouter ${dish.name} aux favoris`
+              }
             >
               <Icon name="heart" size={18} fill={isFav} />
             </button>
@@ -96,12 +107,26 @@ export function DishCard({ dish }: { dish: Dish }) {
             </div>
           )}
 
+          {/* Allergènes — information obligatoire avant la conclusion de l'achat
+              en vente à distance (règlement UE 1169/2011, art. 14). */}
+          {dish.allergens.length > 0 && (
+            <p className="mt-2 text-[11px] leading-snug text-ink-2">
+              <span className="font-bold">Allergènes :</span>{" "}
+              {dish.allergens.map((a) => ALLERGEN_LABEL[a]).join(", ")}
+            </p>
+          )}
+
+          {lowStock && (
+            <p className="mt-2 text-xs font-bold text-brick">Plus que {dish.stock}</p>
+          )}
+
           {/* prix + ajout */}
           <div className="mt-4 flex items-center justify-between gap-2 pt-1">
             <span className="text-lg font-extrabold text-brick">
-              {dish.price != null ? fmtPrice(dish.price) : "Bientôt"}
+              {dish.priceCents !== null ? fmtPrice(dish.priceCents) : "Bientôt"}
             </span>
             <button
+              type="button"
               onClick={onAdd}
               disabled={blocked}
               className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition ${

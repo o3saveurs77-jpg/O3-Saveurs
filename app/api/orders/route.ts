@@ -1,69 +1,95 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { rowToOrder } from "@/lib/serialize";
-import { makeRef } from "@/lib/ref";
-import { sendOrderConfirmation } from "@/lib/email";
-import type { CartLine, OrderCustomer, OrderMode } from "@/lib/types";
+import { rowToOrderWithDriver } from "@/lib/serialize";
+import { optionalUser } from "@/lib/guard";
+import { ORDER_STATUSES } from "@/lib/types";
+import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/orders  (?email=… pour filtrer un client)
+const PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 200;
+
+/**
+ * GET /api/orders — liste des commandes, **cloisonnée par session**.
+ *
+ * Cette route renvoyait auparavant toute la table sans authentification : nom,
+ * email, téléphone et adresse de chaque client s'obtenaient par un simple
+ * `curl`. Le paramètre `?email=` était un filtre d'affichage, pas un contrôle.
+ *
+ * Désormais : un ADMIN voit tout, un client connecté ne voit que ses propres
+ * commandes (rattachées par `userId` **ou** par l'email de son compte), et un
+ * visiteur anonyme n'obtient rien.
+ */
 export async function GET(req: Request) {
-  const email = new URL(req.url).searchParams.get("email");
-  const rows = await prisma.order.findMany({
-    where: email ? { customerEmail: email } : undefined,
-    orderBy: { createdAt: "desc" },
-  });
-  return NextResponse.json(rows.map(rowToOrder));
-}
-
-interface CreateBody {
-  lines: CartLine[];
-  mode: OrderMode;
-  zoneIdx: number | null;
-  slot: string;
-  customer: OrderCustomer;
-  subtotal: number;
-  fee: number;
-  paymentMethod: string;
-}
-
-// POST /api/orders — créer une commande sans paiement en ligne
-// (« Espèces sur place »). Les paiements carte passent par /api/checkout.
-export async function POST(req: Request) {
-  const b = (await req.json()) as CreateBody;
-  if (!b.lines?.length || !b.customer?.name) {
-    return NextResponse.json({ error: "Panier ou client manquant" }, { status: 400 });
+  const user = await optionalUser();
+  if (!user) {
+    return NextResponse.json({ error: "Connexion requise" }, { status: 401 });
   }
-  const session = await auth();
-  const total = b.subtotal + b.fee;
 
-  const row = await prisma.order.create({
-    data: {
-      ref: makeRef(),
-      userEmail: session?.user?.email ?? null,
-      mode: b.mode,
-      status: "confirmee",
-      zoneIdx: b.zoneIdx,
-      slot: b.slot,
-      customerName: b.customer.name,
-      customerEmail: b.customer.email,
-      customerPhone: b.customer.phone,
-      address: b.customer.address ?? null,
-      city: b.customer.city ?? null,
-      zip: b.customer.zip ?? null,
-      subtotal: b.subtotal,
-      fee: b.fee,
-      total,
-      paid: false, // réglé à la livraison / au retrait
-      paymentMethod: b.paymentMethod,
-      lines: JSON.stringify(b.lines),
-    },
+  const url = new URL(req.url);
+  const isAdmin = user.role === "ADMIN";
+
+  const take = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, Number(url.searchParams.get("take")) || PAGE_SIZE),
+  );
+  const skip = Math.max(0, Number(url.searchParams.get("skip")) || 0);
+
+  const where: Prisma.OrderWhereInput = isAdmin
+    ? {}
+    : {
+        // Rattachement par compte en priorité, par email en secours pour les
+        // commandes passées en invité avant la création du compte.
+        OR: [{ userId: await userIdOf(user.email) }, { customerEmail: user.email.toLowerCase() }],
+      };
+
+  // Les filtres du back-office ne sont ouverts qu'à l'administration : pour un
+  // client, tout paramètre supplémentaire est ignoré, jamais élargissant.
+  if (isAdmin) {
+    const status = url.searchParams.get("status");
+    if (status && (ORDER_STATUSES as readonly string[]).includes(status)) {
+      where.status = status;
+    }
+
+    const paid = url.searchParams.get("paid");
+    if (paid === "true" || paid === "false") where.paid = paid === "true";
+
+    const emailFilter = url.searchParams.get("email");
+    if (emailFilter) where.customerEmail = emailFilter.toLowerCase();
+
+    const runId = url.searchParams.get("runId");
+    if (runId) where.deliveryRunId = runId;
+
+    const since = url.searchParams.get("since");
+    if (since) {
+      const d = new Date(since);
+      if (!Number.isNaN(d.getTime())) where.createdAt = { gte: d };
+    }
+  }
+
+  const [rows, total] = await Promise.all([
+    prisma.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take,
+      skip,
+      include: { driver: { select: { name: true } } },
+    }),
+    prisma.order.count({ where }),
+  ]);
+
+  return NextResponse.json({
+    orders: rows.map(rowToOrderWithDriver),
+    total,
+    take,
+    skip,
   });
+}
 
-  // Email de confirmation client + notification restaurant (si Resend configuré).
-  await sendOrderConfirmation(row);
-
-  return NextResponse.json(rowToOrder(row), { status: 201 });
+async function userIdOf(email: string): Promise<string> {
+  const row = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  // Chaîne impossible à confondre avec un cuid : sans compte, aucun
+  // rattachement par identifiant ne doit correspondre.
+  return row?.id ?? "__aucun__";
 }

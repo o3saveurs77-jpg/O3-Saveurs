@@ -3,85 +3,140 @@
 Site de commande à domicile (livraison + à emporter) pour un restaurant de **cuisine du monde**
 (Afrique de l'Ouest · Maghreb · Asie) à Lognes.
 
-**Stack** : Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Prisma · SQLite
-(→ PostgreSQL en prod) · Recharts · Vitest.
+**Stack** : Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Prisma 6 ·
+**PostgreSQL (Neon)** · NextAuth v5 · Stripe Checkout · Resend · Vercel Blob · Recharts · Vitest.
 
-> 📋 Voir [`PROJECT-PLAN.md`](./PROJECT-PLAN.md) pour la liste exhaustive des fonctionnalités et leur statut.
+| Document | Contenu |
+| --- | --- |
+| [`CONTRIBUTING.md`](./CONTRIBUTING.md) | **À lire avant d'écrire du code** — conventions, montants en centimes, autorisation, validation |
+| [`ROADMAP.md`](./ROADMAP.md) | Lots fonctionnels 0 à 9, ordre d'exécution |
+| [`AUDIT.md`](./AUDIT.md) | Audit du 25/07/2026 — sécurité, logique métier, conformité |
+| [`DEPLOY.md`](./DEPLOY.md) | Mise en production pas à pas (Neon, Stripe, Resend, Blob, Vercel) |
 
 ---
 
-## 🚀 Démarrage
+## Démarrage
+
+Le projet tourne sur **PostgreSQL**, y compris en développement — le plus simple est une branche
+de développement Neon, gratuite. Il n'y a plus de base SQLite locale.
 
 ```bash
 npm install
-npm run db:migrate      # crée la base SQLite (prisma/dev.db)
-npm run db:seed         # remplit catalogue, zones, plats du jour, commandes & comptes démo
+
+# 1. Renseigner .env (copier .env.example) — au minimum :
+#    DATABASE_URL, DIRECT_URL, AUTH_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
+cp .env.example .env
+
+# 2. Créer le schéma
+npm run db:deploy       # applique les migrations (ou `db:migrate` en dev)
+
+# 3. Peupler le catalogue — idempotent, ne supprime jamais rien
+npm run db:seed
+
+# 4. Jeu de démonstration (commandes, livreurs, promotions) — DÉVELOPPEMENT SEULEMENT
+npm run db:seed:demo
+
 npm run dev             # http://localhost:3000
 ```
 
-> La connexion DB est dans `.env` (`DATABASE_URL="file:./dev.db"`). Pour les intégrations
-> externes (Auth0, Stripe, Resend), copier `.env.example` → `.env.local` et renseigner les clés.
+`AUTH_SECRET` se génère avec `openssl rand -base64 32`. `ADMIN_PASSWORD` doit faire **au moins
+12 caractères** : le seed refuse de s'exécuter sinon, car ce compte donne accès à l'intégralité du
+fichier clients et de la comptabilité.
 
 ### Scripts
 
 | Script | Rôle |
-|---|---|
+| --- | --- |
 | `npm run dev` | Serveur de développement |
-| `npm run build` / `start` | Build & lancement production |
-| `npm test` / `test:watch` | Tests Vitest |
-| `npm run db:seed` | (Re)peuple la base de démo |
-| `npm run db:studio` | Prisma Studio (explorateur de données) |
-| `npm run db:reset` | Réinitialise la base + re-seed |
+| `npm run build` / `start` | Build et lancement production |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | ESLint |
+| `npm test` / `test:watch` / `test:cov` | Tests Vitest |
+| `npm run db:migrate` | Crée et applique une migration (développement) |
+| `npm run db:deploy` | Applique les migrations existantes (production) |
+| `npm run db:seed` | Catalogue, zones, horaires, réglages, admin — **idempotent** |
+| `npm run db:seed:demo` | Jeu de démonstration ; `-- --purge` pour le retirer |
+| `npm run db:studio` | Prisma Studio |
+| `npm run db:reset` | Réinitialise la base (destructif, développement uniquement) |
 
-### Comptes de démo
-- **Client** : se connecter via `/compte` (email `awa.diallo@email.com`, ou n'importe quel email — le compte est créé à la volée).
-- **Admin** : back-office accessible sur `/admin`.
+> `db:push` a été retiré volontairement : il crée une dérive entre le schéma et les migrations.
+
+### Comptes
+
+- **Admin** : `ADMIN_EMAIL` / `ADMIN_PASSWORD` de `.env`, créés par `db:seed`. Back-office sur `/admin`.
+- **Client de démonstration** : `awa.diallo@email.com` / `demo1234`, créé par `db:seed:demo`.
+
+Il n'y a **pas** de création de compte à la volée : l'inscription passe par `/compte`.
 
 ---
 
-## 🗂️ Architecture
+## Architecture
 
 ```
 app/
   page.tsx                 Accueil (hero, zones, plat du jour, incontournables)
-  carte/                   La Carte (recherche, filtres, options, badges)
+  carte/                   La Carte (recherche, filtres, options, allergènes)
   commander/               Tunnel de commande
-  commande/[id]/           Confirmation + suivi temps réel
-  facture/[id]/            Facture imprimable (PDF navigateur)
-  compte/                  Espace client (commandes, factures, adresses, favoris, profil)
-  admin/                   Back-office (vue d'ensemble, commandes, plats, livraisons, clients, zones, facturation)
-  api/                     Route Handlers : dishes, orders, zones, auth
+  commande/[id]/           Confirmation et suivi (lecture seule)
+  facture/[id]/            Facture conforme (Server Component autorisé)
+  compte/                  Espace client (commandes, factures, adresses, favoris, réclamations)
+  admin/                   Back-office
+  mentions-legales/ cgv/ confidentialite/ allergenes/
+  api/                     Route Handlers
 components/
-  providers/               Contextes : Auth, Orders, Dishes (branchés sur l'API)
+  providers/               Contextes : Auth, Dishes, Orders
   cart/                    Panier (Context + localStorage + tiroir)
   admin/                   Écrans du back-office
 lib/
-  menu.ts                  Catalogue source (seed) + helpers
-  prisma.ts                Client Prisma (singleton)
-  serialize.ts             Mappage lignes DB ↔ types du domaine
-  analytics.ts             Agrégations du dashboard (testé)
-  zones.ts                 Matching ville → zone (testé)
+  money.ts                 Centimes, formatage, ventilation TVA
+  pricing.ts               Calcul serveur d'une commande (prix, zone, remise)
+  guard.ts                 Autorisation des routes API
+  validate.ts              Validation des entrées, échappement HTML
+  stock.ts                 Réservation et mouvements de stock
+  hours.ts                 Horaires et créneaux (pur, testé)
+  zones.ts                 Zone depuis code postal ou commune (pur, testé)
+  settings.ts              Réglages éditables depuis l'admin
+  email.ts                 Emails transactionnels (Resend), idempotents
+  serialize.ts             Mappage lignes Prisma ↔ types du domaine
+  ref.ts                   Références de commande, numérotation de facture
 prisma/
-  schema.prisma            Modèle de données
-  seed.ts                  Script de seed
-tests/                     Vitest (logique métier + composant)
+  schema.prisma            21 modèles
+  seed.ts                  Catalogue (idempotent)
+  seed-demo.ts             Démonstration (refuse la production)
+tests/                     Vitest
+_maquettes/                Maquettes pré-Next, hors build et hors dépôt
 ```
 
+### Deux règles qui structurent tout le code
+
+**1. Aucun montant ne vient du navigateur.** Le client envoie ce qu'il commande (`dishId`, `qty`,
+options, formule) et où il veut être livré. Le serveur relit les prix en base, déduit la zone du
+code postal, applique la promotion et calcule le total — voir [`lib/pricing.ts`](./lib/pricing.ts).
+Tous les montants sont des **entiers de centimes**.
+
+**2. Chaque route API vérifie son appelant.** Le middleware ne protège que les *pages* `/admin`.
+Les Route Handlers appellent `requireAdmin()` / `requireUser()` de [`lib/guard.ts`](./lib/guard.ts).
+
+Le détail est dans [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
 ### Flux de données
-Le catalogue, les commandes, les zones et les comptes sont **persistés en base** via les
-Route Handlers `/api/*`. Les contextes React (`DishesContext`, `OrdersContext`, `AuthContext`)
-chargent les données depuis l'API et écrivent les mutations (création de commande, changement de
-statut, CRUD plats, favoris…). Le panier reste côté client (localStorage).
+
+Catalogue, commandes, zones, promotions, stocks, comptes et réglages sont persistés en base et
+servis par `/api/*`. La base est la **seule source de vérité** : `lib/menu.ts` ne contient que les
+types applicatifs et le jeu de données de seed. Le panier reste côté client (`localStorage`) mais
+n'est jamais cru sur les prix.
 
 ---
 
-## 🔌 Passage en production (intégrations)
-Tout est structuré et branchable dès que les clés sont disponibles (voir `.env.example`) :
-- **PostgreSQL** : passer `provider = "postgresql"` dans `schema.prisma` + `DATABASE_URL` → `prisma migrate deploy`.
-- **Auth0** : remplacer la session cookie de `app/api/auth/*` + `AuthContext`.
-- **Stripe** : brancher le paiement réel dans le tunnel + webhook (commande créée dans `POST /api/orders`).
-- **Resend** : envoi email de confirmation + facture PDF (point `TODO` dans `POST /api/orders`).
+## État
+
+`npm run typecheck`, `npm test` et `npm run build` passent. Le projet n'a **pas encore été testé
+en runtime réel** : il attend les vraies clés Neon, Stripe, Resend et Vercel Blob.
+
+Avant toute mise en ligne commerciale, il reste à obtenir de la cliente ses informations légales
+(SIRET, forme juridique, numéro de TVA, régime de TVA réel à confirmer avec son comptable) et la
+saisie des allergènes plat par plat. Le détail est au §10 de [`AUDIT.md`](./AUDIT.md).
 
 ---
 
-*Magar Développement — M. Andrys MAGAR · SIRET 908 058 092 00028 · TVA non applicable, art. 293 B du CGI.*
+*Développé par Magar Développement — M. Andrys MAGAR.*

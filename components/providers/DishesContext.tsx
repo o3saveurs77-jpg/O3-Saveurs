@@ -1,12 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { items as seedItems } from "@/lib/menu";
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import type { Dish } from "@/lib/menu";
 
 interface DishesCtx {
   dishes: Dish[];
   ready: boolean;
+  /** vrai quand `/api/dishes` a échoué — la carte affichée est alors incomplète */
+  error: boolean;
   update: (id: string, patch: Partial<Dish>) => void;
   toggleAvailable: (id: string) => void;
   togglePopular: (id: string) => void;
@@ -18,16 +19,23 @@ interface DishesCtx {
 const Ctx = createContext<DishesCtx | null>(null);
 
 export function DishesProvider({ children }: { children: React.ReactNode }) {
-  // seed local = rendu instantané avant la réponse API (évite l'écran vide)
-  const [dishes, setDishes] = useState<Dish[]>(seedItems);
+  /* L'état partait des données de seed de `lib/menu.ts` : si `/api/dishes`
+   * échouait (base indisponible, `DATABASE_URL` invalide), le `catch` était vide
+   * et le site continuait d'afficher la carte de démonstration **avec ses prix**
+   * et des identifiants inexistants en base. On part donc d'une liste vide et
+   * l'échec est signalé. */
+  const [dishes, setDishes] = useState<Dish[]>([]);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/dishes", { cache: "no-store" });
-      if (res.ok) setDishes(await res.json());
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setDishes((await res.json()) as Dish[]);
+      setError(false);
     } catch {
-      /* garde le seed en fallback hors-ligne */
+      setError(true);
     } finally {
       setReady(true);
     }
@@ -50,36 +58,32 @@ export function DishesProvider({ children }: { children: React.ReactNode }) {
     (id: string) =>
       setDishes((cur) => {
         const d = cur.find((x) => x.id === id);
-        if (d) {
-          const available = !d.available;
-          fetch(`/api/dishes/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ available }),
-          }).catch(() => {});
-          return cur.map((x) => (x.id === id ? { ...x, available } : x));
-        }
-        return cur;
+        if (!d) return cur;
+        const available = !d.available;
+        fetch(`/api/dishes/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ available }),
+        }).catch(() => {});
+        return cur.map((x) => (x.id === id ? { ...x, available } : x));
       }),
-    []
+    [],
   );
 
   const togglePopular = useCallback(
     (id: string) =>
       setDishes((cur) => {
         const d = cur.find((x) => x.id === id);
-        if (d) {
-          const popular = !d.popular;
-          fetch(`/api/dishes/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ popular }),
-          }).catch(() => {});
-          return cur.map((x) => (x.id === id ? { ...x, popular } : x));
-        }
-        return cur;
+        if (!d) return cur;
+        const popular = !d.popular;
+        fetch(`/api/dishes/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ popular }),
+        }).catch(() => {});
+        return cur.map((x) => (x.id === id ? { ...x, popular } : x));
       }),
-    []
+    [],
   );
 
   const add = useCallback(async (dish: Omit<Dish, "id">) => {
@@ -90,7 +94,7 @@ export function DishesProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify(dish),
       });
       if (res.ok) {
-        const created: Dish = await res.json();
+        const created = (await res.json()) as Dish;
         setDishes((cur) => [created, ...cur]);
       }
     } catch {
@@ -108,13 +112,12 @@ export function DishesProvider({ children }: { children: React.ReactNode }) {
     load();
   }, [load]);
 
-  return (
-    <Ctx.Provider
-      value={{ dishes, ready, update, toggleAvailable, togglePopular, add, remove, reset }}
-    >
-      {children}
-    </Ctx.Provider>
+  const value = useMemo<DishesCtx>(
+    () => ({ dishes, ready, error, update, toggleAvailable, togglePopular, add, remove, reset }),
+    [dishes, ready, error, update, toggleAvailable, togglePopular, add, remove, reset],
   );
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function useDishes() {

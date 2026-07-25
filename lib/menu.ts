@@ -1,4 +1,17 @@
-/* Ô 3 Saveurs — Chez Laila · données de la carte (portées de data.js) */
+/* Ô 3 Saveurs — Chez Laila · types du catalogue et données de seed.
+ *
+ * Deux choses cohabitent ici :
+ *  · les **types applicatifs** (`Dish`, `Zone`, …), dont les montants sont en
+ *    centimes et qui décrivent ce que l'API renvoie depuis la base ;
+ *  · les **données de seed** (`items`, `zones`, `platsDuJour`, …), écrites en
+ *    euros pour rester lisibles, et lues uniquement par `prisma/seed.ts`.
+ *
+ * L'application ne doit jamais afficher les données de seed : la base est la
+ * seule source de vérité.
+ */
+
+import { fmtCents } from "@/lib/money";
+import type { Allergen } from "@/lib/types";
 
 export const photo = (n: number) => `/photos/p${String(n).padStart(2, "0")}.jpg`;
 
@@ -6,7 +19,8 @@ export type Badge = "Healthy" | "Nouveau" | "Bientôt" | null;
 
 export interface OptionChoice {
   l: string;
-  price?: number;
+  /** supplément en centimes */
+  priceCents?: number;
 }
 
 export interface DishOption {
@@ -15,23 +29,40 @@ export interface DishOption {
   choices: OptionChoice[];
 }
 
+/**
+ * Plat tel que servi par l'API, lu depuis la base.
+ * Montants en **centimes** (voir `lib/money.ts`).
+ */
 export interface Dish {
   id: string;
   cat: string;
   name: string;
   desc: string;
-  /** prix de base ; null = à définir / bientôt */
-  price: number | null;
+  /** prix de base en centimes ; null = à définir / bientôt */
+  priceCents: number | null;
   badge: Badge;
   photo: string | null;
   options: DishOption[];
-  /** formules d'upsell : [label, prix] */
+  /** formules d'upsell : [label, prix en centimes] */
   formules?: [string, number][];
   tags: string[];
   spice: number;
   popular: boolean;
-  /** disponibilité (gérée depuis l'admin) */
+  /** disponibilité manuelle ; un stock à 0 rend le plat indisponible de fait */
   available: boolean;
+  /** allergènes déclarés (règlement INCO 1169/2011) */
+  allergens: Allergen[];
+  /** null = stock illimité */
+  stock: number | null;
+  stockAlert: number | null;
+  costCents: number | null;
+  position: number;
+}
+
+/** Vrai si le plat peut être commandé maintenant (dispo, prix connu, stock). */
+export function isOrderable(d: Dish): boolean {
+  if (!d.available || d.priceCents === null) return false;
+  return d.stock === null || d.stock > 0;
 }
 
 export interface Category {
@@ -40,18 +71,57 @@ export interface Category {
   script: string;
 }
 
+/** Zone de livraison, montants en centimes. */
 export interface Zone {
-  min: number;
-  fee: number;
+  idx: number;
+  minimumCents: number;
+  feeCents: number;
   villes: string[];
+  zips: string[];
 }
 
 export interface Formule {
   id: string;
   name: string;
-  price: number;
+  /** en centimes */
+  priceCents: number;
   desc: string;
   extra: string;
+}
+
+// ─── Données de seed (en euros, lisibles) ──────────────────────
+// Ces structures ne sont lues que par `prisma/seed.ts`, qui convertit les
+// montants en centimes. L'application, elle, ne lit que la base.
+
+export interface SeedDish {
+  id: string;
+  cat: string;
+  name: string;
+  desc: string;
+  /** prix en euros ; null = à définir */
+  price: number | null;
+  badge: Badge;
+  photo: string | null;
+  options: SeedDishOption[];
+  formules?: [string, number][];
+  tags: string[];
+  spice: number;
+  popular: boolean;
+  available: boolean;
+  allergens?: Allergen[];
+}
+
+export interface SeedDishOption {
+  name: string;
+  required: boolean;
+  choices: { l: string; price?: number }[];
+}
+
+export interface SeedZone {
+  min: number;
+  fee: number;
+  villes: string[];
+  zips?: string[];
 }
 
 export interface PlatDuJour {
@@ -79,11 +149,14 @@ export const info = {
 };
 
 // Zones de livraison (frais fixes indicatifs + minimum de commande)
-export const zones: Zone[] = [
-  { min: 15, fee: 2.5, villes: ["Lognes", "Noisiel", "Croissy-Beaubourg", "Torcy", "Champs-sur-Marne", "Émerainville", "Collégien"] },
-  { min: 20, fee: 3.5, villes: ["Bussy-Saint-Georges", "Noisy-le-Grand", "Vaires-sur-Marne", "Ferrières-en-Brie"] },
-  { min: 25, fee: 4.5, villes: ["Pontault-Combault", "Lagny-sur-Marne", "Roissy-en-Brie"] },
-  { min: 35, fee: 5.5, villes: ["Chessy", "Bailly-Romainvilliers", "Serris", "Montévrain", "Magny-le-Hongre"] },
+// Les codes postaux sont la clé de rapprochement fiable : un nom de commune se
+// saisit de dix façons, un code postal non. À faire confirmer par la cliente en
+// même temps que les frais réels (spec §10).
+export const zones: SeedZone[] = [
+  { min: 15, fee: 2.5, villes: ["Lognes", "Noisiel", "Croissy-Beaubourg", "Torcy", "Champs-sur-Marne", "Émerainville", "Collégien"], zips: ["77185", "77186", "77183", "77200", "77420", "77184", "77090"] },
+  { min: 20, fee: 3.5, villes: ["Bussy-Saint-Georges", "Noisy-le-Grand", "Vaires-sur-Marne", "Ferrières-en-Brie"], zips: ["77600", "93160", "77360", "77164"] },
+  { min: 25, fee: 4.5, villes: ["Pontault-Combault", "Lagny-sur-Marne", "Roissy-en-Brie"], zips: ["77340", "77400", "77680"] },
+  { min: 35, fee: 5.5, villes: ["Chessy", "Bailly-Romainvilliers", "Serris", "Montévrain", "Magny-le-Hongre"], zips: ["77700", "77144"] },
 ];
 
 export const cats: Category[] = [
@@ -100,12 +173,12 @@ export const cats: Category[] = [
 ];
 
 export const sauces = ["Sauce Niamey", "Piment maison", "Sriracha"];
-const rizOpt: DishOption = { name: "Riz", required: true, choices: [{ l: "Riz blanc" }, { l: "Riz rouge" }] };
+const rizOpt: SeedDishOption = { name: "Riz", required: true, choices: [{ l: "Riz blanc" }, { l: "Riz rouge" }] };
 
 // helper de création
 let _id = 0;
-type DishInput = Partial<Dish> & Pick<Dish, "cat" | "name" | "desc"> & { price: number | null };
-const D = (o: DishInput): Dish => ({
+type DishInput = Partial<SeedDish> & Pick<SeedDish, "cat" | "name" | "desc"> & { price: number | null };
+const D = (o: DishInput): SeedDish => ({
   id: "d" + ++_id,
   badge: null,
   photo: null,
@@ -117,7 +190,7 @@ const D = (o: DishInput): Dish => ({
   ...o,
 });
 
-export const items: Dish[] = [
+export const items: SeedDish[] = [
   // ENTRÉES
   D({ cat: "entrees", name: "Pastels Thon", desc: "4 pièces · feuilletés croustillants au thon relevé", price: 6, tags: ["4 pièces"], photo: null }),
   D({ cat: "entrees", name: "Pastels Viande hachée", desc: "4 pièces · bœuf haché épicé, pâte dorée", price: 7, tags: ["4 pièces"], photo: null }),
@@ -204,15 +277,20 @@ items.forEach((it) => {
 });
 
 export const formules: Formule[] = [
-  { id: "f1", name: "Entrée + Plat", price: 16, desc: "Pastel, patates fourrées ou salade composée + plat africain ou tajine poulet", extra: "+ 1 canette 33 cl incluse" },
-  { id: "f2", name: "Plat + Dessert", price: 16, desc: "Plat africain ou tajine poulet + un dessert de la carte", extra: "+ 1 canette 33 cl incluse" },
+  { id: "f1", name: "Entrée + Plat", priceCents: 1600, desc: "Pastel, patates fourrées ou salade composée + plat africain ou tajine poulet", extra: "+ 1 canette 33 cl incluse" },
+  { id: "f2", name: "Plat + Dessert", priceCents: 1600, desc: "Plat africain ou tajine poulet + un dessert de la carte", extra: "+ 1 canette 33 cl incluse" },
 ];
 
+/** Plats du jour de départ, repris par le seed. L'application lit la base. */
 export const platsDuJour: PlatDuJour[] = [
   { jour: "Mercredi", nom: "Sardines grillées" },
   { jour: "Jeudi", nom: "Paëlla" },
   { jour: "Vendredi", nom: "Couscous Royal" },
 ];
 
-export const fmtPrice = (n: number) =>
-  n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+/**
+ * Formate un montant **en centimes** pour l'affichage : 1197 → « 11,97 € ».
+ * Réexporté depuis `lib/money.ts` : les composants gardent leur import
+ * habituel, et il n'existe qu'une seule implémentation du formatage.
+ */
+export const fmtPrice = fmtCents;

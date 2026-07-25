@@ -21,11 +21,21 @@ export const authConfig = {
       }
       return session;
     },
-    // Utilisé par le middleware pour protéger /admin.
+    /**
+     * Utilisé par le middleware. Ne couvre que les *pages* : les routes `/api/*`
+     * valident l'appelant elles-mêmes via `lib/guard.ts`, et le layout
+     * `/admin` refait le contrôle de rôle côté serveur.
+     */
     authorized({ auth, request }) {
-      const isAdminArea = request.nextUrl.pathname.startsWith("/admin");
-      if (!isAdminArea) return true;
-      return auth?.user?.role === "ADMIN";
+      const { pathname } = request.nextUrl;
+
+      // `/compte` reste public : c'est la page qui porte le formulaire de
+      // connexion (`pages.signIn`). La protéger créerait une boucle de
+      // redirection. Elle affiche elle-même le formulaire ou le profil selon
+      // la session.
+      if (pathname.startsWith("/admin")) return auth?.user?.role === "ADMIN";
+
+      return true;
     },
   },
   providers: [],

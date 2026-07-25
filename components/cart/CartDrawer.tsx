@@ -1,36 +1,92 @@
 "use client";
 
+import { useEffect, useId, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useCart } from "./CartContext";
 import { Icon } from "@/components/Icon";
 import { fmtPrice } from "@/lib/menu";
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function CartDrawer() {
-  const { lines, open, setOpen, subtotal, count, setQty, remove } = useCart();
+  const { open } = useCart();
+  // Le tiroir était **toujours monté** et seulement translaté hors écran : ses
+  // boutons restaient focusables au clavier sur chaque page du site. Il n'est
+  // désormais dans le DOM que lorsqu'il est ouvert.
+  if (!open) return null;
+  return <Drawer />;
+}
+
+function Drawer() {
+  const { lines, setOpen, subtotalCents, count, setQty, remove } = useCart();
+  const panelRef = useRef<HTMLElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null;
+    const { overflow } = document.body.style;
+    document.body.style.overflow = "hidden";
+
+    const first = panelRef.current?.querySelector<HTMLElement>(FOCUSABLE);
+    (first ?? panelRef.current)?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      const nodes = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+      if (nodes.length === 0) return;
+      const firstNode = nodes[0];
+      const lastNode = nodes[nodes.length - 1];
+      const active = document.activeElement;
+
+      if (e.shiftKey && (active === firstNode || active === panelRef.current)) {
+        e.preventDefault();
+        lastNode.focus();
+      } else if (!e.shiftKey && active === lastNode) {
+        e.preventDefault();
+        firstNode.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.body.style.overflow = overflow;
+      trigger?.focus?.();
+    };
+  }, [setOpen]);
 
   return (
     <>
       {/* overlay */}
       <div
         onClick={() => setOpen(false)}
-        className={`fixed inset-0 z-[90] bg-black/40 transition-opacity duration-300 ${
-          open ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
+        className="fixed inset-0 z-[90] bg-black/40"
         aria-hidden="true"
       />
 
       {/* panneau */}
       <aside
-        className={`fixed right-0 top-0 z-[100] flex h-full w-full max-w-[420px] flex-col bg-page shadow-[var(--shadow-lg)] transition-transform duration-300 ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
-        aria-label="Panier"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="fixed right-0 top-0 z-[100] flex h-full w-full max-w-[420px] flex-col bg-page shadow-[var(--shadow-lg)] outline-none"
       >
         {/* en-tête */}
         <header className="flex items-center justify-between border-b border-line px-5 py-4">
           <div className="flex items-center gap-2.5">
             <Icon name="bag" size={22} className="text-primary" />
-            <h2 className="text-lg">Votre panier</h2>
+            <h2 id={titleId} className="text-lg">
+              Votre panier
+            </h2>
             {count > 0 && (
               <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-white">
                 {count}
@@ -38,9 +94,10 @@ export function CartDrawer() {
             )}
           </div>
           <button
+            type="button"
             onClick={() => setOpen(false)}
             className="grid h-9 w-9 place-items-center rounded-full hover:bg-panel-2"
-            aria-label="Fermer"
+            aria-label="Fermer le panier"
           >
             <Icon name="x" size={20} />
           </button>
@@ -61,10 +118,15 @@ export function CartDrawer() {
                   key={l.key}
                   className="flex gap-3 rounded-[var(--radius-soft)] border border-line bg-panel p-3"
                 >
-                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg">
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg">
                     {l.photo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={l.photo} alt={l.name} className="h-full w-full object-cover" />
+                      <Image
+                        src={l.photo}
+                        alt={l.name}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
                     ) : (
                       <div className="ph h-full w-full">
                         <span className="glyph text-2xl">Ô3</span>
@@ -76,9 +138,10 @@ export function CartDrawer() {
                     <div className="flex items-start justify-between gap-2">
                       <p className="truncate font-bold leading-tight">{l.name}</p>
                       <button
+                        type="button"
                         onClick={() => remove(l.key)}
                         className="text-ink-2 hover:text-brick"
-                        aria-label="Retirer"
+                        aria-label={`Retirer ${l.name} du panier`}
                       >
                         <Icon name="x" size={16} />
                       </button>
@@ -93,23 +156,25 @@ export function CartDrawer() {
                     <div className="mt-auto flex items-center justify-between pt-2">
                       <div className="flex items-center gap-1 rounded-full border border-line">
                         <button
+                          type="button"
                           onClick={() => setQty(l.key, l.qty - 1)}
                           className="grid h-7 w-7 place-items-center rounded-full hover:bg-panel-2"
-                          aria-label="Moins"
+                          aria-label={`Diminuer la quantité de ${l.name}`}
                         >
                           <Icon name="minus" size={14} />
                         </button>
                         <span className="w-5 text-center text-sm font-bold">{l.qty}</span>
                         <button
+                          type="button"
                           onClick={() => setQty(l.key, l.qty + 1)}
                           className="grid h-7 w-7 place-items-center rounded-full hover:bg-panel-2"
-                          aria-label="Plus"
+                          aria-label={`Augmenter la quantité de ${l.name}`}
                         >
                           <Icon name="plus" size={14} />
                         </button>
                       </div>
                       <span className="font-bold text-brick">
-                        {fmtPrice(l.unitPrice * l.qty)}
+                        {fmtPrice(l.unitPriceCents * l.qty)}
                       </span>
                     </div>
                   </div>
@@ -124,7 +189,7 @@ export function CartDrawer() {
           <footer className="border-t border-line px-5 py-4">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-ink-2">Sous-total</span>
-              <span className="text-xl font-extrabold">{fmtPrice(subtotal)}</span>
+              <span className="text-xl font-extrabold">{fmtPrice(subtotalCents)}</span>
             </div>
             <Link
               href="/commander"

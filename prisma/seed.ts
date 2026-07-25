@@ -1,15 +1,26 @@
-/* Seed de la base — peuple le catalogue, les zones, les plats du jour,
-   un compte client démo et un historique de commandes pour le back-office. */
+/* Seed du catalogue — **idempotent et non destructif**.
+ *
+ * La version précédente commençait par `deleteMany()` sur les commandes, les
+ * plats, les zones et **les comptes clients**, et `DEPLOY.md` prescrivait de la
+ * lancer sur la base de production. Rejouée après le lancement — redéploiement,
+ * nouvel environnement, reprise après incident — elle effaçait toute la
+ * comptabilité du restaurant.
+ *
+ * Ce script est donc conçu pour être relancé sans risque : il fait des `upsert`
+ * et ne supprime jamais rien. Les commandes et comptes de démonstration sont
+ * dans `seed-demo.ts`, qui refuse de s'exécuter en production.
+ *
+ *   npm run db:seed        → catalogue, zones, horaires, réglages, admin
+ *   npm run db:seed:demo   → jeu de démonstration (dev uniquement)
+ */
 
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { items, zones, platsDuJour } from "../lib/menu";
-import { generateDemoOrders, DEMO_EMAIL } from "../lib/mockOrders";
+import { items, zones, platsDuJour, cats } from "../lib/menu";
+import { DEFAULT_HOURS } from "../lib/hours";
+import { SETTING_DEFAULTS } from "../lib/settings";
 
 const prisma = new PrismaClient();
-
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "admin@o3saveurs.fr").toLowerCase();
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin1234";
 
 const WEEKDAY: Record<string, number> = {
   Dimanche: 0,
@@ -21,121 +32,158 @@ const WEEKDAY: Record<string, number> = {
   Samedi: 6,
 };
 
-async function main() {
-  console.log("🌱 Réinitialisation…");
-  await prisma.order.deleteMany();
-  await prisma.dish.deleteMany();
-  await prisma.zone.deleteMany();
-  await prisma.dailySpecial.deleteMany();
-  await prisma.user.deleteMany();
+/** Euros du jeu de données → centimes stockés. */
+const cents = (v: number | null | undefined): number | null =>
+  v === null || v === undefined ? null : Math.round(v * 100);
 
-  // ─── Plats ───
+function resolveAdminCredentials(): { email: string; password: string } {
+  const email = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
+  const password = process.env.ADMIN_PASSWORD || "";
+
+  if (!email || !password) {
+    throw new Error(
+      "ADMIN_EMAIL et ADMIN_PASSWORD doivent être définis dans l'environnement.\n" +
+        "Aucune valeur par défaut n'est fournie : un mot de passe d'administration\n" +
+        "documenté serait un compte ouvert sur toutes les données clients.",
+    );
+  }
+  if (password.length < 12) {
+    throw new Error(
+      `ADMIN_PASSWORD fait ${password.length} caractères. Minimum 12 : ce compte\n` +
+        "donne accès à l'intégralité du fichier clients et de la comptabilité.",
+    );
+  }
+  return { email, password };
+}
+
+async function seedCategories() {
+  console.log(`📂 ${cats.length} catégories…`);
+  for (const [i, c] of cats.entries()) {
+    await prisma.category.upsert({
+      where: { slug: c.id },
+      create: { slug: c.id, label: c.label, script: c.script, position: i },
+      // On ne réécrit pas `active` : la cliente a pu masquer une catégorie.
+      update: { label: c.label, script: c.script, position: i },
+    });
+  }
+}
+
+async function seedDishes() {
   console.log(`🍽️  ${items.length} plats…`);
-  await prisma.dish.createMany({
-    data: items.map((d, i) => ({
-      id: d.id,
+  for (const [i, d] of items.entries()) {
+    const data = {
       cat: d.cat,
       name: d.name,
       desc: d.desc,
-      price: d.price,
+      priceCents: cents(d.price),
       photo: d.photo,
       badge: d.badge,
       popular: d.popular,
-      available: d.available,
       spice: d.spice,
       tags: JSON.stringify(d.tags),
-      options: JSON.stringify(d.options),
-      formules: d.formules ? JSON.stringify(d.formules) : null,
+      options: JSON.stringify(
+        d.options.map((o) => ({
+          name: o.name,
+          required: o.required,
+          choices: o.choices.map((c) => ({ l: c.l, priceCents: cents(c.price) ?? undefined })),
+        })),
+      ),
+      formules: d.formules
+        ? JSON.stringify(d.formules.map(([label, price]) => [label, cents(price) ?? 0]))
+        : null,
+      allergens: JSON.stringify(d.allergens ?? []),
       position: i,
-    })),
-  });
+    };
 
-  // ─── Zones ───
+    await prisma.dish.upsert({
+      where: { id: d.id },
+      // `available`, `stock` et `costCents` sont laissés à la base : ils sont
+      // pilotés au quotidien depuis l'admin et ne doivent pas être réécrasés.
+      create: { id: d.id, ...data, available: d.available },
+      update: data,
+    });
+  }
+}
+
+async function seedZones() {
   console.log(`🚚 ${zones.length} zones…`);
-  await prisma.zone.createMany({
-    data: zones.map((z, i) => ({
-      idx: i,
-      fee: z.fee,
-      minimum: z.min,
+  for (const [i, z] of zones.entries()) {
+    const data = {
+      feeCents: cents(z.fee) ?? 0,
+      minimumCents: cents(z.min) ?? 0,
       cities: JSON.stringify(z.villes),
-    })),
-  });
+      zips: JSON.stringify(z.zips ?? []),
+    };
+    await prisma.zone.upsert({
+      where: { idx: i },
+      create: { idx: i, ...data },
+      update: data,
+    });
+  }
+}
 
-  // ─── Plats du jour ───
-  await prisma.dailySpecial.createMany({
-    data: platsDuJour.map((p) => ({
-      weekday: WEEKDAY[p.jour] ?? 0,
-      name: p.nom,
-      price: null,
-      active: true,
-    })),
-  });
+async function seedHours() {
+  console.log("🕒 horaires d'ouverture…");
+  for (const h of DEFAULT_HOURS) {
+    await prisma.openingHours.upsert({
+      where: { weekday: h.weekday },
+      create: h,
+      update: {}, // horaires déjà en base = choix de la cliente, on n'y touche pas
+    });
+  }
+}
 
-  // ─── Utilisateurs ───
-  const demoHash = await bcrypt.hash("demo1234", 10);
-  const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
-  console.log(`👤 Admin : ${ADMIN_EMAIL}`);
-  await prisma.user.createMany({
-    data: [
-      {
-        name: "Awa Diallo",
-        email: DEMO_EMAIL,
-        phone: "06 12 34 56 78",
-        password: demoHash, // compte démo client — mot de passe : demo1234
-        role: "CLIENT",
-        favorites: JSON.stringify([items[5].id, items[18].id]),
-        addresses: JSON.stringify([
-          { id: "a1", label: "Domicile", address: "12 rue des Acacias", zip: "77185", city: "Lognes" },
-          { id: "a2", label: "Bureau", address: "3 av. de l'Europe", zip: "77420", city: "Champs-sur-Marne" },
-        ]),
-      },
-      {
-        name: "Laila (Admin)",
-        email: ADMIN_EMAIL,
-        phone: "01 72 84 52 44",
-        password: adminHash, // mot de passe : ADMIN_PASSWORD (.env)
-        role: "ADMIN",
-        favorites: "[]",
-        addresses: "[]",
-      },
-    ],
-  });
+async function seedSettings() {
+  console.log("⚙️  réglages…");
+  for (const [key, value] of Object.entries(SETTING_DEFAULTS)) {
+    await prisma.setting.upsert({
+      where: { key },
+      create: { key, value },
+      update: {}, // ne jamais écraser un réglage saisi par la cliente
+    });
+  }
+}
 
-  // ─── Commandes démo ───
-  const demo = generateDemoOrders(Date.now());
-  console.log(`🧾 ${demo.length} commandes démo…`);
-  await prisma.order.createMany({
-    data: demo.map((o) => ({
-      id: o.id,
-      ref: o.ref,
-      userEmail: o.customer.email === DEMO_EMAIL ? DEMO_EMAIL : null,
-      mode: o.mode,
-      status: o.status,
-      zoneIdx: o.zoneIdx,
-      slot: o.slot,
-      customerName: o.customer.name,
-      customerEmail: o.customer.email,
-      customerPhone: o.customer.phone,
-      address: o.customer.address ?? null,
-      city: o.customer.city ?? null,
-      zip: o.customer.zip ?? null,
-      subtotal: o.subtotal,
-      fee: o.fee,
-      total: o.total,
-      paid: o.paid,
-      paymentMethod: o.paymentMethod,
-      driver: o.driver ?? null,
-      lines: JSON.stringify(o.lines),
-      createdAt: new Date(o.createdAt),
-    })),
-  });
+async function seedDailySpecials() {
+  console.log(`⭐ ${platsDuJour.length} plats du jour…`);
+  for (const [i, p] of platsDuJour.entries()) {
+    const weekday = WEEKDAY[p.jour] ?? 0;
+    const existing = await prisma.dailySpecial.findFirst({ where: { weekday, name: p.nom } });
+    if (existing) continue;
+    await prisma.dailySpecial.create({
+      data: { weekday, name: p.nom, priceCents: null, active: true, position: i },
+    });
+  }
+}
 
-  console.log("✅ Seed terminé.");
+async function seedAdmin() {
+  const { email, password } = resolveAdminCredentials();
+  const hash = await bcrypt.hash(password, 12);
+  console.log(`👤 Admin : ${email}`);
+  await prisma.user.upsert({
+    where: { email },
+    create: { name: "Laila", email, phone: "01 72 84 52 44", password: hash, role: "ADMIN" },
+    // Le mot de passe est réaligné sur l'environnement, mais le rôle et le
+    // compte existant sont préservés.
+    update: { password: hash, role: "ADMIN" },
+  });
+}
+
+async function main() {
+  console.log("🌱 Seed du catalogue (idempotent, aucune suppression)…\n");
+  await seedCategories();
+  await seedDishes();
+  await seedZones();
+  await seedHours();
+  await seedSettings();
+  await seedDailySpecials();
+  await seedAdmin();
+  console.log("\n✅ Seed terminé. Aucune donnée existante n'a été supprimée.");
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error("\n❌ Seed interrompu :", e instanceof Error ? e.message : e);
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());

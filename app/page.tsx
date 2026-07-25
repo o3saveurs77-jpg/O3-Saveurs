@@ -1,8 +1,21 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Hero } from "@/components/home/Hero";
 import { DishCard } from "@/components/DishCard";
 import { Icon } from "@/components/Icon";
-import { items, zones, formules, platsDuJour, info, fmtPrice } from "@/lib/menu";
+import { prisma } from "@/lib/prisma";
+import { rowToDish, rowToZone } from "@/lib/serialize";
+import { formules, info, fmtPrice } from "@/lib/menu";
+import type { Dish, Zone } from "@/lib/menu";
+import { parisNow, parisStartOfDay, WEEKDAY_LABEL } from "@/lib/hours";
+
+/* La page lisait `items` et `zones` de `lib/menu.ts`, c'est-à-dire les données
+ * de seed : un prix ou un « populaire » modifié dans l'administration
+ * n'apparaissait jamais ici, et « Nos incontournables » restait faux pour
+ * toujours. Elle était de plus prérendue une fois pour toutes, si bien que le
+ * `new Date()` du plat du jour était figé au build — l'encart ne s'affichait
+ * jamais. Lecture en base + revalidation toutes les 5 minutes. */
+export const revalidate = 300;
 
 // Trio des grandes familles de saveurs
 const SAVEURS = [
@@ -26,12 +39,61 @@ const SAVEURS = [
   },
 ];
 
-const JOURS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+interface PlatDuJourView {
+  name: string;
+  priceCents: number | null;
+  jour: string;
+}
 
-export default function HomePage() {
-  const populaires = items.filter((i) => i.popular).slice(0, 6);
-  const today = JOURS[new Date().getDay()];
-  const platToday = platsDuJour.find((p) => p.jour === today);
+/** Plats populaires, plat du jour et zones — tout depuis la base. */
+async function loadHome(): Promise<{
+  populaires: Dish[];
+  platToday: PlatDuJourView | null;
+  zones: Zone[];
+}> {
+  const { weekday } = parisNow();
+  const today = parisStartOfDay();
+  const tomorrow = new Date(today.getTime() + 86_400_000);
+
+  const [dishRows, specialRows, zoneRows] = await Promise.all([
+    prisma.dish.findMany({
+      where: { popular: true, available: true },
+      orderBy: [{ position: "asc" }, { name: "asc" }],
+      take: 6,
+    }),
+    prisma.dailySpecial.findMany({
+      where: {
+        active: true,
+        OR: [{ date: { gte: today, lt: tomorrow } }, { weekday }],
+      },
+      orderBy: [{ position: "asc" }],
+    }),
+    prisma.zone.findMany({ where: { active: true }, orderBy: { idx: "asc" } }),
+  ]);
+
+  // Une date précise l'emporte sur la récurrence hebdomadaire.
+  const special = specialRows.find((s) => s.date !== null) ?? specialRows[0] ?? null;
+
+  return {
+    populaires: dishRows.map(rowToDish),
+    platToday: special
+      ? { name: special.name, priceCents: special.priceCents, jour: WEEKDAY_LABEL[weekday] }
+      : null,
+    zones: zoneRows.map(rowToZone),
+  };
+}
+
+export default async function HomePage() {
+  let populaires: Dish[] = [];
+  let platToday: PlatDuJourView | null = null;
+  let zones: Zone[] = [];
+
+  try {
+    ({ populaires, platToday, zones } = await loadHome());
+  } catch (error) {
+    // Base indisponible : la vitrine reste lisible, sans afficher de faux prix.
+    console.error("[accueil] lecture de la base échouée:", error);
+  }
 
   return (
     <>
@@ -48,15 +110,19 @@ export default function HomePage() {
             <Link
               key={s.cat}
               href="/carte"
-              className="group relative overflow-hidden rounded-[var(--radius-card)] shadow-[var(--shadow-soft)]"
+              className="group relative block h-64 overflow-hidden rounded-[var(--radius-card)] shadow-[var(--shadow-soft)]"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src={s.photo}
                 alt={s.titre}
-                className="h-64 w-full object-cover transition duration-500 group-hover:scale-105"
+                fill
+                sizes="(max-width: 768px) 100vw, 33vw"
+                className="object-cover transition duration-500 group-hover:scale-105"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+              <div
+                className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"
+                aria-hidden="true"
+              />
               <div className="absolute inset-x-0 bottom-0 p-5 text-white">
                 <h3 className="font-script text-3xl text-gold">{s.titre}</h3>
                 <p className="mt-1 text-sm text-white/90">{s.desc}</p>
@@ -75,8 +141,11 @@ export default function HomePage() {
               <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-bold uppercase tracking-wide">
                 <Icon name="sparkle" size={15} /> Plat du jour · {platToday.jour}
               </p>
-              <h2 className="mt-3 font-script text-4xl text-gold sm:text-5xl">{platToday.nom}</h2>
-              <p className="mt-2 text-white/90">Préparé en quantité limitée — uniquement aujourd'hui.</p>
+              <h2 className="mt-3 font-script text-4xl text-gold sm:text-5xl">{platToday.name}</h2>
+              <p className="mt-2 text-white/90">
+                Préparé en quantité limitée — uniquement aujourd'hui
+                {platToday.priceCents !== null && <> · {fmtPrice(platToday.priceCents)}</>}.
+              </p>
             </div>
             <Link
               href="/carte"
@@ -89,22 +158,27 @@ export default function HomePage() {
       )}
 
       {/* ── Incontournables ──────────────────────────────── */}
-      <section className="wrap py-16">
-        <div className="mb-7 flex items-end justify-between gap-4">
-          <div>
-            <p className="font-script text-3xl text-teal">Les chouchous</p>
-            <h2 className="mt-1 text-3xl sm:text-4xl">Nos incontournables</h2>
+      {populaires.length > 0 && (
+        <section className="wrap py-16">
+          <div className="mb-7 flex items-end justify-between gap-4">
+            <div>
+              <p className="font-script text-3xl text-teal">Les chouchous</p>
+              <h2 className="mt-1 text-3xl sm:text-4xl">Nos incontournables</h2>
+            </div>
+            <Link
+              href="/carte"
+              className="hidden items-center gap-1.5 font-semibold text-primary hover:underline sm:flex"
+            >
+              Toute la carte <Icon name="arrow" size={16} />
+            </Link>
           </div>
-          <Link href="/carte" className="hidden items-center gap-1.5 font-semibold text-primary hover:underline sm:flex">
-            Toute la carte <Icon name="arrow" size={16} />
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {populaires.map((d) => (
-            <DishCard key={d.id} dish={d} />
-          ))}
-        </div>
-      </section>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {populaires.map((d) => (
+              <DishCard key={d.id} dish={d} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Formules ─────────────────────────────────────── */}
       <section className="bg-panel-2">
@@ -121,7 +195,9 @@ export default function HomePage() {
               >
                 <div className="flex items-baseline justify-between">
                   <h3 className="text-xl">{f.name}</h3>
-                  <span className="font-display text-3xl text-brick">{fmtPrice(f.price)}</span>
+                  <span className="font-display text-3xl text-brick">
+                    {fmtPrice(f.priceCents)}
+                  </span>
                 </div>
                 <p className="mt-2 flex-1 text-sm text-ink-2">{f.desc}</p>
                 <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-teal">
@@ -134,42 +210,44 @@ export default function HomePage() {
       </section>
 
       {/* ── Zones de livraison ───────────────────────────── */}
-      <section className="wrap py-16">
-        <div className="text-center">
-          <p className="font-script text-3xl text-teal">On vient jusqu'à vous</p>
-          <h2 className="mt-1 text-3xl sm:text-4xl">Zones de livraison</h2>
-          <p className="mx-auto mt-3 max-w-xl text-ink-2">
-            Frais et minimum de commande selon votre commune. Hors zone, l'à emporter reste
-            possible.
-          </p>
-        </div>
-        <div className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {zones.map((z, i) => (
-            <div
-              key={i}
-              className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]"
-            >
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-primary-soft px-3 py-1 text-sm font-bold text-primary">
-                  Zone {i + 1}
-                </span>
-                <Icon name="pin" size={20} className="text-primary" />
+      {zones.length > 0 && (
+        <section className="wrap py-16">
+          <div className="text-center">
+            <p className="font-script text-3xl text-teal">On vient jusqu'à vous</p>
+            <h2 className="mt-1 text-3xl sm:text-4xl">Zones de livraison</h2>
+            <p className="mx-auto mt-3 max-w-xl text-ink-2">
+              Frais et minimum de commande selon votre commune. Hors zone, l'à emporter reste
+              possible.
+            </p>
+          </div>
+          <div className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {zones.map((z) => (
+              <div
+                key={z.idx}
+                className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="rounded-full bg-primary-soft px-3 py-1 text-sm font-bold text-primary">
+                    Zone {z.idx + 1}
+                  </span>
+                  <Icon name="pin" size={20} className="text-primary" />
+                </div>
+                <div className="mt-3 flex gap-4 text-sm">
+                  <span>
+                    <span className="block text-xs text-ink-2">Frais</span>
+                    <strong className="text-brick">{fmtPrice(z.feeCents)}</strong>
+                  </span>
+                  <span>
+                    <span className="block text-xs text-ink-2">Minimum</span>
+                    <strong className="text-brick">{fmtPrice(z.minimumCents)}</strong>
+                  </span>
+                </div>
+                <p className="mt-3 text-sm text-ink-2">{z.villes.join(" · ")}</p>
               </div>
-              <div className="mt-3 flex gap-4 text-sm">
-                <span>
-                  <span className="block text-xs text-ink-2">Frais</span>
-                  <strong className="text-brick">{fmtPrice(z.fee)}</strong>
-                </span>
-                <span>
-                  <span className="block text-xs text-ink-2">Minimum</span>
-                  <strong className="text-brick">{fmtPrice(z.min)}</strong>
-                </span>
-              </div>
-              <p className="mt-3 text-sm text-ink-2">{z.villes.join(" · ")}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── À propos teaser ──────────────────────────────── */}
       <section className="bg-ink text-cream">
@@ -199,15 +277,20 @@ export default function HomePage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             {info.heroSpreads.slice(0, 4).map((p, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={i}
-                src={p}
-                alt="Plat Ô 3 Saveurs"
-                className={`h-40 w-full rounded-2xl object-cover shadow-[var(--shadow-lg)] ${
+              <div
+                key={p}
+                className={`relative h-40 w-full overflow-hidden rounded-2xl shadow-[var(--shadow-lg)] ${
                   i % 2 ? "translate-y-4" : ""
                 }`}
-              />
+              >
+                <Image
+                  src={p}
+                  alt="Plat Ô 3 Saveurs"
+                  fill
+                  sizes="(max-width: 768px) 50vw, 25vw"
+                  className="object-cover"
+                />
+              </div>
             ))}
           </div>
         </div>

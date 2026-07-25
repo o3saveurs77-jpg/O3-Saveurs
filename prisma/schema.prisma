@@ -1,11 +1,19 @@
 // Ô 3 Saveurs — Chez Laila · schéma de données
-// Production : PostgreSQL (Neon). En dev, pointer DATABASE_URL vers une base
-// Neon (branche de dev) ou un Postgres local. Après avoir renseigné
-// DATABASE_URL, exécuter `npx prisma migrate deploy` (prod) ou
-// `npx prisma migrate dev` (dev) puis `npm run db:seed`.
 //
-// Neon fournit deux URLs : une "pooled" (…-pooler…, PgBouncer) pour l'app
-// (DATABASE_URL) et une "direct" pour les migrations (DIRECT_URL).
+// Production : PostgreSQL (Neon). Neon fournit deux URLs : une "pooled"
+// (…-pooler…, PgBouncer) pour l'app (DATABASE_URL) et une "direct" pour les
+// migrations (DIRECT_URL).
+//
+// Conventions
+// ───────────
+// · **Tous les montants sont des entiers de centimes** (`…Cents`). Jamais de
+//   Float pour de l'argent : 3 × 3,99 € donne 11.969999… en flottant, ce qui
+//   fait diverger la comptabilité des relevés Stripe. Voir `lib/money.ts`.
+// · Les colonnes suffixées `Json` sont du JSON sérialisé en TEXT (héritage
+//   SQLite). `lib/serialize.ts` les parse avec repli.
+// · Les statuts sont des `String` validés par des unions TypeScript dans
+//   `lib/types.ts`, pas des enums Prisma, pour éviter une migration à chaque
+//   nouvelle valeur métier.
 
 generator client {
   provider = "prisma-client-js"
@@ -19,79 +27,448 @@ datasource db {
 
 // ─── Catalogue ────────────────────────────────────────────────
 
+model Category {
+  slug     String  @id
+  label    String
+  script   String
+  position Int     @default(0)
+  active   Boolean @default(true)
+
+  @@index([position])
+}
+
 model Dish {
-  id        String   @id @default(cuid())
+  id        String  @id @default(cuid())
   cat       String
   name      String
-  desc      String   @default("")
-  price     Float? // null = à définir / bientôt
+  desc      String  @default("")
+  /// null = prix à définir / « bientôt »
+  priceCents Int?
   photo     String?
-  badge     String? // Healthy | Nouveau | Bientôt
-  popular   Boolean  @default(false)
-  available Boolean  @default(true)
-  spice     Int      @default(0)
-  tags      String   @default("[]") // JSON: string[]
-  options   String   @default("[]") // JSON: DishOption[]
-  formules  String? // JSON: [string, number][]
+  /// Healthy | Nouveau | Bientôt | Coup de cœur
+  badge     String?
+  popular   Boolean @default(false)
+  /// Disponibilité manuelle. Le stock à 0 rend le plat indisponible de fait.
+  available Boolean @default(true)
+  spice     Int     @default(0)
+
+  /// JSON: string[]
+  tags     String  @default("[]")
+  /// JSON: DishOption[]
+  options  String  @default("[]")
+  /// JSON: [string, number][] — formules d'upsell, prix en centimes
+  formules String?
+  /// JSON: Allergen[] — 14 allergènes réglementaires (INCO 1169/2011)
+  allergens String @default("[]")
+
+  /// null = stock illimité (plat toujours disponible)
+  stock      Int?
+  /// seuil d'alerte de réapprovisionnement
+  stockAlert Int?
+  /// coût matière, pour le calcul de marge du tableau de bord
+  costCents  Int?
+
   position  Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  movements StockMovement[]
+  specials  DailySpecial[]
+
+  @@index([cat, position])
+  @@index([available])
+}
+
+model StockMovement {
+  id     String @id @default(cuid())
+  dishId String
+  dish   Dish   @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  /// négatif = sortie (vente, perte), positif = entrée (réappro, correction)
+  delta  Int
+  /// vente | reappro | correction | perte | inventaire
+  reason String
+  note   String?
+  /// email de l'auteur (null = automatique, déclenché par une commande)
+  author String?
+  /// commande à l'origine du mouvement, le cas échéant
+  orderId   String?
+  createdAt DateTime @default(now())
+
+  @@index([dishId, createdAt])
+  @@index([createdAt])
 }
 
 // ─── Livraison ────────────────────────────────────────────────
 
 model Zone {
-  id      String @id @default(cuid())
-  idx     Int    @unique
-  fee     Float
-  minimum Float
-  cities  String // JSON: string[]
+  id           String  @id @default(cuid())
+  idx          Int     @unique
+  feeCents     Int
+  minimumCents Int
+  /// JSON: string[] — noms de communes
+  cities       String
+  /// JSON: string[] — codes postaux, clé de rapprochement fiable
+  zips         String  @default("[]")
+  active       Boolean @default(true)
 }
 
-model DailySpecial {
+model OpeningHours {
+  /// 0 = dimanche … 6 = samedi
+  weekday Int     @id
+  closed  Boolean @default(false)
+  /// service du midi, format "11:30" (null = pas de service)
+  lunchOpen   String?
+  lunchClose  String?
+  /// service du soir
+  dinnerOpen  String?
+  dinnerClose String?
+}
+
+model Driver {
   id      String  @id @default(cuid())
-  weekday Int     @unique // 0=dimanche … 6=samedi
   name    String
-  price   Float?
+  phone   String  @default("")
+  vehicle String?
   active  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  runs      DeliveryRun[]
+  orders    Order[]
+}
+
+/// Tournée : un livreur, un créneau, plusieurs commandes ordonnées.
+model DeliveryRun {
+  id       String  @id @default(cuid())
+  driverId String
+  driver   Driver  @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  /// jour de la tournée (à minuit, Europe/Paris)
+  date     DateTime
+  slot     String  @default("asap")
+  /// preparee | en_cours | terminee | annulee
+  status   String  @default("preparee")
+  notes    String?
+
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  orders Order[]
+
+  @@index([date, status])
+  @@index([driverId, date])
+}
+
+// ─── Mise en avant ────────────────────────────────────────────
+
+model DailySpecial {
+  id         String  @id @default(cuid())
+  /// plat du catalogue mis en avant (null = plat libre, décrit par `name`)
+  dishId     String?
+  dish       Dish?   @relation(fields: [dishId], references: [id], onDelete: SetNull)
+  name       String
+  priceCents Int?
+  /// récurrence hebdomadaire : 0 = dimanche … 6 = samedi (null si `date` est fixé)
+  weekday    Int?
+  /// date précise, prioritaire sur `weekday`
+  date       DateTime?
+  active     Boolean @default(true)
+  position   Int     @default(0)
+
+  @@index([weekday])
+  @@index([date])
+}
+
+/// Bandeau d'information en haut du site (« Fermé le 15 août », « Nouveau : … »).
+model Announcement {
+  id       String    @id @default(cuid())
+  message  String
+  link     String?
+  /// info | promo | alerte
+  tone     String    @default("info")
+  startsAt DateTime?
+  endsAt   DateTime?
+  active   Boolean   @default(true)
+  position Int       @default(0)
+
+  createdAt DateTime @default(now())
+}
+
+/// Encart publicitaire / visuel de mise en avant.
+model Banner {
+  id    String  @id @default(cuid())
+  title String
+  image String
+  link  String?
+  /// accueil | carte | panier
+  placement String  @default("accueil")
+  startsAt  DateTime?
+  endsAt    DateTime?
+  active    Boolean @default(true)
+  position  Int     @default(0)
+  /// compteur de clics, pour mesurer l'efficacité
+  clicks    Int     @default(0)
+
+  createdAt DateTime @default(now())
+}
+
+// ─── Promotions ───────────────────────────────────────────────
+
+model Promotion {
+  id    String  @id @default(cuid())
+  /// null pour une promotion automatique (sans code à saisir)
+  code  String? @unique
+  label String
+  /// percent | amount | free_delivery
+  kind  String
+  /// pourcentage 1-100 si kind=percent, centimes si kind=amount, ignoré si free_delivery
+  value Int     @default(0)
+
+  minSubtotalCents Int @default(0)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  /// null = illimité
+  maxUses          Int?
+  usedCount        Int     @default(0)
+  oncePerCustomer  Boolean @default(false)
+  /// restreint à un jour de la semaine (0 = dimanche), null = tous les jours
+  weekday          Int?
+  /// true = appliquée automatiquement sans que le client saisisse un code
+  auto             Boolean @default(false)
+  active           Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  orders    Order[]
+
+  @@index([active, auto])
 }
 
 // ─── Clients & commandes ──────────────────────────────────────
 
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  phone     String   @default("")
-  password  String? // hash bcrypt (null = compte OAuth / invité)
-  role      String   @default("CLIENT") // CLIENT | ADMIN
-  favorites String   @default("[]") // JSON: dishIds[]
-  addresses String   @default("[]") // JSON: SavedAddress[]
+  id       String  @id @default(cuid())
+  name     String
+  email    String  @unique
+  phone    String  @default("")
+  /// hash bcrypt (null = compte invité / OAuth)
+  password String?
+  /// CLIENT | ADMIN
+  role     String  @default("CLIENT")
+  /// JSON: dishIds[]
+  favorites String @default("[]")
+  /// JSON: SavedAddress[]
+  addresses String @default("[]")
+
   createdAt DateTime @default(now())
+  orders    Order[]
+  tickets   SupportTicket[]
 }
 
 model Order {
-  id              String   @id @default(cuid())
-  ref             String   @unique
-  userEmail       String? // rattachement client
-  mode            String // livraison | emporter
-  status          String   @default("confirmee")
-  zoneIdx         Int?
-  slot            String   @default("asap")
-  customerName    String
-  customerEmail   String
-  customerPhone   String
-  address         String?
-  city            String?
-  zip             String?
-  subtotal        Float
-  fee             Float    @default(0)
-  total           Float
-  paid            Boolean  @default(false)
-  paymentMethod   String   @default("Carte")
-  stripeSessionId String? // session Stripe Checkout
-  driver          String?
-  lines           String // JSON: CartLine[]
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id        String  @id @default(cuid())
+  ref       String  @unique
+  /// numéro de facture séquentiel, figé à l'émission (art. 242 nonies A CGI)
+  invoiceNumber Int? @unique
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  /// livraison | emporter
+  mode   String
+  /// en_attente_paiement | confirmee | cuisine | route | livree | annulee
+  status String @default("en_attente_paiement")
+
+  zoneIdx Int?
+  slot    String @default("asap")
+
+  customerName  String
+  customerEmail String
+  customerPhone String
+  address       String?
+  city          String?
+  zip           String?
+
+  subtotalCents Int
+  discountCents Int @default(0)
+  feeCents      Int @default(0)
+  totalCents    Int
+  /// TVA appliquée en points de base (1000 = 10 %), figée à la commande
+  vatRateBp     Int @default(1000)
+
+  promotionId String?
+  promotion   Promotion? @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+  promoCode   String?
+
+  paid Boolean @default(false)
+  /// en_attente | paye | echec | rembourse | expire
+  paymentStatus String @default("en_attente")
+  paymentMethod String @default("Carte")
+
+  stripeSessionId       String?
+  stripePaymentIntentId String?
+
+  driverId String?
+  driver   Driver? @relation(fields: [driverId], references: [id], onDelete: SetNull)
+
+  deliveryRunId String?
+  deliveryRun   DeliveryRun? @relation(fields: [deliveryRunId], references: [id], onDelete: SetNull)
+  runPosition   Int?
+
+  /// JSON: OrderLine[] — figé à la commande (prix historiques)
+  lines String
+
+  /// horodatage de chaque étape, pour les délais réels du tableau de bord
+  confirmedAt DateTime?
+  cookingAt   DateTime?
+  routeAt     DateTime?
+  deliveredAt DateTime?
+  canceledAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets SupportTicket[]
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([customerEmail])
+  @@index([userId])
+  @@index([stripeSessionId])
+  @@index([paid, createdAt])
+  @@index([deliveryRunId, runPosition])
+}
+
+// ─── Newsletter ───────────────────────────────────────────────
+
+model NewsletterSubscriber {
+  id    String  @id @default(cuid())
+  email String  @unique
+  name  String?
+  /// jeton de confirmation et de désinscription (RGPD)
+  token String  @unique
+  /// double opt-in : false jusqu'au clic dans l'email de confirmation
+  confirmed   Boolean   @default(false)
+  confirmedAt DateTime?
+  unsubscribedAt DateTime?
+  /// footer | checkout | admin | import
+  source String @default("footer")
+
+  createdAt DateTime @default(now())
+
+  @@index([confirmed, unsubscribedAt])
+}
+
+model Campaign {
+  id      String @id @default(cuid())
+  subject String
+  html    String
+  /// tous | actifs | inactifs
+  audience String @default("tous")
+  /// brouillon | programmee | envoyee | echec
+  status  String @default("brouillon")
+
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  sentCount   Int       @default(0)
+  failedCount Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Service après-vente ──────────────────────────────────────
+
+model SupportTicket {
+  id      String  @id @default(cuid())
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  userId  String?
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  customerName  String
+  customerEmail String
+  subject       String
+  /// retard | manquant | qualite | erreur_commande | remboursement | autre
+  category      String  @default("autre")
+  /// ouvert | en_cours | resolu | ferme
+  status        String  @default("ouvert")
+  /// basse | normale | haute
+  priority      String  @default("normale")
+
+  /// geste commercial accordé, en centimes
+  refundCents Int?
+  /// code promo de dédommagement généré depuis le ticket
+  gestureCode String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  closedAt  DateTime?
+
+  messages TicketMessage[]
+
+  @@index([status, createdAt])
+  @@index([customerEmail])
+}
+
+model TicketMessage {
+  id       String        @id @default(cuid())
+  ticketId String
+  ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  /// CLIENT | ADMIN
+  author   String
+  body     String
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+/// Messages du formulaire de contact public (distinct du SAV, sans commande).
+model ContactMessage {
+  id      String  @id @default(cuid())
+  name    String
+  email   String
+  phone   String?
+  subject String  @default("")
+  message String
+  handled Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([handled, createdAt])
+}
+
+// ─── Technique ────────────────────────────────────────────────
+
+/// Réglages éditables depuis l'admin : coordonnées, SIRET, TVA, seuils, textes.
+/// Évite de coder en dur ce que la cliente doit pouvoir changer seule.
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// Compteurs séquentiels (numérotation de facture, référence de commande).
+/// Une numérotation de facture doit être chronologique et sans rupture.
+model Counter {
+  key   String @id
+  value Int    @default(0)
+}
+
+/// Journal des emails envoyés : garantit l'idempotence quand Stripe rejoue un
+/// webhook, et donne une trace de ce que le client a réellement reçu.
+model EmailLog {
+  id      String  @id @default(cuid())
+  /// confirmation | paiement | statut | facture | relance | newsletter | sav
+  kind    String
+  orderId String?
+  to      String
+  /// clé d'unicité métier (ex. "paiement:<orderId>") pour ne pas envoyer 2 fois
+  dedupeKey String? @unique
+  ok        Boolean @default(true)
+  error     String?
+
+  sentAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([sentAt])
 }
