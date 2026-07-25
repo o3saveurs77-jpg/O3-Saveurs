@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+/* ───────────────────────────────────────────────────────────
+   Ô 3 Saveurs — Chez Laila · Design system (charte §2)
+   Ambiance chaleureuse & métissée — Asie · Maghreb · Afrique
+   ─────────────────────────────────────────────────────────── */
+
+@theme {
+  /* Palette de marque (charte §2 + maquette « Dépliant ») */
+  --color-page: #f7e9d2;        /* fond crème chaud */
+  --color-panel: #ffffff;       /* cartes */
+  --color-panel-2: #fbf1e0;     /* fond secondaire crème */
+  --color-panel-3: #f3e1c4;     /* fond tertiaire */
+  --color-cream: #fbefd8;       /* crème (texte clair / cartes) */
+
+  --color-ink: #2c1d11;         /* texte principal */
+  --color-ink-2: #856a50;       /* texte secondaire */
+  --color-line: #e7d3b0;        /* bordures */
+
+  --color-primary: #e8732a;     /* terracotta / orange */
+  --color-primary-ink: #ffffff;
+  --color-primary-soft: #fce4cf;
+
+  --color-brick: #a6243a;       /* rouge brique — titres de sections */
+  --color-teal: #1fa89a;        /* turquoise — accents */
+  --color-gold: #f2b705;        /* jaune doré — highlights / prix */
+
+  --color-footer-bg: #241813;
+  --color-footer-ink: #f7e9d2;
+
+  /* Typographies (injectées par next/font) */
+  --font-script: var(--font-yellowtail), cursive;
+  --font-display: var(--font-bricolage), system-ui, sans-serif;
+  --font-body: var(--font-archivo), system-ui, sans-serif;
+
+  /* Rayons & ombres */
+  --radius-card: 16px;
+  --radius-soft: 10px;
+  --shadow-soft: 0 1px 2px rgba(40, 20, 8, 0.06), 0 8px 30px rgba(40, 20, 8, 0.08);
+  --shadow-lg: 0 24px 60px rgba(30, 15, 5, 0.18);
+
+  --max-w: 1180px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+::selection {
+  background: var(--color-primary);
+  color: var(--color-primary-ink);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  margin: 0;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+}
+
+/* ── Utilitaires custom ───────────────────────────────────── */
+
+.font-script {
+  font-family: var(--font-script);
+  font-weight: 400;
+  line-height: 1;
+}
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.wrap {
+  max-width: var(--max-w);
+  margin-inline: auto;
+  padding-inline: 22px;
+}
+
+/* Motif ethnique : bandeau zigzag + triangles aux couleurs de marque */
+.ots-band {
+  height: 24px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='24' viewBox='0 0 40 24'%3E%3Cpath d='M0 4 L10 11 L20 4 L30 11 L40 4' fill='none' stroke='%231FA89A' stroke-width='3'/%3E%3Cpath d='M0 15 L10 15 L5 24 Z M10 15 L20 15 L15 24 Z M20 15 L30 15 L25 24 Z M30 15 L40 15 L35 24 Z' fill='%23A6243A'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-size: auto 24px;
+}
+.ots-band.flip {
+  transform: scaleY(-1);
+}
+
+/* Soleil ethnique discret (décor) */
+.ots-sun {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cg fill='none' stroke='%23F2B705' stroke-width='4'%3E%3Ccircle cx='60' cy='60' r='22'/%3E%3Cg stroke-linecap='round'%3E%3Cpath d='M60 6v16M60 98v16M6 60h16M98 60h16M22 22l11 11M87 87l11 11M98 22 87 33M33 87 22 98'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+/* Placeholder pour plats sans photo */
+.ph {
+  display: grid;
+  place-items: center;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 30% 20%, color-mix(in oklab, var(--color-primary) 22%, var(--color-panel-2)), transparent 60%),
+    var(--color-panel-2);
+  color: var(--color-primary);
+}
+.ph .glyph {
+  font-family: var(--font-script);
+  font-size: clamp(34px, 8vw, 56px);
+  opacity: 0.85;
+}
+
+/* Nav collante avec flou */
+.nav-blur {
+  background: color-mix(in oklab, var(--color-page) 86%, transparent);
+  backdrop-filter: blur(12px) saturate(1.2);
+}
+
+/* Animation d'entrée */
+@keyframes floatUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: floatUp 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise {
+    animation: none;
+  }
+}
+
+/* Scrollbar */
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* masque le scrollbar des rails horizontaux */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

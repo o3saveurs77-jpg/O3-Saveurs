@@ -1,0 +1,97 @@
+// Ô 3 Saveurs — Chez Laila · schéma de données
+// Production : PostgreSQL (Neon). En dev, pointer DATABASE_URL vers une base
+// Neon (branche de dev) ou un Postgres local. Après avoir renseigné
+// DATABASE_URL, exécuter `npx prisma migrate deploy` (prod) ou
+// `npx prisma migrate dev` (dev) puis `npm run db:seed`.
+//
+// Neon fournit deux URLs : une "pooled" (…-pooler…, PgBouncer) pour l'app
+// (DATABASE_URL) et une "direct" pour les migrations (DIRECT_URL).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Catalogue ────────────────────────────────────────────────
+
+model Dish {
+  id        String   @id @default(cuid())
+  cat       String
+  name      String
+  desc      String   @default("")
+  price     Float? // null = à définir / bientôt
+  photo     String?
+  badge     String? // Healthy | Nouveau | Bientôt
+  popular   Boolean  @default(false)
+  available Boolean  @default(true)
+  spice     Int      @default(0)
+  tags      String   @default("[]") // JSON: string[]
+  options   String   @default("[]") // JSON: DishOption[]
+  formules  String? // JSON: [string, number][]
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Livraison ────────────────────────────────────────────────
+
+model Zone {
+  id      String @id @default(cuid())
+  idx     Int    @unique
+  fee     Float
+  minimum Float
+  cities  String // JSON: string[]
+}
+
+model DailySpecial {
+  id      String  @id @default(cuid())
+  weekday Int     @unique // 0=dimanche … 6=samedi
+  name    String
+  price   Float?
+  active  Boolean @default(true)
+}
+
+// ─── Clients & commandes ──────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  phone     String   @default("")
+  password  String? // hash bcrypt (null = compte OAuth / invité)
+  role      String   @default("CLIENT") // CLIENT | ADMIN
+  favorites String   @default("[]") // JSON: dishIds[]
+  addresses String   @default("[]") // JSON: SavedAddress[]
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  ref             String   @unique
+  userEmail       String? // rattachement client
+  mode            String // livraison | emporter
+  status          String   @default("confirmee")
+  zoneIdx         Int?
+  slot            String   @default("asap")
+  customerName    String
+  customerEmail   String
+  customerPhone   String
+  address         String?
+  city            String?
+  zip             String?
+  subtotal        Float
+  fee             Float    @default(0)
+  total           Float
+  paid            Boolean  @default(false)
+  paymentMethod   String   @default("Carte")
+  stripeSessionId String? // session Stripe Checkout
+  driver          String?
+  lines           String // JSON: CartLine[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

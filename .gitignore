@@ -1,0 +1,46 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+.thumbnail
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env files
+.env
+.env*.local
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# tests
+/coverage
+
+# déploiement
+.vercel
+
+# Sources et médias lourds — conservés sur le disque, hors du dépôt.
+# `uploads/` contient les originaux fournis par la cliente (dépliant PDF, photos
+# sources) : ne pas supprimer, c'est la seule copie. `assets/photos/` est un
+# doublon de `public/photos/` (seul ce dernier est servi par le site).
+/uploads
+/scraps
+/assets
+
+# Maquettes de référence pré-Next (hors build, cf. tsconfig "exclude")
+/_maquettes
