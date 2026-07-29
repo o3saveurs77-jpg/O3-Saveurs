@@ -7,6 +7,7 @@ import { fmtPrice, isOrderable } from "@/lib/menu";
 import { ALLERGEN_LABEL } from "@/lib/types";
 import { Icon } from "./Icon";
 import { DishBadge } from "./DishBadge";
+import { DishPlaceholder } from "./DishPlaceholder";
 import { useCartActions } from "./cart/CartContext";
 import { useAuth } from "./providers/AuthContext";
 import { DishModal } from "./DishModal";
@@ -37,9 +38,12 @@ export function DishCard({ dish, priority = false }: { dish: Dish; priority?: bo
 
   return (
     <>
-      <article className="group flex flex-col overflow-hidden rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-lg)]">
+      {/* `h-full` : sur l'accueil la carte est enveloppée dans un `Reveal`, qui
+          devient la cellule de grille étirée. Sans cela l'article gardait sa
+          hauteur naturelle à l'intérieur et `mt-auto` n'avait rien à remplir. */}
+      <article className="group flex h-full flex-col overflow-hidden rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-soft)] transition duration-300 hover:-translate-y-1.5 hover:border-primary/35 hover:shadow-[var(--shadow-lg)]">
         {/* visuel */}
-        <div className="relative aspect-[4/3] overflow-hidden">
+        <div className="sheen relative aspect-[4/3] overflow-hidden">
           {dish.photo ? (
             <Image
               src={dish.photo}
@@ -47,14 +51,12 @@ export function DishCard({ dish, priority = false }: { dish: Dish; priority?: bo
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
               priority={priority}
-              className={`object-cover transition duration-500 group-hover:scale-105 ${
+              className={`object-cover transition duration-700 ease-out group-hover:scale-[1.07] ${
                 epuise ? "grayscale" : ""
               }`}
             />
           ) : (
-            <div className="ph h-full w-full">
-              <span className="glyph">{dish.name.split(" ")[0]}</span>
-            </div>
+            <DishPlaceholder cat={dish.cat} name={dish.name} />
           )}
 
           {epuise && (
@@ -120,19 +122,24 @@ export function DishCard({ dish, priority = false }: { dish: Dish; priority?: bo
             <p className="mt-2 text-xs font-bold text-brick">Plus que {dish.stock}</p>
           )}
 
-          {/* prix + ajout */}
-          <div className="mt-4 flex items-center justify-between gap-2 pt-1">
-            <span className="text-lg font-extrabold text-brick">
+          {/* Prix + ajout.
+              `mt-auto` et non `mt-4` : la ligne suivait le bas du contenu, si
+              bien qu'une description sur trois lignes ou un tag supplémentaire
+              décalait le bouton vers le bas. Dans une même rangée les boutons
+              se retrouvaient à trois hauteurs différentes. Poussée en fin de
+              colonne, la ligne s'aligne sur toutes les cartes de la rangée. */}
+          <div className="mt-auto flex items-center justify-between gap-2 border-t border-line/70 pt-3">
+            <span className="font-display text-xl text-brick">
               {dish.priceCents !== null ? fmtPrice(dish.priceCents) : "Bientôt"}
             </span>
             <button
               type="button"
               onClick={onAdd}
               disabled={blocked}
-              className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition ${
+              className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold transition duration-200 ${
                 blocked
                   ? "cursor-not-allowed bg-panel-2 text-ink-2"
-                  : "bg-primary text-white hover:brightness-105 active:scale-95"
+                  : "bg-primary text-white shadow-sm hover:-translate-y-0.5 hover:shadow-[0_8px_18px_-6px_var(--color-primary)] hover:brightness-105 active:translate-y-0 active:scale-95"
               }`}
             >
               {epuise ? (

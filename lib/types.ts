@@ -60,8 +60,15 @@ export const ORDER_STATUSES: readonly OrderStatus[] = [
   "annulee",
 ];
 
-/** Progression normale affichée au client (hors annulation et attente). */
-export const STATUS_FLOW: OrderStatus[] = ["confirmee", "cuisine", "route", "livree"];
+/**
+ * Progression normale affichée au client (hors annulation et attente).
+ * `as const` volontaire : le type des éléments se restreint à ces quatre
+ * statuts, ce qui permet aux composants de suivi d'exiger une icône pour
+ * chacun — et seulement pour ceux-là.
+ */
+export const STATUS_FLOW = ["confirmee", "cuisine", "route", "livree"] as const;
+
+export type FlowStatus = (typeof STATUS_FLOW)[number];
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   en_attente_paiement: "En attente de paiement",

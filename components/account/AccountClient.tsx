@@ -8,19 +8,22 @@ import { useDishes } from "@/components/providers/DishesContext";
 import { fmtPrice } from "@/lib/menu";
 import { STATUS_LABEL } from "@/lib/types";
 import type { OrderStatus } from "@/lib/types";
-import { Icon } from "@/components/Icon";
+import { Icon, type IconName } from "@/components/Icon";
 
+// Contrastes revus : `text-primary` sur `bg-primary-soft` plafonnait à 2,48:1 et
+// `text-teal` à 2,46:1, tous deux sous le seuil WCAG AA de 4,5:1.
 const STATUS_COLOR: Record<OrderStatus, string> = {
-  confirmee: "bg-gold/20 text-[#8a6d00]",
-  cuisine: "bg-primary-soft text-primary",
-  route: "bg-teal/15 text-teal",
+  en_attente_paiement: "bg-brick/10 text-brick",
+  confirmee: "bg-gold/20 text-[#7a5f00]",
+  cuisine: "bg-primary-soft text-brick",
+  route: "bg-teal/15 text-[#0f6b5e]",
   livree: "bg-[#e9f7f4] text-[#0f6b5e]",
   annulee: "bg-brick/10 text-brick",
 };
 
 type Tab = "commandes" | "factures" | "adresses" | "favoris" | "profil";
 
-const TABS: { k: Tab; label: string; icon: string }[] = [
+const TABS: { k: Tab; label: string; icon: IconName }[] = [
   { k: "commandes", label: "Mes commandes", icon: "list" },
   { k: "factures", label: "Factures", icon: "euro" },
   { k: "adresses", label: "Adresses", icon: "pin" },
@@ -62,9 +65,9 @@ export function AccountClient() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[220px_1fr]">
-        {/* onglets */}
-        <nav className="flex gap-2 overflow-x-auto md:flex-col">
+      <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)]">
+        {/* onglets — rail défilant sous `md`, colonne au-delà */}
+        <nav className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:flex-col md:px-0">
           {TABS.map((t) => (
             <button
               key={t.k}
@@ -221,7 +224,7 @@ function OrdersTab() {
             {o.lines.map((l) => `${l.qty}× ${l.name}`).join(" · ")}
           </p>
           <div className="mt-3 flex items-center justify-between">
-            <span className="font-bold text-brick">{fmtPrice(o.total)}</span>
+            <span className="font-bold text-brick">{fmtPrice(o.totalCents)}</span>
             <div className="flex gap-2">
               <Link href={`/commande/${o.id}`} className="rounded-full border border-line px-4 py-2 text-sm font-semibold hover:bg-panel-2">
                 Suivre
@@ -241,8 +244,11 @@ function InvoicesTab() {
   const mine = useMyOrders().filter((o) => o.paid);
   if (mine.length === 0) return <Empty icon="euro" title="Aucune facture disponible" />;
   return (
-    <div className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-soft)]">
-      <table className="w-full text-sm">
+    /* `overflow-hidden` seul rognait la table sur téléphone : les quatre
+       colonnes ne tiennent pas sous 460 px et la colonne « PDF » était
+       simplement coupée, sans moyen de l'atteindre. On défile. */
+    <div className="overflow-x-auto rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-soft)]">
+      <table className="w-full min-w-[30rem] text-sm">
         <thead className="bg-panel-2 text-left text-ink-2">
           <tr>
             <th className="px-4 py-3 font-semibold">Référence</th>
@@ -256,7 +262,7 @@ function InvoicesTab() {
             <tr key={o.id} className="border-t border-line">
               <td className="px-4 py-3 font-semibold">{o.ref}</td>
               <td className="px-4 py-3 text-ink-2">{dateFr(o.createdAt)}</td>
-              <td className="px-4 py-3 font-semibold">{fmtPrice(o.total)}</td>
+              <td className="px-4 py-3 font-semibold">{fmtPrice(o.totalCents)}</td>
               <td className="px-4 py-3 text-right">
                 <Link href={`/facture/${o.id}`} className="inline-flex items-center gap-1.5 font-semibold text-primary hover:underline">
                   <Icon name="arrow" size={15} /> PDF
@@ -355,7 +361,9 @@ function FavoritesTab() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate font-bold">{d.name}</p>
-            <p className="text-sm text-brick">{d.price != null ? fmtPrice(d.price) : "Bientôt"}</p>
+            <p className="text-sm text-brick">
+              {d.priceCents != null ? fmtPrice(d.priceCents) : "Bientôt"}
+            </p>
           </div>
           <button onClick={() => toggleFavorite(d.id)} className="text-brick" aria-label="Retirer des favoris">
             <Icon name="heart" size={20} fill />
@@ -402,7 +410,15 @@ function ProfileTab() {
   );
 }
 
-function Empty({ icon, title, children }: { icon: string; title: string; children?: React.ReactNode }) {
+function Empty({
+  icon,
+  title,
+  children,
+}: {
+  icon: IconName;
+  title: string;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-[var(--radius-card)] border border-line bg-panel py-16 text-center shadow-[var(--shadow-soft)]">
       <Icon name={icon} size={44} className="text-ink-2 opacity-30" />

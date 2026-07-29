@@ -4,10 +4,16 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Emblem } from "@/components/Brand";
-import { Icon } from "@/components/Icon";
+import { Icon, type IconName } from "@/components/Icon";
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: IconName;
+}
 
 /** Regroupé par métier : le quotidien d'abord, la configuration ensuite. */
-const NAV_GROUPS = [
+const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Pilotage",
     items: [
@@ -95,7 +101,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const close = () => setOpen(false);
 
   return (
-    <div className="min-h-screen bg-page">
+    <div className="min-h-dvh bg-page">
       {/* sidebar desktop */}
       <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-ink p-4 lg:flex">
         <Link href="/admin" className="mb-6 flex items-center gap-2.5 px-2 py-2">
@@ -117,14 +123,16 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* topbar mobile */}
-      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-line bg-ink px-4 py-3 lg:hidden">
-        <Link href="/admin" className="flex items-center gap-2">
+      <header className="sticky top-0 z-40 flex items-center justify-between gap-2 border-b border-line bg-ink px-4 py-3 lg:hidden">
+        <Link href="/admin" className="flex min-w-0 items-center gap-2">
           <Emblem size={32} />
-          <span className="font-display text-cream">Back-office</span>
+          <span className="truncate font-display text-cream">Back-office</span>
         </Link>
+        {/* Une icône nue de 24 px offrait une cible tactile deux fois trop
+            petite ; le carré de 40 px l'entoure sans déplacer le dessin. */}
         <button
           onClick={() => setOpen((v) => !v)}
-          className="text-cream"
+          className="-mr-2 grid h-10 w-10 shrink-0 place-items-center text-cream"
           aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
           aria-expanded={open}
           aria-controls="admin-nav-mobile"
@@ -133,9 +141,20 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </button>
       </header>
       {open && (
-        <nav id="admin-nav-mobile" className="flex flex-col gap-1 border-b border-line bg-ink p-4 lg:hidden">
+        /* Quinze entrées réparties en quatre groupes : déroulé en pleine
+           hauteur, le menu repoussait le contenu de l'écran et il fallait
+           traverser toute la navigation pour revenir à la page. Il défile
+           désormais dans sa propre fenêtre. */
+        <nav
+          id="admin-nav-mobile"
+          className="flex max-h-[70dvh] flex-col gap-1 overflow-y-auto border-b border-line bg-ink p-4 lg:hidden"
+        >
           <SideLinks pathname={pathname} onNavigate={close} />
-          <Link href="/" className="rounded-xl px-4 py-3 text-sm font-semibold text-cream/60 hover:bg-white/10">
+          <Link
+            href="/"
+            onClick={close}
+            className="rounded-xl px-4 py-3 text-sm font-semibold text-cream/60 hover:bg-white/10"
+          >
             ← Retour au site
           </Link>
         </nav>

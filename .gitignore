@@ -23,6 +23,13 @@ yarn-error.log*
 # env files
 .env
 .env*.local
+# Copies de secours de `.env` faites à la main : même contenu sensible que
+# l'original, aucune raison d'être versionnées.
+.env.backup*
+
+# Réglages Claude Code propres à la machine (chemins locaux, permissions).
+# `settings.json` reste versionné : c'est la configuration de l'équipe.
+.claude/settings.local.json
 
 # typescript
 *.tsbuildinfo

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { useOrders } from "@/components/providers/OrdersContext";
 import { fmtPrice } from "@/lib/menu";
+import { vatBreakdown, formatInvoiceNumber } from "@/lib/money";
 import { valid } from "@/lib/analytics";
 import { Icon } from "@/components/Icon";
 
@@ -15,21 +16,43 @@ export function FacturationAdmin() {
     [orders]
   );
 
-  const total = invoices.reduce((s, o) => s + o.total, 0);
+  const total = invoices.reduce((s, o) => s + o.totalCents, 0);
 
   const exportCsv = () => {
-    const header = ["Reference", "Date", "Client", "Email", "Mode", "Sous-total", "Frais", "Total", "Paiement"];
-    const rows = invoices.map((o) => [
-      o.ref,
-      new Date(o.createdAt).toLocaleDateString("fr-FR"),
-      o.customer.name,
-      o.customer.email,
-      o.mode,
-      o.subtotal.toFixed(2),
-      o.fee.toFixed(2),
-      o.total.toFixed(2),
-      o.paymentMethod,
-    ]);
+    const header = [
+      "Numero de facture",
+      "Reference",
+      "Date",
+      "Client",
+      "Email",
+      "Mode",
+      "Sous-total HT",
+      "TVA",
+      "Frais de livraison",
+      "Remise",
+      "Total TTC",
+      "Paiement",
+    ];
+    // Montants exportés en euros à deux décimales, depuis les centimes : c'est
+    // le format qu'attend un tableur, et la conversion se fait une seule fois,
+    // ici, sans jamais réintroduire de flottant dans les calculs.
+    const rows = invoices.map((o) => {
+      const vat = vatBreakdown(o.totalCents, o.vatRateBp);
+      return [
+        formatInvoiceNumber(o.invoiceNumber, new Date(o.createdAt)),
+        o.ref,
+        new Date(o.createdAt).toLocaleDateString("fr-FR"),
+        o.customer.name,
+        o.customer.email,
+        o.mode,
+        (vat.netCents / 100).toFixed(2),
+        (vat.vatCents / 100).toFixed(2),
+        (o.feeCents / 100).toFixed(2),
+        (o.discountCents / 100).toFixed(2),
+        (o.totalCents / 100).toFixed(2),
+        o.paymentMethod,
+      ];
+    });
     const csv = [header, ...rows].map((r) => r.map((c) => `"${c}"`).join(";")).join("\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -80,7 +103,9 @@ export function FacturationAdmin() {
                 </td>
                 <td className="px-4 py-3">{o.customer.name}</td>
                 <td className="px-4 py-3 text-ink-2">{o.paymentMethod}</td>
-                <td className="px-4 py-3 text-right font-bold text-brick">{fmtPrice(o.total)}</td>
+                <td className="px-4 py-3 text-right font-bold text-brick">
+                  {fmtPrice(o.totalCents)}
+                </td>
                 <td className="px-4 py-3 text-right">
                   <Link href={`/facture/${o.id}`} className="inline-flex items-center gap-1.5 font-semibold text-primary hover:underline">
                     <Icon name="arrow" size={15} /> Voir

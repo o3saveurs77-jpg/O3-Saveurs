@@ -168,7 +168,10 @@ export function OrderTracker({ id }: { id: string }) {
   }
 
   const { order } = state;
-  const currentIdx = STATUS_FLOW.indexOf(order.status);
+  // `STATUS_FLOW` ne couvre que la progression normale : les statuts hors flux
+  // (« en attente de paiement », « annulée ») donnent volontairement -1 et sont
+  // traités par les deux drapeaux ci-dessous.
+  const currentIdx = (STATUS_FLOW as readonly OrderStatus[]).indexOf(order.status);
   const cancelled = order.status === "annulee";
   const awaitingPayment = order.status === "en_attente_paiement";
   const lastLabel = order.mode === "emporter" ? "Prête !" : "Livrée";
@@ -183,7 +186,7 @@ export function OrderTracker({ id }: { id: string }) {
   return (
     <div className="wrap max-w-3xl py-10">
       {/* confirmation */}
-      <div className="rounded-[var(--radius-card)] border border-line bg-panel p-6 text-center shadow-[var(--shadow-soft)]">
+      <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 text-center shadow-[var(--shadow-soft)] sm:p-6">
         <div
           className={`mx-auto grid h-16 w-16 place-items-center rounded-full ${
             awaitingPayment
@@ -195,7 +198,7 @@ export function OrderTracker({ id }: { id: string }) {
         >
           <Icon name={awaitingPayment ? "clock" : cancelled ? "x" : "check"} size={34} />
         </div>
-        <h1 className="mt-4 text-3xl">
+        <h1 className="mt-4 text-2xl sm:text-3xl">
           {awaitingPayment
             ? "Paiement en cours de confirmation"
             : cancelled
@@ -228,7 +231,7 @@ export function OrderTracker({ id }: { id: string }) {
 
       {/* suivi */}
       {!cancelled && !awaitingPayment && (
-        <div className="mt-6 rounded-[var(--radius-card)] border border-line bg-panel p-6 shadow-[var(--shadow-soft)]">
+        <div className="mt-6 rounded-[var(--radius-card)] border border-line bg-panel p-4 shadow-[var(--shadow-soft)] sm:p-6">
           <h2 className="mb-6 text-lg">Suivi de préparation</h2>
           <ol className="relative flex justify-between">
             {/* ligne de progression */}
@@ -248,20 +251,26 @@ export function OrderTracker({ id }: { id: string }) {
               const active = i === currentIdx;
               const label = i === STATUS_FLOW.length - 1 ? lastLabel : STATUS_LABEL[status];
               return (
+                /* `min-w-0` : sans lui, l'intitulé le plus long (« En
+                   préparation ») imposait sa largeur à sa colonne, les quatre
+                   étapes ne tenaient plus dans la carte et la frise débordait
+                   sous 380 px. */
                 <li
                   key={status}
-                  className="relative z-10 flex flex-1 flex-col items-center gap-2"
+                  className="relative z-10 flex min-w-0 flex-1 flex-col items-center gap-2"
                   aria-current={active ? "step" : undefined}
                 >
                   <span
-                    className={`grid h-10 w-10 place-items-center rounded-full border-2 transition ${
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 transition ${
                       done ? "border-teal bg-teal text-white" : "border-line bg-panel text-ink-2"
                     } ${active ? "ring-4 ring-teal/20" : ""}`}
                   >
                     <Icon name={STEP_ICON[status]} size={18} />
                   </span>
                   <span
-                    className={`text-center text-xs font-semibold ${done ? "text-ink" : "text-ink-2"}`}
+                    className={`text-center text-[11px] font-semibold leading-tight sm:text-xs ${
+                      done ? "text-ink" : "text-ink-2"
+                    }`}
                   >
                     {label}
                   </span>

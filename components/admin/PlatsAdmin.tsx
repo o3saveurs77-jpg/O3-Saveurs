@@ -795,6 +795,9 @@ function DishEditor({
         allergens: f.allergens,
         stock,
         stockAlert,
+        // Coût matière : calculé plus haut, il alimente la marge du tableau de
+        // bord. Il était omis de l'envoi, donc jamais enregistré.
+        costCents,
         // Un nouveau plat sans position explicite se place en fin de catégorie,
         // ce que fait déjà `POST /api/dishes`.
         position: position ?? 0,

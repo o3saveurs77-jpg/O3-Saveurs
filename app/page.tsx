@@ -3,11 +3,13 @@ import Image from "next/image";
 import { Hero } from "@/components/home/Hero";
 import { DishCard } from "@/components/DishCard";
 import { Icon } from "@/components/Icon";
+import { Reveal } from "@/components/Reveal";
 import { prisma } from "@/lib/prisma";
 import { rowToDish, rowToZone } from "@/lib/serialize";
 import { formules, info, fmtPrice } from "@/lib/menu";
 import type { Dish, Zone } from "@/lib/menu";
-import { parisNow, parisStartOfDay, WEEKDAY_LABEL } from "@/lib/hours";
+import { loadDailySpecial } from "@/lib/dailySpecial";
+import type { PlatDuJourView } from "@/lib/dailySpecial";
 
 /* La page lisait `items` et `zones` de `lib/menu.ts`, c'est-à-dire les données
  * de seed : un prix ou un « populaire » modifié dans l'administration
@@ -39,46 +41,28 @@ const SAVEURS = [
   },
 ];
 
-interface PlatDuJourView {
-  name: string;
-  priceCents: number | null;
-  jour: string;
-}
-
 /** Plats populaires, plat du jour et zones — tout depuis la base. */
 async function loadHome(): Promise<{
   populaires: Dish[];
   platToday: PlatDuJourView | null;
   zones: Zone[];
 }> {
-  const { weekday } = parisNow();
-  const today = parisStartOfDay();
-  const tomorrow = new Date(today.getTime() + 86_400_000);
-
-  const [dishRows, specialRows, zoneRows] = await Promise.all([
+  /* La sélection du plat du jour vit dans `lib/dailySpecial.ts` depuis que la
+   * Carte l'affiche elle aussi. Elle reste dans ce `Promise.all` : c'est une
+   * promesse comme une autre, les trois lectures partent toujours ensemble. */
+  const [dishRows, platToday, zoneRows] = await Promise.all([
     prisma.dish.findMany({
       where: { popular: true, available: true },
       orderBy: [{ position: "asc" }, { name: "asc" }],
       take: 6,
     }),
-    prisma.dailySpecial.findMany({
-      where: {
-        active: true,
-        OR: [{ date: { gte: today, lt: tomorrow } }, { weekday }],
-      },
-      orderBy: [{ position: "asc" }],
-    }),
+    loadDailySpecial(),
     prisma.zone.findMany({ where: { active: true }, orderBy: { idx: "asc" } }),
   ]);
 
-  // Une date précise l'emporte sur la récurrence hebdomadaire.
-  const special = specialRows.find((s) => s.date !== null) ?? specialRows[0] ?? null;
-
   return {
     populaires: dishRows.map(rowToDish),
-    platToday: special
-      ? { name: special.name, priceCents: special.priceCents, jour: WEEKDAY_LABEL[weekday] }
-      : null,
+    platToday,
     zones: zoneRows.map(rowToZone),
   };
 }
@@ -101,44 +85,58 @@ export default async function HomePage() {
 
       {/* ── Trio des saveurs ─────────────────────────────── */}
       <section className="wrap py-16">
-        <div className="text-center">
+        <Reveal className="text-center">
           <p className="font-script text-3xl text-teal">Trois continents</p>
           <h2 className="mt-1 text-3xl sm:text-4xl">Une assiette, le monde entier</h2>
-        </div>
+        </Reveal>
         <div className="mt-9 grid gap-6 md:grid-cols-3">
-          {SAVEURS.map((s) => (
-            <Link
-              key={s.cat}
-              href="/carte"
-              className="group relative block h-64 overflow-hidden rounded-[var(--radius-card)] shadow-[var(--shadow-soft)]"
-            >
-              <Image
-                src={s.photo}
-                alt={s.titre}
-                fill
-                sizes="(max-width: 768px) 100vw, 33vw"
-                className="object-cover transition duration-500 group-hover:scale-105"
-              />
-              <div
-                className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"
-                aria-hidden="true"
-              />
-              <div className="absolute inset-x-0 bottom-0 p-5 text-white">
-                <h3 className="font-script text-3xl text-gold">{s.titre}</h3>
-                <p className="mt-1 text-sm text-white/90">{s.desc}</p>
-              </div>
-            </Link>
+          {SAVEURS.map((s, i) => (
+            /* Cascade de 110 ms : les trois vignettes se posent l'une après
+               l'autre plutôt qu'en bloc. */
+            <Reveal key={s.cat} delay={i * 110}>
+              <Link
+                href="/carte"
+                className="group relative block h-64 overflow-hidden rounded-[var(--radius-card)] shadow-[var(--shadow-soft)] transition duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]"
+              >
+                <Image
+                  src={s.photo}
+                  alt={s.titre}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  className="object-cover transition duration-700 ease-out group-hover:scale-110"
+                />
+                {/* Le dégradé s'opacifie au survol pour garder le texte lisible
+                    pendant que la photo s'agrandit dessous. */}
+                <div
+                  className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent transition-opacity duration-300 group-hover:from-black/90"
+                  aria-hidden="true"
+                />
+                <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                  <h3 className="font-script text-3xl text-gold drop-shadow-sm">{s.titre}</h3>
+                  <p className="mt-1 text-sm text-white/90">{s.desc}</p>
+                  <span className="mt-2.5 inline-flex items-center gap-1.5 text-sm font-bold text-gold opacity-0 transition duration-300 group-hover:opacity-100">
+                    Découvrir <Icon name="arrow" size={15} />
+                  </span>
+                </div>
+              </Link>
+            </Reveal>
           ))}
         </div>
       </section>
 
       {/* ── Plat du jour ─────────────────────────────────── */}
       {platToday && (
-        <section className="bg-brick text-white">
+        <section className="relative overflow-hidden bg-brick text-white">
           <div className="ots-band flip" />
-          <div className="wrap flex flex-col items-center gap-4 py-12 text-center sm:flex-row sm:justify-between sm:text-left">
-            <div>
-              <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-bold uppercase tracking-wide">
+          {/* Halo doré : le bandeau était un aplat rouge plein, très plat à
+              côté du reste de la page. */}
+          <div
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_120%_at_15%_50%,color-mix(in_oklab,var(--color-gold)_26%,transparent),transparent_60%)]"
+            aria-hidden="true"
+          />
+          <div className="wrap relative flex flex-col items-center gap-4 py-12 text-center sm:flex-row sm:justify-between sm:text-left">
+            <Reveal>
+              <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-bold uppercase tracking-wide backdrop-blur">
                 <Icon name="sparkle" size={15} /> Plat du jour · {platToday.jour}
               </p>
               <h2 className="mt-3 font-script text-4xl text-gold sm:text-5xl">{platToday.name}</h2>
@@ -146,13 +144,15 @@ export default async function HomePage() {
                 Préparé en quantité limitée — uniquement aujourd'hui
                 {platToday.priceCents !== null && <> · {fmtPrice(platToday.priceCents)}</>}.
               </p>
-            </div>
-            <Link
-              href="/carte"
-              className="inline-flex items-center gap-2 rounded-full bg-gold px-6 py-3.5 font-bold text-[#3a2a05] transition hover:brightness-105"
-            >
-              Commander <Icon name="arrow" size={18} />
-            </Link>
+            </Reveal>
+            <Reveal delay={140}>
+              <Link
+                href="/carte"
+                className="pulse-ring inline-flex items-center gap-2 rounded-full bg-gold px-6 py-3.5 font-bold text-[#3a2a05] transition duration-200 hover:-translate-y-0.5 hover:brightness-105"
+              >
+                Commander <Icon name="arrow" size={18} />
+              </Link>
+            </Reveal>
           </div>
         </section>
       )}
@@ -160,50 +160,58 @@ export default async function HomePage() {
       {/* ── Incontournables ──────────────────────────────── */}
       {populaires.length > 0 && (
         <section className="wrap py-16">
-          <div className="mb-7 flex items-end justify-between gap-4">
+          <Reveal className="mb-7 flex items-end justify-between gap-4">
             <div>
               <p className="font-script text-3xl text-teal">Les chouchous</p>
               <h2 className="mt-1 text-3xl sm:text-4xl">Nos incontournables</h2>
             </div>
             <Link
               href="/carte"
-              className="hidden items-center gap-1.5 font-semibold text-primary hover:underline sm:flex"
+              className="link-underline hidden items-center gap-1.5 font-semibold text-primary sm:flex"
             >
               Toute la carte <Icon name="arrow" size={16} />
             </Link>
-          </div>
+          </Reveal>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {populaires.map((d) => (
-              <DishCard key={d.id} dish={d} />
+            {populaires.map((d, i) => (
+              /* La cascade suit la lecture ligne par ligne : 3 colonnes en
+                 desktop, donc 90 ms par carte reste sous la seconde au total. */
+              <Reveal key={d.id} delay={(i % 3) * 90 + Math.floor(i / 3) * 60} className="h-full">
+                {/* Pas de `priority` ici : la section est à ~1 500 px du haut,
+                    précharger ses images volerait de la bande passante au LCP,
+                    qui est le collage du hero. */}
+                <DishCard dish={d} />
+              </Reveal>
             ))}
           </div>
         </section>
       )}
 
       {/* ── Formules ─────────────────────────────────────── */}
-      <section className="bg-panel-2">
-        <div className="wrap py-16">
-          <div className="text-center">
+      <section className="relative overflow-hidden bg-panel-2">
+        <div className="wrap relative py-16">
+          <Reveal className="text-center">
             <p className="font-script text-3xl text-teal">Le bon plan</p>
             <h2 className="mt-1 text-3xl sm:text-4xl">Nos formules</h2>
-          </div>
+          </Reveal>
           <div className="mx-auto mt-9 grid max-w-3xl gap-6 sm:grid-cols-2">
-            {formules.map((f) => (
-              <div
-                key={f.id}
-                className="flex flex-col rounded-[var(--radius-card)] border border-line bg-panel p-6 shadow-[var(--shadow-soft)]"
-              >
-                <div className="flex items-baseline justify-between">
-                  <h3 className="text-xl">{f.name}</h3>
-                  <span className="font-display text-3xl text-brick">
-                    {fmtPrice(f.priceCents)}
-                  </span>
+            {formules.map((f, i) => (
+              <Reveal key={f.id} delay={i * 120} className="h-full">
+                {/* Le prix passe en pastille pleine : c'est l'argument de la
+                    section, il était noyé au même niveau que le titre. */}
+                <div className="group flex h-full flex-col rounded-[var(--radius-card)] border border-line bg-panel p-6 shadow-[var(--shadow-soft)] transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[var(--shadow-lg)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-xl leading-tight">{f.name}</h3>
+                    <span className="shrink-0 rounded-full bg-brick px-3.5 py-1.5 font-display text-lg text-white shadow-sm">
+                      {fmtPrice(f.priceCents)}
+                    </span>
+                  </div>
+                  <p className="mt-3 flex-1 text-sm text-ink-2">{f.desc}</p>
+                  <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-teal/10 px-3 py-1.5 text-sm font-semibold text-teal">
+                    <Icon name="check" size={16} /> {f.extra}
+                  </p>
                 </div>
-                <p className="mt-2 flex-1 text-sm text-ink-2">{f.desc}</p>
-                <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-teal">
-                  <Icon name="check" size={16} /> {f.extra}
-                </p>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -212,47 +220,57 @@ export default async function HomePage() {
       {/* ── Zones de livraison ───────────────────────────── */}
       {zones.length > 0 && (
         <section className="wrap py-16">
-          <div className="text-center">
+          <Reveal className="text-center">
             <p className="font-script text-3xl text-teal">On vient jusqu'à vous</p>
             <h2 className="mt-1 text-3xl sm:text-4xl">Zones de livraison</h2>
             <p className="mx-auto mt-3 max-w-xl text-ink-2">
               Frais et minimum de commande selon votre commune. Hors zone, l'à emporter reste
               possible.
             </p>
-          </div>
+          </Reveal>
           <div className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {zones.map((z) => (
-              <div
-                key={z.idx}
-                className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="rounded-full bg-primary-soft px-3 py-1 text-sm font-bold text-primary">
-                    Zone {z.idx + 1}
-                  </span>
-                  <Icon name="pin" size={20} className="text-primary" />
+            {zones.map((z, i) => (
+              <Reveal key={z.idx} delay={i * 90} className="h-full">
+                {/* Les deux montants étaient collés en petit corps ; ils passent
+                    sur une ligne encadrée pour qu'on les compare d'un coup d'œil
+                    d'une zone à l'autre. */}
+                <div className="flex h-full flex-col rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)] transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[var(--shadow-lg)]">
+                  <div className="flex items-center justify-between">
+                    <span className="rounded-full bg-primary-soft px-3 py-1 text-sm font-bold text-primary">
+                      Zone {z.idx + 1}
+                    </span>
+                    <Icon name="pin" size={20} className="text-primary" />
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-[var(--radius-soft)] bg-panel-2 p-3 text-sm">
+                    <span>
+                      <span className="block text-xs text-ink-2">Frais</span>
+                      <strong className="font-display text-base text-brick">
+                        {fmtPrice(z.feeCents)}
+                      </strong>
+                    </span>
+                    <span>
+                      <span className="block text-xs text-ink-2">Minimum</span>
+                      <strong className="font-display text-base text-brick">
+                        {fmtPrice(z.minimumCents)}
+                      </strong>
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-relaxed text-ink-2">{z.villes.join(" · ")}</p>
                 </div>
-                <div className="mt-3 flex gap-4 text-sm">
-                  <span>
-                    <span className="block text-xs text-ink-2">Frais</span>
-                    <strong className="text-brick">{fmtPrice(z.feeCents)}</strong>
-                  </span>
-                  <span>
-                    <span className="block text-xs text-ink-2">Minimum</span>
-                    <strong className="text-brick">{fmtPrice(z.minimumCents)}</strong>
-                  </span>
-                </div>
-                <p className="mt-3 text-sm text-ink-2">{z.villes.join(" · ")}</p>
-              </div>
+              </Reveal>
             ))}
           </div>
         </section>
       )}
 
       {/* ── À propos teaser ──────────────────────────────── */}
-      <section className="bg-ink text-cream">
-        <div className="wrap grid items-center gap-10 py-16 md:grid-cols-2">
-          <div>
+      <section className="relative overflow-hidden bg-ink text-cream">
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_100%_at_85%_20%,color-mix(in_oklab,var(--color-primary)_20%,transparent),transparent_62%)]"
+          aria-hidden="true"
+        />
+        <div className="wrap relative grid items-center gap-10 py-16 md:grid-cols-2">
+          <Reveal>
             <p className="font-script text-3xl text-gold">Chez Laila</p>
             <h2 className="mt-1 text-3xl sm:text-4xl">Une cuisine généreuse, faite maison</h2>
             <p className="mt-4 text-cream/80">
@@ -269,28 +287,29 @@ export default async function HomePage() {
               </Link>
               <a
                 href={`tel:${info.phone.replace(/\s/g, "")}`}
-                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 font-bold text-white transition hover:brightness-105"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 font-bold text-white transition duration-200 hover:-translate-y-0.5 hover:brightness-105"
               >
                 <Icon name="phone" size={18} /> {info.phone}
               </a>
             </div>
-          </div>
+          </Reveal>
           <div className="grid grid-cols-2 gap-4">
             {info.heroSpreads.slice(0, 4).map((p, i) => (
-              <div
-                key={p}
-                className={`relative h-40 w-full overflow-hidden rounded-2xl shadow-[var(--shadow-lg)] ${
-                  i % 2 ? "translate-y-4" : ""
-                }`}
-              >
-                <Image
-                  src={p}
-                  alt="Plat Ô 3 Saveurs"
-                  fill
-                  sizes="(max-width: 768px) 50vw, 25vw"
-                  className="object-cover"
-                />
-              </div>
+              <Reveal key={p} delay={i * 100}>
+                <div
+                  className={`group relative h-40 w-full overflow-hidden rounded-2xl shadow-[var(--shadow-lg)] ${
+                    i % 2 ? "translate-y-4" : ""
+                  }`}
+                >
+                  <Image
+                    src={p}
+                    alt="Plat Ô 3 Saveurs"
+                    fill
+                    sizes="(max-width: 768px) 50vw, 25vw"
+                    className="object-cover transition duration-700 ease-out group-hover:scale-110"
+                  />
+                </div>
+              </Reveal>
             ))}
           </div>
         </div>

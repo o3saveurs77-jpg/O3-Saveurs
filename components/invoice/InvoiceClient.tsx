@@ -23,7 +23,7 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { Emblem } from "@/components/Brand";
 import { fmtCents, fmtVatRate, vatBreakdown } from "@/lib/money";
-import { formatInvoiceNumber } from "@/lib/ref";
+import { formatInvoiceNumber } from "@/lib/money";
 import { PAYMENT_STATUS_LABEL } from "@/lib/types";
 import type { Order } from "@/lib/types";
 
@@ -106,7 +106,7 @@ export function InvoiceClient({
       <style>{PRINT_CSS}</style>
 
       {/* barre d'actions — jamais imprimée */}
-      <div className="mb-5 flex items-center justify-between print:hidden">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 print:hidden">
         <Link
           href={isAdmin ? "/admin/facturation" : "/compte"}
           className="inline-flex items-center gap-1.5 font-semibold text-ink-2 hover:text-ink"
@@ -116,9 +116,13 @@ export function InvoiceClient({
         <button
           type="button"
           onClick={() => window.print()}
-          className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-bold text-white hover:brightness-105"
+          className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 font-bold text-white hover:brightness-105 sm:px-6"
         >
-          <Icon name="print" size={18} /> Imprimer / Enregistrer en PDF
+          <Icon name="print" size={18} />
+          {/* Le libellé complet fait déborder la barre sous 400 px ; le geste
+              reste le même, seul son intitulé se raccourcit. */}
+          <span className="sm:hidden">Imprimer</span>
+          <span className="hidden sm:inline">Imprimer / Enregistrer en PDF</span>
         </button>
       </div>
 
@@ -168,10 +172,13 @@ export function InvoiceClient({
       {/* document */}
       <article
         id="facture-doc"
-        className="rounded-[var(--radius-card)] border border-line bg-white p-8 text-ink shadow-[var(--shadow-soft)]"
+        /* `p-8` ne laissait que 224 px de contenu sur un écran de 320 px : les
+           lignes d'adresse et le tableau d'articles se cassaient mot par mot.
+           La marge d'impression, elle, reste celle du document. */
+        className="rounded-[var(--radius-card)] border border-line bg-white p-5 text-ink shadow-[var(--shadow-soft)] sm:p-8 print:p-8"
       >
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-6">
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <Emblem size={52} />
             <div className="text-sm text-ink-2">
               <p className="font-display text-xl text-ink">
@@ -194,7 +201,10 @@ export function InvoiceClient({
               </p>
             </div>
           </div>
-          <div className="text-right">
+          {/* `text-left` sous 640 px : aligné à droite sur une seule colonne,
+              le bloc se retrouvait décalé sous le bloc vendeur sans rapport
+              visuel avec lui. */}
+          <div className="text-left sm:text-right">
             <h1 className="font-display text-2xl">FACTURE</h1>
             <p className="text-sm font-semibold">{number}</p>
             <p className="text-sm text-ink-2">Émise le {dateFmt.format(createdAt)}</p>
@@ -232,46 +242,51 @@ export function InvoiceClient({
           </div>
         </section>
 
-        <table className="w-full text-sm">
-          <caption className="sr-only">Détail des articles facturés</caption>
-          <thead>
-            <tr className="border-y border-line text-left text-ink-2">
-              <th scope="col" className="py-2 font-semibold">
-                Article
-              </th>
-              <th scope="col" className="py-2 text-center font-semibold">
-                Qté
-              </th>
-              <th scope="col" className="py-2 text-right font-semibold">
-                P.U. TTC
-              </th>
-              <th scope="col" className="py-2 text-right font-semibold">
-                Total TTC
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {order.lines.map((l) => (
-              <tr
-                key={`${l.dishId}-${l.formule ?? ""}-${JSON.stringify(l.opts)}`}
-                className="border-b border-line"
-              >
-                <td className="py-2.5">
-                  {l.name}
-                  {l.formule && <span className="block text-xs text-ink-2">{l.formule}</span>}
-                  {Object.values(l.opts).length > 0 && (
-                    <span className="block text-xs text-ink-2">
-                      {Object.values(l.opts).join(" · ")}
-                    </span>
-                  )}
-                </td>
-                <td className="py-2.5 text-center">{l.qty}</td>
-                <td className="py-2.5 text-right">{fmtCents(l.unitPriceCents)}</td>
-                <td className="py-2.5 text-right font-semibold">{fmtCents(l.lineTotalCents)}</td>
+        {/* Quatre colonnes chiffrées ne tiennent pas sous ~420 px. Le tableau
+            défile à l'écran ; `print:min-w-0` le rend à sa largeur naturelle sur
+            le papier, où il n'y a rien à faire défiler. */}
+        <div className="-mx-1 overflow-x-auto px-1 print:mx-0 print:overflow-visible print:px-0">
+          <table className="w-full min-w-[26rem] text-sm print:min-w-0">
+            <caption className="sr-only">Détail des articles facturés</caption>
+            <thead>
+              <tr className="border-y border-line text-left text-ink-2">
+                <th scope="col" className="py-2 font-semibold">
+                  Article
+                </th>
+                <th scope="col" className="py-2 text-center font-semibold">
+                  Qté
+                </th>
+                <th scope="col" className="py-2 text-right font-semibold">
+                  P.U. TTC
+                </th>
+                <th scope="col" className="py-2 text-right font-semibold">
+                  Total TTC
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {order.lines.map((l) => (
+                <tr
+                  key={`${l.dishId}-${l.formule ?? ""}-${JSON.stringify(l.opts)}`}
+                  className="border-b border-line"
+                >
+                  <td className="py-2.5">
+                    {l.name}
+                    {l.formule && <span className="block text-xs text-ink-2">{l.formule}</span>}
+                    {Object.values(l.opts).length > 0 && (
+                      <span className="block text-xs text-ink-2">
+                        {Object.values(l.opts).join(" · ")}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2.5 text-center">{l.qty}</td>
+                  <td className="py-2.5 text-right">{fmtCents(l.unitPriceCents)}</td>
+                  <td className="py-2.5 text-right font-semibold">{fmtCents(l.lineTotalCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <div className="ml-auto mt-4 w-full max-w-xs space-y-1.5 text-sm">
           <div className="flex justify-between">
@@ -322,10 +337,12 @@ export function InvoiceClient({
               : "Facture non acquittée à ce jour. Règlement à la remise de la commande."}
           </p>
           <p>
-            Les denrées alimentaires périssables ne sont pas soumises au droit de rétractation
-            (art. L221-28 3° du code de la consommation). Voir nos conditions générales de vente.
+            Les denrées alimentaires périssables ne sont pas soumises au droit de rétractation (art.
+            L221-28 3° du code de la consommation). Voir nos conditions générales de vente.
           </p>
-          <p className="pt-1">Merci de votre confiance — {seller.name}, {seller.tagline}.</p>
+          <p className="pt-1">
+            Merci de votre confiance — {seller.name}, {seller.tagline}.
+          </p>
         </footer>
       </article>
     </div>

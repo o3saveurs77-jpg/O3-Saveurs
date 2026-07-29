@@ -18,8 +18,7 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { rowToOrder } from "@/lib/serialize";
-import { fmtCents, vatBreakdown, fmtVatRate } from "@/lib/money";
-import { formatInvoiceNumber } from "@/lib/ref";
+import { fmtCents, vatBreakdown, fmtVatRate, formatInvoiceNumber } from "@/lib/money";
 import { escapeHtml } from "@/lib/validate";
 import { STATUS_LABEL } from "@/lib/types";
 import type { Order as OrderRow } from "@prisma/client";

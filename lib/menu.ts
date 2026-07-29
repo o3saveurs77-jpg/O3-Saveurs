@@ -144,8 +144,36 @@ export const info = {
   ],
   payments: ["Espèces", "Carte Bleue", "Tickets Restaurant"],
   partner: "Uber Eats",
-  socials: ["Instagram", "Snapchat"],
-  heroSpreads: [photo(3), photo(10), photo(25), photo(32), photo(19), photo(23)],
+  /* Le pied de page dessinait deux ronds cliquables pour Instagram et Snapchat
+   * — mais `socials` ne contenait que des libellés, sans la moindre adresse.
+   * C'étaient des `<span>` : un visiteur cliquait dans le vide.
+   *
+   * `href: null` tant que les comptes ne sont pas connus. Le pied de page
+   * n'affiche que les entrées renseignées, donc rien pour l'instant : mieux
+   * vaut aucune icône qu'une icône morte. Renseigner l'URL suffit à la faire
+   * apparaître, il n'y a pas d'autre changement à faire. */
+  socials: [
+    { name: "Instagram", icon: "insta", href: null },
+    { name: "Snapchat", icon: "snap", href: null },
+  ] as { name: string; icon: "insta" | "snap"; href: string | null }[],
+  /* Ces six visuels alimentent le collage du hero et la grille « à propos ».
+   * La sélection précédente — p03, p10, p25, p32, p19, p23 — était six cadrages
+   * de la *même* table dressée, dont deux paires de fichiers rigoureusement
+   * identiques (p03=p05, p10=p23). Le collage donnait donc trois fois la même
+   * image et la grille du bas quatre fois, ce qui faisait paraître le catalogue
+   * photo bien plus pauvre qu'il ne l'est.
+   *
+   * Ordre voulu : la vue d'ensemble ouvre (grande carte du hero), puis un plat
+   * par famille. Les quatre premiers servent aussi la grille « à propos », d'où
+   * l'alternance des familles dès le début. */
+  heroSpreads: [
+    photo(3), // table dressée — abondance
+    photo(11), // tajine veau & pruneaux — Maghreb
+    photo(4), // tcheb poulet — Afrique de l'Ouest
+    photo(12), // brochettes bœuf — grillades
+    photo(30), // yassa poulet
+    photo(20), // cocktail maison — la couleur d'une boisson
+  ],
 };
 
 // Zones de livraison (frais fixes indicatifs + minimum de commande)

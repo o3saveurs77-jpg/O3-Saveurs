@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { info } from "@/lib/menu";
 import { Icon } from "@/components/Icon";
+import { ContactForm } from "@/components/contact/ContactForm";
 
 export const metadata: Metadata = {
   title: "Contact · Ô 3 Saveurs — Chez Laila",
@@ -52,45 +53,8 @@ export default function ContactPage() {
           </div>
         </div>
 
-        {/* formulaire (stub — branchement Resend à venir) */}
-        <form className="rounded-[var(--radius-card)] border border-line bg-panel p-6 shadow-[var(--shadow-soft)]">
-          <h2 className="mb-4 text-xl">Un message ?</h2>
-          <div className="space-y-4">
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-ink-2">Nom</label>
-              <input
-                className="w-full rounded-[var(--radius-soft)] border border-line bg-page px-4 py-3 outline-none focus:border-primary"
-                placeholder="Votre nom"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-ink-2">Email</label>
-              <input
-                type="email"
-                className="w-full rounded-[var(--radius-soft)] border border-line bg-page px-4 py-3 outline-none focus:border-primary"
-                placeholder="vous@email.com"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-ink-2">Message</label>
-              <textarea
-                rows={5}
-                className="w-full rounded-[var(--radius-soft)] border border-line bg-page px-4 py-3 outline-none focus:border-primary"
-                placeholder="Votre message…"
-              />
-            </div>
-            <button
-              type="button"
-              className="w-full rounded-full bg-primary px-6 py-3.5 font-bold text-white transition hover:brightness-105"
-              title="L'envoi par email (Resend) sera branché prochainement"
-            >
-              Envoyer
-            </button>
-            <p className="text-center text-xs text-ink-2">
-              Formulaire de démonstration — l'envoi sera activé prochainement.
-            </p>
-          </div>
-        </form>
+        {/* formulaire réel : POST /api/contact → ContactMessage + notification */}
+        <ContactForm />
       </div>
     </>
   );

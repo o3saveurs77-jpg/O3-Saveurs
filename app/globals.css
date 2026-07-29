@@ -52,12 +52,40 @@ body {
   padding: 0;
 }
 
+/* `clip` et non `hidden` : `hidden` ferait de la racine un conteneur de
+   défilement, ce qui neutralise `position: sticky` sur la nav et sur la barre
+   de la Carte. `clip` coupe le débordement latéral sans rien de tout cela.
+   Filet de sécurité : un décor mal placé ne doit jamais offrir un défilement
+   horizontal parasite sur mobile. */
+html {
+  overflow-x: clip;
+  /* Un texte agrandi par l'utilisateur ne doit pas être ramené de force à sa
+     taille d'origine à la rotation de l'écran (bug iOS historique). */
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   font-family: var(--font-body);
   background: var(--color-page);
   color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overflow-x: clip;
+  /* Références de commande, emails et URL n'ont aucun point de césure : sans
+     cela un `ORD-2026-000123` élargit sa colonne et pousse toute la page. */
+  overflow-wrap: break-word;
+}
+
+/* Sur iOS, un champ dont le corps est inférieur à 16 px déclenche un zoom
+   automatique à la mise au point — la page reste ensuite décalée. Les tailles
+   de l'interface (14/15 px) sont conservées à partir de `sm`, où le problème
+   ne se pose plus. */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 img {
@@ -93,10 +121,25 @@ h4 {
   letter-spacing: -0.02em;
 }
 
-.wrap {
-  max-width: var(--max-w);
-  margin-inline: auto;
-  padding-inline: 22px;
+/* `@layer components` et non une règle nue : la CSS hors couche l'emporte sur
+   *toutes* les couches de Tailwind, si bien que `max-width` gagnait contre
+   `max-w-2xl`/`max-w-3xl`. La facture et le suivi de commande, écrits en
+   `wrap max-w-2xl`, s'affichaient donc sur 1 180 px de large. Dans la couche
+   `components`, les utilitaires reprennent la main.
+   Gouttière : 16 px sous 640 px — 22 px de chaque côté prélevaient 14 % d'un
+   écran de 320 px. */
+@layer components {
+  .wrap {
+    max-width: var(--max-w);
+    margin-inline: auto;
+    padding-inline: 16px;
+  }
+
+  @media (min-width: 640px) {
+    .wrap {
+      padding-inline: 22px;
+    }
+  }
 }
 
 /* Motif ethnique : bandeau zigzag + triangles aux couleurs de marque */
@@ -134,6 +177,50 @@ h4 {
   opacity: 0.85;
 }
 
+/* ── Substitut illustré des plats sans photo ──────────────────
+   Un aplat crème lisait « image manquante ». Ce fond tissé (chevrons de la
+   charte + halo chaud) lit « pas de photo pour ce plat » — une intention, pas
+   un oubli. Voir components/DishPlaceholder.tsx. */
+/* `flex` et non `grid` : en grille, les deux enfants formaient deux rangées que
+   `place-items` centrait chacune dans sa moitié, d'où un dessin plaqué en haut
+   et un libellé plaqué en bas. En colonne flex, le duo reste solidaire. */
+.dish-ph {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+  color: color-mix(in oklab, var(--color-primary) 72%, var(--color-brick));
+  background:
+    radial-gradient(circle at 28% 18%, color-mix(in oklab, var(--color-gold) 26%, transparent), transparent 58%),
+    radial-gradient(circle at 82% 88%, color-mix(in oklab, var(--color-brick) 16%, transparent), transparent 55%),
+    linear-gradient(150deg, var(--color-panel-2), var(--color-panel-3));
+}
+/* Chevrons de marque : maille large et très atténuée. Serrés et plus opaques,
+   ils lisaient comme une trame de chargement au lieu d'un fond. */
+.dish-ph::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.09;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='30' viewBox='0 0 56 30'%3E%3Cpath d='M0 22 L14 8 L28 22 L42 8 L56 22' fill='none' stroke='%23A6243A' stroke-width='2.5'/%3E%3C/svg%3E");
+  background-size: 56px 30px;
+}
+.dish-ph-art {
+  position: relative;
+  width: clamp(58px, 30%, 92px);
+  opacity: 0.92;
+}
+.dish-ph-label {
+  position: relative;
+  font-family: var(--font-script);
+  font-size: clamp(17px, 3.4vw, 22px);
+  line-height: 1;
+  opacity: 0.85;
+}
+
 /* Nav collante avec flou */
 .nav-blur {
   background: color-mix(in oklab, var(--color-page) 86%, transparent);
@@ -154,9 +241,107 @@ h4 {
 .rise {
   animation: floatUp 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
+
+/* ── Apparition au défilement ─────────────────────────────────
+   Piloté par components/Reveal.tsx, qui pose `.is-in` à l'entrée dans le champ
+   de vision. Une transition plutôt qu'une animation : l'état de départ reste
+   appliqué tant que la classe n'est pas là, donc rien ne clignote si le
+   JavaScript tarde. */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 0.62s cubic-bezier(0.22, 0.68, 0.28, 1),
+    transform 0.62s cubic-bezier(0.22, 0.68, 0.28, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Le halo du bouton principal — attire l'œil sans clignoter. */
+@keyframes softPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-primary) 45%, transparent);
+  }
+  55% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+.pulse-ring {
+  animation: softPulse 3.4s ease-out infinite;
+}
+
+/* Balayage lumineux sur les cartes au survol */
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%) skewX(-18deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transition: transform 0.75s ease;
+  pointer-events: none;
+}
+.group:hover .sheen::after {
+  transform: translateX(120%) skewX(-18deg);
+}
+
+/* Soulignement animé des liens de navigation */
+.link-underline {
+  position: relative;
+}
+.link-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  height: 2px;
+  width: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s ease;
+}
+.link-underline:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* `prefers-reduced-motion` n'est pas une préférence esthétique : pour une
+   partie des utilisateurs le mouvement déclenche des troubles vestibulaires.
+   Tout ce qui bouge est neutralisé d'un bloc, état final visible. */
 @media (prefers-reduced-motion: reduce) {
   .rise {
     animation: none;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .pulse-ring {
+    animation: none;
+  }
+  .sheen::after {
+    display: none;
+  }
+  .link-underline::after {
+    transition: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

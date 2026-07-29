@@ -63,6 +63,19 @@ export function fmtVatRate(rateBp: number = VAT_RATE_BP): string {
   return `${(rateBp / 100).toFixed(rateBp % 100 === 0 ? 0 : 1).replace(".", ",")} %`;
 }
 
+/**
+ * `FACT-2026-000142` — présentation d'un numéro de facture séquentiel.
+ *
+ * Défini ici et non dans `lib/ref.ts` : ce module est pur, alors que `ref.ts`
+ * importe Prisma et `node:crypto` pour *attribuer* les numéros. Les composants
+ * client qui affichent une facture ne doivent pas tirer la base dans le bundle
+ * du navigateur.
+ */
+export function formatInvoiceNumber(n: number | null, at: Date = new Date()): string {
+  if (n === null) return "—";
+  return `FACT-${at.getFullYear()}-${String(n).padStart(6, "0")}`;
+}
+
 /** Garde-fou : un montant monétaire doit être un entier positif raisonnable. */
 export function isValidCents(v: unknown, { max = 100_000_00 } = {}): v is number {
   return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= max;

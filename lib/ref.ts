@@ -67,11 +67,12 @@ export async function nextInvoiceNumber(): Promise<number> {
   return counter.value;
 }
 
-/** `FACT-2026-000142` — présentation du numéro séquentiel. */
-export function formatInvoiceNumber(n: number | null, at: Date = new Date()): string {
-  if (n === null) return "—";
-  return `FACT-${at.getFullYear()}-${String(n).padStart(6, "0")}`;
-}
+/**
+ * Le *formatage* d'un numéro de facture vit dans `lib/money.ts`, qui est pur :
+ * ce module-ci importe Prisma et `node:crypto`, donc un composant client ne peut
+ * pas l'importer sans tirer la base dans le bundle du navigateur.
+ */
+export { formatInvoiceNumber } from "@/lib/money";
 
 /** Code promo de dédommagement, généré depuis un ticket SAV. */
 export function makeGestureCode(): string {

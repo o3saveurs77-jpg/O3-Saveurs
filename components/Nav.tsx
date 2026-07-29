@@ -23,21 +23,32 @@ export function Nav() {
   return (
     <>
       <header className="nav-blur sticky top-0 z-50 border-b border-line">
-        <div className="wrap flex h-[68px] items-center justify-between gap-4">
-          <Link href="/" onClick={() => setMobile(false)} aria-label="Accueil">
+        <div className="wrap flex h-[68px] items-center justify-between gap-2 sm:gap-4">
+          {/* `min-w-0 shrink` : sans lui le logo gardait sa largeur naturelle et
+              poussait les trois boutons ronds hors de l'écran sous 360 px — le
+              `truncate` interne de `Logo` n'avait jamais l'occasion d'agir. */}
+          <Link
+            href="/"
+            onClick={() => setMobile(false)}
+            aria-label="Accueil"
+            className="min-w-0 shrink"
+          >
             <Logo />
           </Link>
 
           {/* nav desktop */}
-          <nav className="hidden items-center gap-1 md:flex">
+          <nav className="hidden items-center gap-1 md:flex" aria-label="Navigation principale">
             {LINKS.map((l) => {
               const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
               return (
                 <Link
                   key={l.href}
                   href={l.href}
+                  aria-current={active ? "page" : undefined}
                   className={`rounded-full px-4 py-2 text-[15px] font-semibold transition ${
-                    active ? "bg-primary-soft text-primary" : "text-ink hover:bg-panel-2"
+                    // `text-primary` sur `bg-primary-soft` plafonne à 2,48:1, sous
+                    // le seuil WCAG AA. `text-brick` sur le même fond passe.
+                    active ? "bg-primary-soft text-brick" : "text-ink hover:bg-panel-2"
                   }`}
                 >
                   {l.label}
@@ -46,7 +57,9 @@ export function Nav() {
             })}
           </nav>
 
-          <div className="flex items-center gap-2">
+          {/* `shrink-0` : le groupe d'actions est la partie incompressible de la
+              barre, c'est le logo qui doit céder de la place, pas l'inverse. */}
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <Link
               href="/carte"
               className="hidden items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-[15px] font-bold text-white transition hover:brightness-105 sm:flex"
@@ -57,7 +70,7 @@ export function Nav() {
             {/* compte */}
             <Link
               href="/compte"
-              className="grid h-11 w-11 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2"
+              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2 sm:h-11 sm:w-11"
               aria-label="Mon compte"
             >
               <Icon name="user" size={20} />
@@ -66,7 +79,7 @@ export function Nav() {
             {/* bouton panier */}
             <button
               onClick={() => setOpen(true)}
-              className="relative grid h-11 w-11 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2"
+              className="relative grid h-10 w-10 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2 sm:h-11 sm:w-11"
               aria-label="Ouvrir le panier"
             >
               <Icon name="bag" size={20} />
@@ -80,8 +93,10 @@ export function Nav() {
             {/* burger mobile */}
             <button
               onClick={() => setMobile((v) => !v)}
-              className="grid h-11 w-11 place-items-center rounded-full border border-line bg-panel md:hidden"
+              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel md:hidden"
               aria-label="Menu"
+              aria-expanded={mobile}
+              aria-controls="nav-mobile"
             >
               <Icon name={mobile ? "x" : "menu"} size={20} />
             </button>
@@ -90,7 +105,11 @@ export function Nav() {
 
         {/* menu mobile déroulant */}
         {mobile && (
-          <nav className="border-t border-line bg-page px-5 py-3 md:hidden">
+          <nav
+            id="nav-mobile"
+            className="border-t border-line bg-page px-4 py-3 md:hidden"
+            aria-label="Navigation principale"
+          >
             {LINKS.map((l) => (
               <Link
                 key={l.href}
@@ -101,6 +120,16 @@ export function Nav() {
                 {l.label}
               </Link>
             ))}
+            {/* Le bouton « Commander » de la barre est masqué sous 640 px : sans
+                ce relais, l'appel à l'action principal du site n'existait nulle
+                part sur téléphone. */}
+            <Link
+              href="/carte"
+              onClick={() => setMobile(false)}
+              className="mt-2 flex items-center justify-center rounded-full bg-primary px-5 py-3 font-bold text-white sm:hidden"
+            >
+              Commander
+            </Link>
           </nav>
         )}
       </header>

@@ -78,7 +78,12 @@ function Drawer() {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="fixed right-0 top-0 z-[100] flex h-full w-full max-w-[420px] flex-col bg-page shadow-[var(--shadow-lg)] outline-none"
+        /* `h-dvh` et non `h-full` : sur mobile, la barre d'adresse du navigateur
+           est comprise dans la hauteur de fenêtre classique, si bien que le pied
+           du tiroir — sous-total et bouton « Commander » — se retrouvait
+           dessous, hors d'atteinte. L'unité dynamique suit la zone réellement
+           visible. */
+        className="fixed right-0 top-0 z-[100] flex h-dvh w-full max-w-[420px] flex-col bg-page shadow-[var(--shadow-lg)] outline-none"
       >
         {/* en-tête */}
         <header className="flex items-center justify-between border-b border-line px-5 py-4">
@@ -140,7 +145,7 @@ function Drawer() {
                       <button
                         type="button"
                         onClick={() => remove(l.key)}
-                        className="text-ink-2 hover:text-brick"
+                        className="-m-2 grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-2 hover:text-brick"
                         aria-label={`Retirer ${l.name} du panier`}
                       >
                         <Icon name="x" size={16} />
@@ -153,12 +158,16 @@ function Drawer() {
                       </p>
                     )}
 
-                    <div className="mt-auto flex items-center justify-between pt-2">
+                    <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
+                      {/* 28 px de côté au doigt : sous le minimum de 44 px des
+                          recommandations tactiles, et le − / + se manquait une
+                          fois sur deux. Le pointeur fin garde la taille
+                          compacte d'origine. */}
                       <div className="flex items-center gap-1 rounded-full border border-line">
                         <button
                           type="button"
                           onClick={() => setQty(l.key, l.qty - 1)}
-                          className="grid h-7 w-7 place-items-center rounded-full hover:bg-panel-2"
+                          className="grid h-9 w-9 place-items-center rounded-full hover:bg-panel-2 sm:h-7 sm:w-7"
                           aria-label={`Diminuer la quantité de ${l.name}`}
                         >
                           <Icon name="minus" size={14} />
@@ -167,7 +176,7 @@ function Drawer() {
                         <button
                           type="button"
                           onClick={() => setQty(l.key, l.qty + 1)}
-                          className="grid h-7 w-7 place-items-center rounded-full hover:bg-panel-2"
+                          className="grid h-9 w-9 place-items-center rounded-full hover:bg-panel-2 sm:h-7 sm:w-7"
                           aria-label={`Augmenter la quantité de ${l.name}`}
                         >
                           <Icon name="plus" size={14} />

@@ -115,7 +115,10 @@ export function DishModal({ dish, onClose }: { dish: Dish; onClose: () => void }
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-page shadow-[var(--shadow-lg)] outline-none sm:rounded-3xl"
+        /* `dvh` : avec `vh`, la barre d'adresse mobile était comptée dans la
+           hauteur, et le pied — quantité et « Ajouter » — passait sous le bord
+           bas de l'écran sur les fiches à options. */
+        className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-page shadow-[var(--shadow-lg)] outline-none sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* visuel + fermer */}
@@ -144,7 +147,7 @@ export function DishModal({ dish, onClose }: { dish: Dish; onClose: () => void }
         </div>
 
         {/* contenu scrollable */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           <h2 id={titleId} className="text-2xl">
             {dish.name}
           </h2>
@@ -194,7 +197,7 @@ export function DishModal({ dish, onClose }: { dish: Dish; onClose: () => void }
                 {dish.formules!.map(([label, priceCents], i) => (
                   <label
                     key={label}
-                    className={`flex cursor-pointer items-center justify-between rounded-xl border px-4 py-3 transition ${
+                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 transition ${
                       formuleIdx === i
                         ? "border-primary bg-primary-soft"
                         : "border-line bg-panel hover:border-primary/40"
@@ -258,7 +261,7 @@ export function DishModal({ dish, onClose }: { dish: Dish; onClose: () => void }
         </div>
 
         {/* pied : quantité + ajout */}
-        <footer className="flex items-center gap-3 border-t border-line px-5 py-4">
+        <footer className="flex items-center gap-2 border-t border-line px-4 py-4 sm:gap-3 sm:px-5">
           <div className="flex items-center gap-1 rounded-full border border-line">
             <button
               type="button"

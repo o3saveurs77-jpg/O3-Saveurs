@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rowToOrder } from "@/lib/serialize";
 import { requireAdmin, readJson, badRequest, notFound, conflict } from "@/lib/guard";
-import { collect, str, oneOf, stringArray, isoDate } from "@/lib/validate";
-import type { DeliveryRun, Order as OrderRow } from "@prisma/client";
+import { str, oneOf, stringArray, isoDate } from "@/lib/validate";
+import type { DeliveryRun, Order as OrderRow, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -57,10 +57,14 @@ function runView(r: RunWithOrders) {
   };
 }
 
-const RUN_INCLUDE = {
+/**
+ * Typé `Prisma.DeliveryRunInclude` et non `as const` : `as const` produit des
+ * tableaux en lecture seule, refusés par les types générés pour un `orderBy`.
+ */
+const RUN_INCLUDE: Prisma.DeliveryRunInclude = {
   driver: { select: { name: true } },
   orders: { orderBy: [{ runPosition: "asc" }, { createdAt: "asc" }] },
-} as const;
+};
 
 /** GET /api/delivery-runs/[id] — **administration uniquement**. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {

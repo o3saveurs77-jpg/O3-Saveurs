@@ -55,6 +55,19 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="fr">
+      <head>
+        {/* `.reveal` part à `opacity: 0` et n'est révélé que par l'observateur
+            de `components/Reveal.tsx`. Sans JavaScript, la moitié de l'accueil
+            resterait donc invisible alors que son HTML est bien servi. Ce
+            filet neutralise l'état de départ dans ce cas précis. */}
+        <noscript>
+          <style
+            dangerouslySetInnerHTML={{
+              __html: ".reveal{opacity:1 !important;transform:none !important}",
+            }}
+          />
+        </noscript>
+      </head>
       <body className={`${bricolage.variable} ${archivo.variable} ${yellowtail.variable}`}>
         {/*
           `OrdersProvider` a été retiré d'ici. Monté dans le layout racine, il

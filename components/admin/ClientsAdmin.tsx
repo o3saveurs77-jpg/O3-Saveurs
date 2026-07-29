@@ -31,7 +31,7 @@ export function ClientsAdmin() {
         last: 0,
       };
       e.orders += 1;
-      e.spent += o.total;
+      e.spent += o.totalCents;
       e.last = Math.max(e.last, o.createdAt);
       map.set(o.customer.email, e);
     });
