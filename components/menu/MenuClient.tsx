@@ -198,13 +198,31 @@ export function MenuClient({ initial = [] }: { initial?: Dish[] }) {
         </div>
       </div>
 
-      {/* mention allergènes — obligation d'information (règlement UE 1169/2011) */}
+      {/* Mention allergènes — obligation d'information (règlement UE 1169/2011).
+          Le texte annonçait « les allergènes majeurs sont indiqués sous chaque
+          plat » quel que soit l'état réel du catalogue. Tant qu'aucune fiche
+          n'est renseignée, c'était une affirmation fausse sur un sujet où se
+          tromper envoie quelqu'un à l'hôpital. Le message suit désormais les
+          données : il n'annonce l'étiquetage que là où il existe, et renvoie au
+          téléphone dans le cas contraire. */}
       <div className="wrap pt-6">
         <p className="flex items-start gap-2 rounded-xl border border-line bg-panel-2 p-3 text-sm text-ink-2">
           <Icon name="warning" size={18} className="mt-0.5 shrink-0 text-primary" />
           <span>
-            Les allergènes majeurs sont indiqués sous chaque plat. Une question, une intolérance ou
-            une allergie ? Appelez-nous avant de commander.
+            {allergens.length > 0 ? (
+              <>
+                Les allergènes connus sont indiqués sous les plats concernés. Cette liste peut être
+                incomplète : en cas d'intolérance ou d'allergie, appelez-nous avant de commander.
+              </>
+            ) : (
+              <>
+                <strong className="text-brick">
+                  Les allergènes ne sont pas encore renseignés sur cette carte.
+                </strong>{" "}
+                En cas d'intolérance ou d'allergie, appelez-nous impérativement avant de commander —
+                nous vous indiquerons la composition exacte de chaque plat.
+              </>
+            )}
           </span>
         </p>
       </div>
