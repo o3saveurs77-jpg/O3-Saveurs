@@ -30,6 +30,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/stocks", label: "Stocks", icon: "box" },
       { href: "/admin/mise-en-avant", label: "Mise en avant", icon: "star" },
       { href: "/admin/promotions", label: "Promotions", icon: "tag" },
+      { href: "/admin/budget", label: "Courses & budget", icon: "cart" },
     ],
   },
   {

@@ -52,6 +52,16 @@ const REQUIRED: Rule[] = [
         ? "pointe encore sur localhost — les liens envoyés par email seront inutilisables"
         : null,
   },
+  { key: "AUTH0_CLIENT_ID", role: "connexion Auth0 (Applications → Basic Information)" },
+  { key: "AUTH0_CLIENT_SECRET", role: "connexion Auth0 (Applications → Basic Information)", min: 20 },
+  {
+    key: "AUTH0_ISSUER",
+    role: "domaine du tenant Auth0 (Applications → Basic Information → Domain)",
+    check: (v) =>
+      v.includes("xxx.eu.auth0.com") || v.includes("remplacer.eu.auth0.com")
+        ? "vaut encore la valeur d'exemple — copier le vrai Domain depuis le dashboard Auth0"
+        : null,
+  },
 ];
 
 /**

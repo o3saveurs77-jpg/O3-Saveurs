@@ -15,7 +15,6 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs";
 import { items, zones, platsDuJour, cats } from "../lib/menu";
 import { DEFAULT_HOURS } from "../lib/hours";
 import { SETTING_DEFAULTS } from "../lib/settings";
@@ -36,24 +35,17 @@ const WEEKDAY: Record<string, number> = {
 const cents = (v: number | null | undefined): number | null =>
   v === null || v === undefined ? null : Math.round(v * 100);
 
-function resolveAdminCredentials(): { email: string; password: string } {
+function resolveAdminEmail(): string {
   const email = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
-  const password = process.env.ADMIN_PASSWORD || "";
-
-  if (!email || !password) {
+  if (!email) {
     throw new Error(
-      "ADMIN_EMAIL et ADMIN_PASSWORD doivent être définis dans l'environnement.\n" +
-        "Aucune valeur par défaut n'est fournie : un mot de passe d'administration\n" +
-        "documenté serait un compte ouvert sur toutes les données clients.",
+      "ADMIN_EMAIL doit être défini dans l'environnement : c'est l'adresse du\n" +
+        "profil applicatif (nom, commandes) créé pour l'administratrice. Le rôle\n" +
+        "ADMIN, lui, s'assigne dans Auth0 (User Management → Users → Roles) —\n" +
+        "voir auth0/actions/add-role-claim.js.",
     );
   }
-  if (password.length < 12) {
-    throw new Error(
-      `ADMIN_PASSWORD fait ${password.length} caractères. Minimum 12 : ce compte\n` +
-        "donne accès à l'intégralité du fichier clients et de la comptabilité.",
-    );
-  }
-  return { email, password };
+  return email;
 }
 
 async function seedCategories() {
@@ -156,16 +148,19 @@ async function seedDailySpecials() {
   }
 }
 
+/**
+ * Crée le profil applicatif de l'administratrice (nom, commandes…). N'accorde
+ * plus le rôle ADMIN : depuis le passage aux rôles Auth0, seule l'assignation
+ * du rôle "ADMIN" à ce compte dans le dashboard Auth0 fait autorité (le champ
+ * `role` posé ici n'est plus lu pour l'autorisation, voir auth.ts).
+ */
 async function seedAdmin() {
-  const { email, password } = resolveAdminCredentials();
-  const hash = await bcrypt.hash(password, 12);
-  console.log(`👤 Admin : ${email}`);
+  const email = resolveAdminEmail();
+  console.log(`👤 Admin : ${email} (rôle à assigner dans Auth0)`);
   await prisma.user.upsert({
     where: { email },
-    create: { name: "Laila", email, phone: "01 72 84 52 44", password: hash, role: "ADMIN" },
-    // Le mot de passe est réaligné sur l'environnement, mais le rôle et le
-    // compte existant sont préservés.
-    update: { password: hash, role: "ADMIN" },
+    create: { name: "Laila", email, phone: "01 72 84 52 44", role: "ADMIN" },
+    update: {},
   });
 }
 

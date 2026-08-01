@@ -17,6 +17,7 @@ import type {
   User as UserRow,
   DailySpecial as DailySpecialRow,
   Promotion as PromotionRow,
+  BudgetItem as BudgetItemRow,
   SupportTicket as TicketRow,
   TicketMessage as TicketMessageRow,
 } from "@prisma/client";
@@ -30,6 +31,8 @@ import type {
   OrderStatus,
   PaymentStatus,
   PromotionKind,
+  BudgetCategory,
+  BudgetItemView,
   AppUser,
   SavedAddress,
   SupportTicketView,
@@ -239,6 +242,22 @@ export function rowToPromotion(r: PromotionRow): PromotionView {
     weekday: r.weekday,
     auto: r.auto,
     active: r.active,
+  };
+}
+
+// ─── Achats & budget ────────────────────────────────────
+
+export function rowToBudgetItem(r: BudgetItemRow): BudgetItemView {
+  return {
+    id: r.id,
+    category: r.category as BudgetCategory,
+    label: r.label,
+    qty: r.qty,
+    unit: r.unit,
+    unitPriceCents: r.unitPriceCents,
+    totalCents: Math.round(r.qty * r.unitPriceCents),
+    packaging: r.packaging,
+    position: r.position,
   };
 }
 

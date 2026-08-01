@@ -21,6 +21,7 @@ export function ZoneCheck() {
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<Outcome>(null);
+  const [freeDeliveryThresholdCents, setFreeDeliveryThresholdCents] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -28,6 +29,19 @@ export function ZoneCheck() {
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("zones"))))
       .then((data: Zone[]) => alive && setZones(data))
       .catch(() => alive && setZones([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/delivery-info", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("delivery-info"))))
+      .then((data: { freeDeliveryThresholdCents: number | null }) => {
+        if (alive) setFreeDeliveryThresholdCents(data.freeDeliveryThresholdCents);
+      })
+      .catch(() => alive && setFreeDeliveryThresholdCents(null));
     return () => {
       alive = false;
     };
@@ -47,21 +61,21 @@ export function ZoneCheck() {
   };
 
   return (
-    <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
-      <div className="mb-3 flex items-center gap-2">
-        <Icon name="truck" size={22} className="text-primary" />
-        <h3 className="text-lg">On vous livre ?</h3>
+    <div className="rounded-[var(--radius-card)] border border-white/20 bg-white/10 p-5 text-white shadow-[var(--shadow-soft)] backdrop-blur-md">
+      <div className="mb-2 flex items-center gap-2">
+        <Icon name="truck" size={22} className="text-gold" />
+        <h3 className="text-lg">On livre chez vous ?</h3>
       </div>
-      <p className="mb-3 text-sm text-ink-2">
-        Entrez votre code postal ou votre ville pour voir les frais et le minimum de commande.
+      <p className="mb-3 text-sm text-white/75">
+        Code postal ou ville : frais et minimum affichés en un clic.
       </p>
 
       <form onSubmit={check} className="flex gap-2">
-        <div className="flex flex-1 items-center gap-2 rounded-full border border-line bg-page px-4">
+        <div className="flex flex-1 items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4">
           <label htmlFor="zone-check" className="sr-only">
             Code postal ou ville de livraison
           </label>
-          <Icon name="pin" size={18} className="text-ink-2" />
+          <Icon name="pin" size={18} className="text-white/70" />
           <input
             id="zone-check"
             name="zone-check"
@@ -69,13 +83,13 @@ export function ZoneCheck() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Ex. 77185, Lognes, Torcy…"
-            className="w-full bg-transparent py-3 text-[15px] outline-none"
+            className="w-full bg-transparent py-3 text-[15px] text-white outline-none placeholder:text-white/50"
           />
         </div>
         <button
           type="submit"
           disabled={!zones}
-          className="rounded-full bg-primary px-5 py-3 font-bold text-white transition hover:brightness-105 disabled:opacity-60"
+          className="rounded-full bg-gold px-5 py-3 font-bold text-ink transition hover:brightness-105 disabled:opacity-60"
         >
           Vérifier
         </button>
@@ -90,6 +104,9 @@ export function ZoneCheck() {
               <p className="mt-0.5">
                 Frais de livraison <strong>{fmtPrice(result.zone.feeCents)}</strong> · minimum de
                 commande <strong>{fmtPrice(result.zone.minimumCents)}</strong>.
+                {freeDeliveryThresholdCents !== null && (
+                  <> Offerte dès <strong>{fmtPrice(freeDeliveryThresholdCents)}</strong> d'achat.</>
+                )}
               </p>
             </div>
           </div>

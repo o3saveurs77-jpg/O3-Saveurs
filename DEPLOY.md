@@ -17,8 +17,8 @@ tous ces services ; il ne reste qu'à créer les comptes et renseigner les clés
    npm run db:deploy   # crée les tables (prisma migrate deploy)
    npm run db:seed     # catalogue, zones, horaires, réglages, compte admin
    ```
-   Le seed crée l'admin défini par `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Il **refuse
-   de s'exécuter** si le mot de passe fait moins de 12 caractères.
+   Le seed garantit que `ADMIN_EMAIL` a le rôle `ADMIN` — la connexion se fait
+   ensuite via Auth0 (étape 2), sans mot de passe applicatif.
 
 > **`db:seed` est idempotent et ne supprime rien** : il peut être relancé sans
 > risque. En revanche `npm run db:seed:demo` crée des commandes fictives et
@@ -29,14 +29,38 @@ tous ces services ; il ne reste qu'à créer les comptes et renseigner les clés
 > N'utilisez pas `prisma db push` : il crée une dérive entre le schéma et les
 > migrations. Le script a été retiré du `package.json`.
 
-## 2. Authentification — NextAuth
+## 2. Authentification — NextAuth + Auth0
 
-- Générer un secret : `npx auth secret` (ou `openssl rand -base64 32`) → `AUTH_SECRET`.
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD` : identifiants du back-office (créés au seed).
-- `NEXTAUTH_URL` : l'URL publique en prod (Vercel la fournit automatiquement,
-  mais on peut la fixer, ex. `https://o3saveurs.vercel.app`).
-- Le back-office `/admin` est protégé par le middleware : seul un compte de rôle
-  `ADMIN` y accède ; les autres sont redirigés vers `/compte`.
+La connexion passe par **Auth0** (Universal Login hébergé) : plus de mot de passe
+géré par l'application elle-même.
+
+1. Générer un secret NextAuth : `npx auth secret` (ou `openssl rand -base64 32`)
+   → `AUTH_SECRET`.
+2. Sur https://auth0.com, créer une application de type **Regular Web
+   Application**.
+3. Dans **Application → Basic Information**, copier :
+   - **Domain** → `AUTH0_ISSUER` (préfixé par `https://`, sans slash final,
+     ex. `https://xxx.eu.auth0.com`)
+   - **Client ID** → `AUTH0_CLIENT_ID`
+   - **Client Secret** → `AUTH0_CLIENT_SECRET`
+4. Toujours dans les réglages de l'application, **Application URIs** :
+   - **Allowed Callback URLs** :
+     `https://VOTRE-DOMAINE/api/auth/callback/auth0,http://localhost:3000/api/auth/callback/auth0`
+   - **Allowed Logout URLs** : `https://VOTRE-DOMAINE,http://localhost:3000`
+   - **Allowed Web Origins** : `https://VOTRE-DOMAINE,http://localhost:3000`
+   - **Allowed Origins (CORS)** : la même liste que Web Origins
+5. `ADMIN_EMAIL` : l'adresse qui doit se connecter (via Auth0) pour obtenir le
+   rôle `ADMIN`. Le seed (`npm run db:seed`) crée/maintient ce compte avec ce
+   rôle ; toute autre adresse qui se connecte via Auth0 est créée en `CLIENT`.
+6. `NEXTAUTH_URL` : l'URL publique en prod (Vercel la fournit automatiquement,
+   mais on peut la fixer, ex. `https://o3saveurs.vercel.app`).
+7. Le back-office `/admin` est protégé par le middleware : seul un compte de rôle
+   `ADMIN` y accède ; les autres sont redirigés vers `/compte`.
+
+> L'inscription (création de compte client) se fait aussi via Auth0 Universal
+> Login — aucune route applicative dédiée. Pour activer des connexions sociales
+> (Google, etc.), c'est un réglage Auth0 (**Authentication → Social**), sans
+> changement de code.
 
 ## 3. Paiement — Stripe
 
@@ -85,9 +109,11 @@ tous ces services ; il ne reste qu'à créer les comptes et renseigner les clés
 2. **Framework : Next.js** (détecté). Aucune config spéciale : le build lance
    `prisma generate && next build`.
 3. **Settings → Environment Variables** : coller toutes les clés du `.env`
-   (`DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`, `NEXTAUTH_URL`, `ADMIN_*`,
+   (`DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`, `NEXTAUTH_URL`,
+   `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_ISSUER`, `ADMIN_EMAIL`,
    `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `BLOB_READ_WRITE_TOKEN`,
-   `RESEND_*`, `RESTAURANT_NOTIFY_EMAIL`).
+   `RESEND_*`, `RESTAURANT_NOTIFY_EMAIL`). Penser aussi à ajouter l'URL Vercel
+   réelle dans les **Application URIs** d'Auth0 (étape 2.4) une fois connue.
 4. **Build Command** : laisser la valeur par défaut, mais vérifier que l'installation
    utilise **`npm ci`** et non `npm install` — `next-auth` est en version beta et un
    `install` peut installer une beta plus récente qui casse l'authentification.
@@ -108,7 +134,8 @@ Cette liste correspond exactement aux `process.env.*` réellement lus par le cod
 | `DATABASE_URL` / `DIRECT_URL` | Postgres Neon (pooled / direct) |
 | `AUTH_SECRET` | Signature des sessions NextAuth |
 | `NEXTAUTH_URL` | URL publique du site (liens des emails, retours Stripe) |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Compte back-office créé au seed (12 caractères minimum) |
+| `AUTH0_CLIENT_ID` / `AUTH0_CLIENT_SECRET` / `AUTH0_ISSUER` | Application Auth0 (Universal Login) |
+| `ADMIN_EMAIL` | Adresse qui obtient le rôle `ADMIN` en se connectant via Auth0 (créée au seed) |
 | `STRIPE_SECRET_KEY` | Clé serveur Stripe — **obligatoire en production** |
 | `STRIPE_WEBHOOK_SECRET` | Vérification de la signature du webhook |
 | `BLOB_READ_WRITE_TOKEN` | Upload des photos (Vercel Blob) |
@@ -117,12 +144,11 @@ Cette liste correspond exactement aux `process.env.*` réellement lus par le cod
 
 ## Comptes après seed
 
-- **Admin** : `ADMIN_EMAIL` / `ADMIN_PASSWORD` tels que définis dans l'environnement.
-  Aucune valeur par défaut n'est fournie et aucun mot de passe n'est documenté ici :
-  un identifiant d'administration écrit dans un fichier du dépôt est un compte ouvert
-  sur tout le fichier clients.
+- **Admin** : l'adresse `ADMIN_EMAIL` obtient le rôle `ADMIN` dès sa première
+  connexion via Auth0. Aucun mot de passe n'est géré par l'application.
 - **Client de démonstration** (développement seulement, via `db:seed:demo`) :
-  `awa.diallo@email.com` / `demo1234`.
+  crée des commandes fictives pour tester l'affichage ; la connexion se fait
+  désormais aussi via Auth0, le mot de passe posé par ce script n'est plus utilisé.
 
 ---
 

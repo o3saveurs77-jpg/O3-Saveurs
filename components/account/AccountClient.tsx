@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/providers/AuthContext";
 import { useOrders } from "@/components/providers/OrdersContext";
 import { useDishes } from "@/components/providers/DishesContext";
@@ -37,7 +38,12 @@ export function AccountClient() {
 
   if (!ready) return <div className="wrap py-24 text-center text-ink-2">Chargement…</div>;
 
-  if (!user) return <AuthForm />;
+  if (!user)
+    return (
+      <Suspense fallback={<div className="wrap py-24 text-center text-ink-2">Chargement…</div>}>
+        <AuthForm />
+      </Suspense>
+    );
 
   return (
     <div className="wrap py-10">
@@ -95,28 +101,15 @@ export function AccountClient() {
 }
 
 function AuthForm() {
-  const { login, register } = useAuth();
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const { login } = useAuth();
   const [busy, setBusy] = useState(false);
+  const params = useSearchParams();
+  const suivant = params.get("suivant");
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+  const submit = async () => {
     setBusy(true);
-    const res =
-      mode === "login"
-        ? await login(email, password)
-        : await register(name, email, password);
-    setBusy(false);
-    if (!res.ok) setError(res.error ?? "Une erreur est survenue.");
+    await login(suivant || "/compte");
   };
-
-  const cls =
-    "w-full rounded-xl border border-line bg-panel-2 px-4 py-3 outline-none focus:border-primary";
 
   return (
     <div className="wrap flex justify-center py-16">
@@ -124,63 +117,17 @@ function AuthForm() {
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft text-primary">
           <Icon name="user" size={28} />
         </div>
-        <h1 className="mt-4 text-center text-2xl">
-          {mode === "login" ? "Votre espace" : "Créer un compte"}
-        </h1>
+        <h1 className="mt-4 text-center text-2xl">Votre espace</h1>
         <p className="mt-2 text-center text-sm text-ink-2">
-          {mode === "login"
-            ? "Connectez-vous pour suivre vos commandes, factures et favoris."
-            : "Inscrivez-vous pour commander plus vite la prochaine fois."}
+          Connectez-vous pour suivre vos commandes, factures et favoris.
         </p>
 
-        <form onSubmit={submit} className="mt-6 space-y-3">
-          {mode === "register" && (
-            <input
-              className={cls}
-              placeholder="Nom complet"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="name"
-            />
-          )}
-          <input
-            className={cls}
-            type="email"
-            required
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-          />
-          <input
-            className={cls}
-            type="password"
-            required
-            placeholder="Mot de passe"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-          />
-
-          {error && <p className="text-sm font-semibold text-brick">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-full bg-primary px-6 py-3.5 font-bold text-white hover:brightness-105 disabled:opacity-60"
-          >
-            {busy ? "…" : mode === "login" ? "Se connecter" : "Créer mon compte"}
-          </button>
-        </form>
-
         <button
-          onClick={() => {
-            setMode(mode === "login" ? "register" : "login");
-            setError(null);
-          }}
-          className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline"
+          onClick={submit}
+          disabled={busy}
+          className="mt-6 w-full rounded-full bg-primary px-6 py-3.5 font-bold text-white hover:brightness-105 disabled:opacity-60"
         >
-          {mode === "login" ? "Pas encore de compte ? S'inscrire" : "Déjà un compte ? Se connecter"}
+          {busy ? "…" : "Se connecter"}
         </button>
       </div>
     </div>

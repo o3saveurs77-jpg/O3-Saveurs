@@ -44,6 +44,10 @@ export const SETTING_DEFAULTS = {
   "social.instagram": "",
   "social.snapchat": "",
   "social.facebook": "",
+
+  // Liste de courses & budget prévisionnel
+  "budget.caCents": "0", // chiffre d'affaires estimé sur la période
+  "budget.days": "1", // nombre de jours de la période
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFAULTS;

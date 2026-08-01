@@ -4,13 +4,10 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { signIn, signOut } from "next-auth/react";
 import type { MockUser, SavedAddress } from "@/lib/types";
 
-type AuthResult = { ok: boolean; error?: string };
-
 interface AuthCtx {
   user: MockUser | null;
   ready: boolean;
-  login: (email: string, password: string) => Promise<AuthResult>;
-  register: (name: string, email: string, password: string) => Promise<AuthResult>;
+  login: (callbackUrl?: string) => Promise<void>;
   logout: () => Promise<void>;
   update: (patch: Partial<MockUser>) => void;
   toggleFavorite: (dishId: string) => void;
@@ -54,29 +51,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<AuthResult> => {
-    const res = await signIn("credentials", { email, password, redirect: false });
-    if (res?.error) return { ok: false, error: "Email ou mot de passe incorrect." };
-    setUser(await fetchMe());
-    return { ok: true };
+  // Redirection pleine page vers Auth0 (Universal Login) : pas de retour direct
+  // ici, la page se recharge sur `callbackUrl` une fois connecté.
+  const login = useCallback(async (callbackUrl?: string): Promise<void> => {
+    await signIn("auth0", { callbackUrl: callbackUrl || "/compte" });
   }, []);
-
-  const register = useCallback(
-    async (name: string, email: string, password: string): Promise<AuthResult> => {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        return { ok: false, error: body.error ?? "Inscription impossible." };
-      }
-      // connexion automatique après inscription
-      return login(email, password);
-    },
-    [login],
-  );
 
   const logout = useCallback(async () => {
     await signOut({ redirect: false });
@@ -120,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <Ctx.Provider
-      value={{ user, ready, login, register, logout, update, toggleFavorite, addAddress, removeAddress }}
+      value={{ user, ready, login, logout, update, toggleFavorite, addAddress, removeAddress }}
     >
       {children}
     </Ctx.Provider>

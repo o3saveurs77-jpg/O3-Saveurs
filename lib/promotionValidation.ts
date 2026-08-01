@@ -16,8 +16,8 @@
  * logique ici reviendrait à autoriser deux vérités sur le montant facturé.
  */
 
-import { bool, err, int, isoDate, ok, oneOf, str, type Result } from "@/lib/validate";
-import { PROMOTION_KINDS, type PromotionKind } from "@/lib/types";
+import { bool, err, int, isoDate, num, ok, oneOf, str, type Result } from "@/lib/validate";
+import { PROMOTION_KINDS, type PromotionKind, BUDGET_CATEGORIES, type BudgetCategory } from "@/lib/types";
 import { fmtCents } from "@/lib/money";
 import { PARIS_TZ, WEEKDAY_LABEL } from "@/lib/hours";
 
@@ -542,6 +542,53 @@ export function validateBannerInput(body: Record<string, unknown>): Result<Banne
     startsAt: window.value.startsAt,
     endsAt: window.value.endsAt,
     active: bool(body.active, true),
+    position: position.value,
+  });
+}
+
+// ─── Liste de courses & budget ─────────────────────────────────
+
+export interface BudgetItemInput {
+  category: BudgetCategory;
+  label: string;
+  qty: number;
+  unit: string;
+  unitPriceCents: number;
+  packaging: boolean;
+  position: number;
+}
+
+export function validateBudgetItemInput(body: Record<string, unknown>): Result<BudgetItemInput> {
+  const category = oneOf(body.category, BUDGET_CATEGORIES, "La catégorie");
+  if (!category.ok) return category;
+
+  const label = str(body.label, "Le nom de l'article", { min: 2, max: 120 });
+  if (!label.ok) return label;
+
+  const qty = num(body.qty, "La quantité", { min: 0.001, max: 1_000_000 });
+  if (!qty.ok) return qty;
+
+  const unit = str(body.unit, "L'unité", { max: 20, required: false });
+  if (!unit.ok) return unit;
+
+  const unitPriceCents = int(body.unitPriceCents, "Le prix unitaire", { min: 0, max: 1_000_000 });
+  if (!unitPriceCents.ok) return unitPriceCents;
+
+  const position = int(body.position, "La position", { min: 0, max: 999, required: false });
+  if (!position.ok) return position;
+
+  // Par défaut, la catégorie « emballages » est la seule exclue du coût matière
+  // alimentaire ; les autres postes peuvent l'être aussi (ex. un lot de fleurs
+  // de table), d'où un booléen distinct plutôt qu'un test sur la catégorie.
+  const packaging = bool(body.packaging, category.value === "emballages");
+
+  return ok({
+    category: category.value,
+    label: label.value,
+    qty: qty.value,
+    unit: unit.value,
+    unitPriceCents: unitPriceCents.value,
+    packaging,
     position: position.value,
   });
 }

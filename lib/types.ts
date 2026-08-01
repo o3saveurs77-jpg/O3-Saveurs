@@ -241,6 +241,57 @@ export const STOCK_REASON_LABEL: Record<StockReason, string> = {
   inventaire: "Inventaire",
 };
 
+// ─── Achats & budget ───────────────────────────────────────────
+
+export type BudgetCategory =
+  | "viandes"
+  | "poissons"
+  | "legumes"
+  | "feculents"
+  | "laitiers"
+  | "epicerie"
+  | "pain"
+  | "boissons"
+  | "emballages";
+
+/** Ordre d'affichage : les postes alimentaires d'abord, les emballages en dernier. */
+export const BUDGET_CATEGORIES: readonly BudgetCategory[] = [
+  "viandes",
+  "poissons",
+  "legumes",
+  "feculents",
+  "laitiers",
+  "epicerie",
+  "pain",
+  "boissons",
+  "emballages",
+];
+
+export const BUDGET_CATEGORY_LABEL: Record<BudgetCategory, string> = {
+  viandes: "Viandes & volailles",
+  poissons: "Poissons",
+  legumes: "Légumes & fruits",
+  feculents: "Riz, semoule & féculents",
+  laitiers: "Produits laitiers & œufs",
+  epicerie: "Épicerie & secs",
+  pain: "Pain & pâte à pastels",
+  boissons: "Boissons & fruits à jus",
+  emballages: "Emballages & à emporter",
+};
+
+export interface BudgetItemView {
+  id: string;
+  category: BudgetCategory;
+  label: string;
+  qty: number;
+  unit: string;
+  unitPriceCents: number;
+  /** qty × unitPriceCents, arrondi — jamais stocké côté serveur */
+  totalCents: number;
+  packaging: boolean;
+  position: number;
+}
+
 // ─── Service après-vente ───────────────────────────────────────
 
 export type TicketStatus = "ouvert" | "en_cours" | "resolu" | "ferme";

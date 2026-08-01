@@ -126,8 +126,8 @@ describe("suggestCities", () => {
 
 describe("zoneByIdx", () => {
   it("retrouve une zone par son index", () => {
-    expect(zoneByIdx(zones, 0)!.feeCents).toBe(250);
-    expect(zoneByIdx(zones, 3)!.minimumCents).toBe(3500);
+    expect(zoneByIdx(zones, 0)!.feeCents).toBe(400);
+    expect(zoneByIdx(zones, 3)!.minimumCents).toBe(1500);
   });
 
   it("renvoie null pour un index absent ou nul", () => {

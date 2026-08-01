@@ -176,15 +176,15 @@ export const info = {
   ],
 };
 
-// Zones de livraison (frais fixes indicatifs + minimum de commande)
-// Les codes postaux sont la clé de rapprochement fiable : un nom de commune se
-// saisit de dix façons, un code postal non. À faire confirmer par la cliente en
-// même temps que les frais réels (spec §10).
+// Zones de livraison — les communes couvertes varient (colonne `villes`/`zips`),
+// mais le tarif est désormais unique : 4,00 € de frais, 15 € de commande minimum,
+// quelle que soit la zone. La livraison est offerte à partir de 40 € d'achat
+// (promotion automatique "free_delivery", gérée dans /admin/promotions).
 export const zones: SeedZone[] = [
-  { min: 15, fee: 2.5, villes: ["Lognes", "Noisiel", "Croissy-Beaubourg", "Torcy", "Champs-sur-Marne", "Émerainville", "Collégien"], zips: ["77185", "77186", "77183", "77200", "77420", "77184", "77090"] },
-  { min: 20, fee: 3.5, villes: ["Bussy-Saint-Georges", "Noisy-le-Grand", "Vaires-sur-Marne", "Ferrières-en-Brie"], zips: ["77600", "93160", "77360", "77164"] },
-  { min: 25, fee: 4.5, villes: ["Pontault-Combault", "Lagny-sur-Marne", "Roissy-en-Brie"], zips: ["77340", "77400", "77680"] },
-  { min: 35, fee: 5.5, villes: ["Chessy", "Bailly-Romainvilliers", "Serris", "Montévrain", "Magny-le-Hongre"], zips: ["77700", "77144"] },
+  { min: 15, fee: 4, villes: ["Lognes", "Noisiel", "Croissy-Beaubourg", "Torcy", "Champs-sur-Marne", "Émerainville", "Collégien"], zips: ["77185", "77186", "77183", "77200", "77420", "77184", "77090"] },
+  { min: 15, fee: 4, villes: ["Bussy-Saint-Georges", "Noisy-le-Grand", "Vaires-sur-Marne", "Ferrières-en-Brie"], zips: ["77600", "93160", "77360", "77164"] },
+  { min: 15, fee: 4, villes: ["Pontault-Combault", "Lagny-sur-Marne", "Roissy-en-Brie"], zips: ["77340", "77400", "77680"] },
+  { min: 15, fee: 4, villes: ["Chessy", "Bailly-Romainvilliers", "Serris", "Montévrain", "Magny-le-Hongre"], zips: ["77700", "77144"] },
 ];
 
 export const cats: Category[] = [

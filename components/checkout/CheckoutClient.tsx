@@ -22,6 +22,14 @@ type Payment = (typeof PAYMENTS)[number];
  */
 const PENDING_ORDER_KEY = "ots_pending_order";
 
+/**
+ * Mémorise l'intention de créer un compte, pour une commande précise — lue par
+ * `OrderTracker` sur l'écran « connexion requise » qui suit systématiquement
+ * une commande passée en invité (voir `lib/guard.ts` : aucune page de commande
+ * n'est accessible sans session, même à son propre auteur).
+ */
+const WANTS_ACCOUNT_KEY = "ots_wants_account";
+
 interface SlotsResponse {
   open: boolean;
   slots: string[];
@@ -40,12 +48,14 @@ export function CheckoutClient() {
   const [payment, setPayment] = useState<Payment>(PAYMENTS[0]);
   const [promoCode, setPromoCode] = useState("");
   const [cgv, setCgv] = useState(false); // jamais pré-cochée : le consentement doit être actif
+  const [wantsAccount, setWantsAccount] = useState(false); // idem : proposition facultative, jamais pré-cochée
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [canceled, setCanceled] = useState(false);
 
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [slots, setSlots] = useState<SlotsResponse | null>(null);
+  const [freeDeliveryThresholdCents, setFreeDeliveryThresholdCents] = useState<number | null>(null);
 
   const [form, setForm] = useState({
     name: user?.name ?? "",
@@ -95,6 +105,20 @@ export function CheckoutClient() {
     };
   }, []);
 
+  // Seuil de livraison offerte — affiché ici, appliqué pour de vrai par `computeOrder()`.
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/delivery-info", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("delivery-info"))))
+      .then((data: { freeDeliveryThresholdCents: number | null }) => {
+        if (alive) setFreeDeliveryThresholdCents(data.freeDeliveryThresholdCents);
+      })
+      .catch(() => alive && setFreeDeliveryThresholdCents(null));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   // Créneaux réels : plus de liste codée en dur proposant le midi les jours de fermeture.
   useEffect(() => {
     let alive = true;
@@ -126,8 +150,14 @@ export function CheckoutClient() {
   const addressFilled = form.zip.length === 5 || form.city.trim().length > 1;
   const outOfZone = mode === "livraison" && !!zones && addressFilled && !zone;
 
-  const feeCents = mode === "livraison" ? zone?.feeCents ?? 0 : 0;
   const minimumCents = mode === "livraison" ? zone?.minimumCents ?? 0 : 0;
+  // Estimation client de la livraison offerte : le seuil vient de la même
+  // promotion automatique que `computeOrder()` applique côté serveur, c'est
+  // donc un aperçu fidèle, pas une garantie — le total réel reste recalculé
+  // à la validation.
+  const freeDeliveryReached =
+    freeDeliveryThresholdCents !== null && subtotalCents >= freeDeliveryThresholdCents;
+  const feeCents = mode === "livraison" && !freeDeliveryReached ? zone?.feeCents ?? 0 : 0;
   const totalCents = subtotalCents + feeCents;
   const belowMin = mode === "livraison" && !!zone && subtotalCents < minimumCents;
 
@@ -213,7 +243,10 @@ export function CheckoutClient() {
        * commande est mémorisé, et `OrderTracker` vide le panier au retour
        * confirmé sur `/commande/{id}`. */
       try {
-        if (data.orderId) sessionStorage.setItem(PENDING_ORDER_KEY, data.orderId);
+        if (data.orderId) {
+          sessionStorage.setItem(PENDING_ORDER_KEY, data.orderId);
+          if (!user && wantsAccount) sessionStorage.setItem(WANTS_ACCOUNT_KEY, data.orderId);
+        }
       } catch {
         /* navigation privée : le panier sera simplement vidé plus tard */
       }
@@ -223,7 +256,7 @@ export function CheckoutClient() {
       setError("Le paiement est momentanément indisponible. Réessayez dans un instant.");
       setPlacing(false);
     }
-  }, [valid, placing, lines, mode, slot, form, promoCode, payment]);
+  }, [valid, placing, lines, mode, slot, form, promoCode, payment, user, wantsAccount]);
 
   if (lines.length === 0) {
     return (
@@ -312,10 +345,17 @@ export function CheckoutClient() {
             <p className="mt-4 rounded-xl bg-panel-2 p-3 text-sm text-ink-2">
               {zone ? (
                 <>
-                  Votre adresse est en <strong className="text-ink">zone {zone.idx + 1}</strong> :
-                  frais de livraison <strong className="text-ink">{fmtPrice(zone.feeCents)}</strong>,
-                  minimum de commande{" "}
-                  <strong className="text-ink">{fmtPrice(zone.minimumCents)}</strong>.
+                  Cette adresse est livrable : frais de livraison{" "}
+                  <strong className="text-ink">{fmtPrice(zone.feeCents)}</strong>
+                  {freeDeliveryThresholdCents !== null && (
+                    <>
+                      {" "}
+                      (offerts dès{" "}
+                      <strong className="text-ink">{fmtPrice(freeDeliveryThresholdCents)}</strong>{" "}
+                      d'achat)
+                    </>
+                  )}
+                  , minimum de commande <strong className="text-ink">{fmtPrice(zone.minimumCents)}</strong>.
                 </>
               ) : outOfZone ? (
                 <>
@@ -324,8 +364,8 @@ export function CheckoutClient() {
                 </>
               ) : (
                 <>
-                  Renseignez votre code postal ci-dessous : les frais et le minimum de commande de
-                  votre zone s'afficheront automatiquement.
+                  Renseignez votre code postal ci-dessous pour vérifier que votre adresse est
+                  livrable.
                 </>
               )}
             </p>
@@ -465,6 +505,26 @@ export function CheckoutClient() {
               </>
             )}
           </div>
+
+          {/* Proposée uniquement à un client non connecté — un compte existant
+              n'a pas besoin qu'on lui repropose d'en créer un. Facultative et
+              non pré-cochée, comme le consentement CGV : la commande aboutit
+              qu'elle soit cochée ou non. */}
+          {!user && (
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-line bg-panel-2 p-3">
+              <input
+                id="co-account"
+                type="checkbox"
+                checked={wantsAccount}
+                onChange={(e) => setWantsAccount(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+              />
+              <label htmlFor="co-account" className="text-sm">
+                Créer un compte avec ces informations pour retrouver l'historique de mes
+                commandes, mes factures et mes informations.
+              </label>
+            </div>
+          )}
         </section>
 
         {/* paiement */}
@@ -552,9 +612,11 @@ export function CheckoutClient() {
               <dd className="font-semibold">
                 {mode !== "livraison"
                   ? "Gratuit"
-                  : zone
-                    ? fmtPrice(zone.feeCents)
-                    : "selon votre zone"}
+                  : !zone
+                    ? "selon votre adresse"
+                    : freeDeliveryReached
+                      ? "Offerte"
+                      : fmtPrice(zone.feeCents)}
               </dd>
             </div>
           </dl>
@@ -577,6 +639,18 @@ export function CheckoutClient() {
               {fmtPrice(minimumCents - subtotalCents)}.
             </p>
           )}
+
+          {mode === "livraison" &&
+            zone &&
+            !belowMin &&
+            !freeDeliveryReached &&
+            freeDeliveryThresholdCents !== null && (
+              <p className="mt-3 flex items-start gap-2 rounded-xl bg-teal/10 p-3 text-sm text-teal">
+                <Icon name="sparkle" size={18} className="mt-0.5 shrink-0" />
+                Plus que {fmtPrice(freeDeliveryThresholdCents - subtotalCents)} d'achat pour la
+                livraison offerte.
+              </p>
+            )}
 
           {/* Consentement aux CGV — non pré-coché (art. 1127-1 C. civ.). Sans lui,
               l'exclusion du droit de rétractation sur les denrées périssables

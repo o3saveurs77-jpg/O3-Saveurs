@@ -437,6 +437,30 @@ model ContactMessage {
   @@index([handled, createdAt])
 }
 
+// ─── Achats & budget ──────────────────────────────────────────
+
+/// Ligne de la liste de courses prévisionnelle (achats de matières premières).
+/// Le total de ligne (`qty × unitPriceCents`) n'est jamais stocké : toujours
+/// recalculé, pour ne pas diverger si un prix grossiste change après coup.
+model BudgetItem {
+  id             String  @id @default(cuid())
+  /// regroupement d'affichage, voir BUDGET_CATEGORIES dans lib/types.ts
+  category       String
+  label          String
+  qty            Float   @default(1)
+  /// unité affichée à côté de la quantité ("kg", "L", "plateau"…)
+  unit           String  @default("")
+  unitPriceCents Int
+  /// emballages & à emporter : exclu du coût matière (alimentaire uniquement)
+  packaging      Boolean @default(false)
+  position       Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category, position])
+}
+
 // ─── Technique ────────────────────────────────────────────────
 
 /// Réglages éditables depuis l'admin : coordonnées, SIRET, TVA, seuils, textes.

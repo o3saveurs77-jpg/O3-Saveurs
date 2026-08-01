@@ -130,6 +130,16 @@ function validate(key: SettingKey, raw: unknown): { ok: true; value: string } | 
       return res.ok ? { ok: true, value: String(res.value) } : { ok: false, error: res.error };
     }
 
+    case "budget.caCents": {
+      const res = int(asString, "Le chiffre d'affaires estimé", { min: 0, max: 100_000_00 });
+      return res.ok ? { ok: true, value: String(res.value) } : { ok: false, error: res.error };
+    }
+
+    case "budget.days": {
+      const res = int(asString, "Le nombre de jours", { min: 1, max: 365 });
+      return res.ok ? { ok: true, value: String(res.value) } : { ok: false, error: res.error };
+    }
+
     case "order.acceptCash":
     case "order.acceptCard":
     case "newsletter.enabled":

@@ -2,7 +2,9 @@ import type { NextAuthConfig } from "next-auth";
 
 /**
  * Config de base, sans provider — sûre pour l'edge runtime (middleware).
- * L'instance complète (avec Credentials + Prisma) est dans `auth.ts`.
+ * L'instance complète (avec Auth0 + Prisma) est dans `auth.ts`. Le rôle
+ * (`token.role`) vient du claim posé par l'Action Auth0 Post-Login, voir
+ * `auth0/actions/add-role-claim.js` et le callback `jwt` dans `auth.ts`.
  */
 export const authConfig = {
   trustHost: true,

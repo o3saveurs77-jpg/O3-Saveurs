@@ -46,6 +46,23 @@ export function int(
   return ok(n);
 }
 
+/** Nombre décimal borné (quantités : kg, litres… jamais de l'argent). */
+export function num(
+  v: unknown,
+  field: string,
+  { min = 0, max = Number.MAX_SAFE_INTEGER, required = true } = {},
+): Result<number> {
+  if (v === undefined || v === null || v === "") {
+    if (required) return err(`${field} est requis`);
+    return ok(min);
+  }
+  const n = typeof v === "number" ? v : Number(String(v).replace(",", "."));
+  if (!Number.isFinite(n)) return err(`${field} doit être un nombre`);
+  if (n < min) return err(`${field} doit être au moins ${min}`);
+  if (n > max) return err(`${field} ne peut pas dépasser ${max}`);
+  return ok(n);
+}
+
 export function bool(v: unknown, fallback = false): boolean {
   if (typeof v === "boolean") return v;
   if (v === "true" || v === 1 || v === "1") return true;

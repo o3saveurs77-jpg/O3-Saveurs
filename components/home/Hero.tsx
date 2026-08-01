@@ -45,7 +45,7 @@ export function Hero() {
             Laila, préparée maison à Lognes.
           </p>
 
-          <div className="max-w-md text-ink">
+          <div className="max-w-md">
             <ZoneCheck />
           </div>
 

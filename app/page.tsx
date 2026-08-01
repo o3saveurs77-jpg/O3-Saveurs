@@ -41,16 +41,17 @@ const SAVEURS = [
   },
 ];
 
-/** Plats populaires, plat du jour et zones — tout depuis la base. */
+/** Plats populaires, plat du jour, zones et seuil de livraison offerte — tout depuis la base. */
 async function loadHome(): Promise<{
   populaires: Dish[];
   platToday: PlatDuJourView | null;
   zones: Zone[];
+  freeDeliveryThresholdCents: number | null;
 }> {
   /* La sélection du plat du jour vit dans `lib/dailySpecial.ts` depuis que la
    * Carte l'affiche elle aussi. Elle reste dans ce `Promise.all` : c'est une
    * promesse comme une autre, les trois lectures partent toujours ensemble. */
-  const [dishRows, platToday, zoneRows] = await Promise.all([
+  const [dishRows, platToday, zoneRows, freeDeliveryPromo] = await Promise.all([
     prisma.dish.findMany({
       where: { popular: true, available: true },
       orderBy: [{ position: "asc" }, { name: "asc" }],
@@ -58,12 +59,18 @@ async function loadHome(): Promise<{
     }),
     loadDailySpecial(),
     prisma.zone.findMany({ where: { active: true }, orderBy: { idx: "asc" } }),
+    prisma.promotion.findFirst({
+      where: { kind: "free_delivery", active: true, auto: true },
+      orderBy: { minSubtotalCents: "asc" },
+      select: { minSubtotalCents: true },
+    }),
   ]);
 
   return {
     populaires: dishRows.map(rowToDish),
     platToday,
     zones: zoneRows.map(rowToZone),
+    freeDeliveryThresholdCents: freeDeliveryPromo?.minSubtotalCents ?? null,
   };
 }
 
@@ -71,9 +78,10 @@ export default async function HomePage() {
   let populaires: Dish[] = [];
   let platToday: PlatDuJourView | null = null;
   let zones: Zone[] = [];
+  let freeDeliveryThresholdCents: number | null = null;
 
   try {
-    ({ populaires, platToday, zones } = await loadHome());
+    ({ populaires, platToday, zones, freeDeliveryThresholdCents } = await loadHome());
   } catch (error) {
     // Base indisponible : la vitrine reste lisible, sans afficher de faux prix.
     console.error("[accueil] lecture de la base échouée:", error);
@@ -223,37 +231,42 @@ export default async function HomePage() {
           <Reveal className="text-center">
             <p className="font-script text-3xl text-teal">On vient jusqu'à vous</p>
             <h2 className="mt-1 text-3xl sm:text-4xl">Zones de livraison</h2>
-            <p className="mx-auto mt-3 max-w-xl text-ink-2">
-              Frais et minimum de commande selon votre commune. Hors zone, l'à emporter reste
-              possible.
-            </p>
+            <p className="mx-auto mt-3 max-w-xl text-ink-2">Hors zone, l'à emporter reste possible.</p>
           </Reveal>
-          <div className="mt-9 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+
+          {/* Le tarif est unique quelle que soit la zone : plus la peine de le
+              répéter sur 4 cartes, un bandeau suffit et met en avant la
+              livraison offerte. */}
+          <Reveal delay={60} className="mx-auto mt-8 flex max-w-2xl flex-wrap items-center justify-center gap-x-8 gap-y-3 rounded-[var(--radius-card)] border border-line bg-panel p-5 text-center shadow-[var(--shadow-soft)]">
+            <span className="flex items-center gap-2">
+              <Icon name="truck" size={20} className="text-primary" />
+              <span className="text-sm">
+                Frais de livraison <strong className="text-ink">{fmtPrice(zones[0].feeCents)}</strong>
+              </span>
+            </span>
+            <span className="flex items-center gap-2">
+              <Icon name="euro" size={20} className="text-primary" />
+              <span className="text-sm">
+                Minimum de commande <strong className="text-ink">{fmtPrice(zones[0].minimumCents)}</strong>
+              </span>
+            </span>
+            {freeDeliveryThresholdCents !== null && (
+              <span className="flex items-center gap-2">
+                <Icon name="sparkle" size={20} className="text-teal" />
+                <span className="text-sm">
+                  Offerte dès <strong className="text-teal">{fmtPrice(freeDeliveryThresholdCents)}</strong>
+                </span>
+              </span>
+            )}
+          </Reveal>
+
+          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {zones.map((z, i) => (
               <Reveal key={z.idx} delay={i * 90} className="h-full">
-                {/* Les deux montants étaient collés en petit corps ; ils passent
-                    sur une ligne encadrée pour qu'on les compare d'un coup d'œil
-                    d'une zone à l'autre. */}
                 <div className="flex h-full flex-col rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)] transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[var(--shadow-lg)]">
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-full bg-primary-soft px-3 py-1 text-sm font-bold text-primary">
-                      Zone {z.idx + 1}
-                    </span>
-                    <Icon name="pin" size={20} className="text-primary" />
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-[var(--radius-soft)] bg-panel-2 p-3 text-sm">
-                    <span>
-                      <span className="block text-xs text-ink-2">Frais</span>
-                      <strong className="font-display text-base text-brick">
-                        {fmtPrice(z.feeCents)}
-                      </strong>
-                    </span>
-                    <span>
-                      <span className="block text-xs text-ink-2">Minimum</span>
-                      <strong className="font-display text-base text-brick">
-                        {fmtPrice(z.minimumCents)}
-                      </strong>
-                    </span>
+                  <div className="flex items-center gap-2 text-primary">
+                    <Icon name="pin" size={18} />
+                    <span className="text-xs font-bold uppercase tracking-wide">Secteur {z.idx + 1}</span>
                   </div>
                   <p className="mt-3 text-sm leading-relaxed text-ink-2">{z.villes.join(" · ")}</p>
                 </div>

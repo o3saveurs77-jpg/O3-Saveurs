@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useCartActions } from "@/components/cart/CartContext";
+import { useAuth } from "@/components/providers/AuthContext";
 import { fmtPrice } from "@/lib/menu";
 import { STATUS_FLOW, STATUS_LABEL } from "@/lib/types";
 import type { Order, OrderLine, OrderStatus } from "@/lib/types";
@@ -10,6 +11,9 @@ import { Icon, type IconName } from "@/components/Icon";
 
 /** Doit rester aligné sur la clé écrite par `CheckoutClient` avant la redirection. */
 const PENDING_ORDER_KEY = "ots_pending_order";
+
+/** Doit rester aligné sur la clé écrite par `CheckoutClient` avant la redirection. */
+const WANTS_ACCOUNT_KEY = "ots_wants_account";
 
 /** Intervalle de rafraîchissement du suivi, en lecture seule. */
 const POLL_MS = 20_000;
@@ -57,8 +61,21 @@ type State =
  */
 export function OrderTracker({ id }: { id: string }) {
   const { clear } = useCartActions();
+  const { login } = useAuth();
   const [state, setState] = useState<State>({ kind: "loading" });
   const cleared = useRef(false);
+
+  // Lu une seule fois : reflète le choix fait au tunnel de commande, pour cette
+  // commande précise. Sert à personnaliser l'écran « connexion requise » que
+  // rencontre systématiquement un invité juste après avoir payé.
+  const [wantsAccount, setWantsAccount] = useState(false);
+  useEffect(() => {
+    try {
+      setWantsAccount(sessionStorage.getItem(WANTS_ACCOUNT_KEY) === id);
+    } catch {
+      setWantsAccount(false);
+    }
+  }, [id]);
 
   const load = useCallback(async (): Promise<OrderStatus | null> => {
     try {
@@ -95,6 +112,7 @@ export function OrderTracker({ id }: { id: string }) {
         cleared.current = true;
         clear();
       }
+      sessionStorage.removeItem(WANTS_ACCOUNT_KEY);
     } catch {
       /* stockage indisponible : le panier sera vidé au prochain ajout */
     }
@@ -133,17 +151,25 @@ export function OrderTracker({ id }: { id: string }) {
   }
 
   if (state.kind === "unauthorized") {
+    // Ramène directement sur cette page une fois connecté (plutôt que sur
+    // `/compte`) : un compte créé avec la même adresse email que la commande
+    // y est automatiquement rattaché (voir `GET /api/orders/[id]`).
+    const backHere = () => login(window.location.pathname + window.location.search);
     return (
       <div className="wrap flex flex-col items-center gap-4 py-24 text-center">
         <Icon name="lock" size={48} className="text-ink-2 opacity-40" />
         <h1 className="text-2xl">Connexion requise</h1>
         <p className="max-w-md text-ink-2">
-          Le suivi d'une commande est réservé à son destinataire. Connectez-vous avec l'adresse
-          email utilisée lors de la commande pour y accéder.
+          {wantsAccount
+            ? "Vous avez choisi de créer un compte pour cette commande : connectez-vous avec l'adresse email indiquée à la commande, il sera créé automatiquement et rattaché à celle-ci."
+            : "Le suivi d'une commande est réservé à son destinataire. Connectez-vous avec l'adresse email utilisée lors de la commande pour y accéder."}
         </p>
-        <Link href="/compte" className="rounded-full bg-primary px-6 py-3 font-bold text-white">
-          Se connecter
-        </Link>
+        <button
+          onClick={backHere}
+          className="rounded-full bg-primary px-6 py-3 font-bold text-white hover:brightness-105"
+        >
+          {wantsAccount ? "Créer mon compte" : "Se connecter"}
+        </button>
       </div>
     );
   }
