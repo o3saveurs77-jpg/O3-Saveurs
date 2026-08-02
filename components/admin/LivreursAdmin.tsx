@@ -318,7 +318,10 @@ export function LivreursAdmin() {
                 </span>
               </div>
 
-              <dl className="mt-4 grid grid-cols-3 gap-2 rounded-[var(--radius-soft)] bg-panel-2 p-3 text-center text-sm">
+              {/* Entre 640-1279 px la carte n'occupe qu'une demi-largeur (grille
+                  parente sm:grid-cols-2) : un montant à 4 chiffres n'a alors
+                  plus qu'~90 px et passait sur deux lignes en grid-cols-3 fixe. */}
+              <dl className="mt-4 grid grid-cols-1 gap-2 rounded-[var(--radius-soft)] bg-panel-2 p-3 text-center text-sm min-[420px]:grid-cols-3">
                 <div>
                   <dt className="text-[11px] text-ink-2">Tournées</dt>
                   <dd className="font-display text-lg text-brick">{d.today.runs}</dd>

@@ -37,8 +37,9 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Relation client",
     items: [
       { href: "/admin/clients", label: "Clients", icon: "user" },
+      { href: "/admin/messages", label: "Messages", icon: "mail" },
       { href: "/admin/sav", label: "Réclamations", icon: "chat" },
-      { href: "/admin/newsletter", label: "Newsletter", icon: "mail" },
+      { href: "/admin/newsletter", label: "Newsletter", icon: "megaphone" },
     ],
   },
   {

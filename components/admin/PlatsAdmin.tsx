@@ -370,12 +370,12 @@ export function PlatsAdmin() {
                     {items.map((d, index) => (
                       <tr key={d.id} className="border-t border-line">
                         <td className="px-4 py-3">
-                          <div className="flex gap-1">
+                          <div className="flex gap-1.5">
                             <button
                               onClick={() => move(d, -1)}
                               disabled={index === 0}
                               aria-label={`Monter ${d.name}`}
-                              className="grid h-7 w-7 place-items-center rounded-full border border-line hover:bg-panel-2 disabled:opacity-30"
+                              className="grid h-10 w-10 place-items-center rounded-full border border-line hover:bg-panel-2 disabled:opacity-30"
                             >
                               <Icon name="chevDown" size={14} className="rotate-180" />
                             </button>
@@ -383,7 +383,7 @@ export function PlatsAdmin() {
                               onClick={() => move(d, 1)}
                               disabled={index === items.length - 1}
                               aria-label={`Descendre ${d.name}`}
-                              className="grid h-7 w-7 place-items-center rounded-full border border-line hover:bg-panel-2 disabled:opacity-30"
+                              className="grid h-10 w-10 place-items-center rounded-full border border-line hover:bg-panel-2 disabled:opacity-30"
                             >
                               <Icon name="chevDown" size={14} />
                             </button>

@@ -354,3 +354,16 @@ export interface SupportTicketView {
   updatedAt: number;
   messages: TicketMessageView[];
 }
+
+// ─── Formulaire de contact ──────────────────────────────────────
+
+export interface ContactMessageView {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  subject: string;
+  message: string;
+  handled: boolean;
+  createdAt: number;
+}

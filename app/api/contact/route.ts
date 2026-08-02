@@ -11,11 +11,44 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { readJson, badRequest, serverError } from "@/lib/guard";
+import { readJson, badRequest, serverError, requireAdmin } from "@/lib/guard";
 import { collect, str, email as emailField, phone as phoneField, escapeHtml } from "@/lib/validate";
 import { send } from "@/lib/email";
+import { rowToContactMessage } from "@/lib/serialize";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 200;
+
+/**
+ * GET /api/contact — file des messages du formulaire de contact (ADMIN).
+ *
+ * Avant cette route, un message n'existait que dans la base et dans la boîte
+ * mail de notification : si l'email était raté ou supprimé, plus personne côté
+ * restaurant ne pouvait savoir qu'un visiteur avait écrit.
+ */
+export async function GET(req: Request) {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+
+  const url = new URL(req.url);
+  const take = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, Number(url.searchParams.get("take")) || PAGE_SIZE),
+  );
+  const skip = Math.max(0, Number(url.searchParams.get("skip")) || 0);
+
+  const status = url.searchParams.get("status");
+  const where = status === "traites" ? { handled: true } : status === "a_traiter" ? { handled: false } : {};
+
+  const [rows, total] = await Promise.all([
+    prisma.contactMessage.findMany({ where, orderBy: { createdAt: "desc" }, take, skip }),
+    prisma.contactMessage.count({ where }),
+  ]);
+
+  return NextResponse.json({ messages: rows.map(rowToContactMessage), total, take, skip });
+}
 
 interface Body {
   name?: unknown;

@@ -103,6 +103,32 @@ géré par l'application elle-même.
    (ex. `commandes@o3saveurs.fr`) et `RESTAURANT_NOTIFY_EMAIL` (copie restaurant).
 3. À chaque commande confirmée : email client + notification restaurant.
 
+### 5bis. Relance panier abandonné — GitHub Actions
+
+Une commande en carte reste `en_attente_paiement` jusqu'à la confirmation
+Stripe ; la session Stripe Checkout expire au bout de 30 minutes
+(`app/api/checkout/route.ts`), après quoi le webhook l'annule et rend le
+stock. Une relance par email n'a donc de sens que **dans cette fenêtre de
+30 minutes** — incompatible avec les Cron Jobs Vercel, limités à une
+exécution par jour sur l'offre Hobby.
+
+La planification passe donc par GitHub Actions
+(`.github/workflows/abandoned-carts.yml`), qui appelle
+`GET /api/cron/abandoned-carts` toutes les 10 minutes :
+
+1. Générer un secret : `openssl rand -base64 32` → `CRON_SECRET`.
+2. L'ajouter aux variables d'environnement Vercel (**Settings → Environment
+   Variables**).
+3. Sur GitHub : **Settings → Secrets and variables → Actions**, créer deux
+   secrets de dépôt :
+   - `CRON_SECRET` — la même valeur qu'à l'étape 1.
+   - `SITE_URL` — l'URL de production (ex. `https://o3saveurs.vercel.app`).
+4. Le workflow tourne dès qu'il est poussé sur `main`. Vérifier dans l'onglet
+   **Actions** du dépôt qu'il s'exécute et renvoie un code 200.
+
+À savoir : GitHub désactive automatiquement les workflows planifiés après
+60 jours sans commit sur le dépôt — un commit (même mineur) les réactive.
+
 ## 6. Déploiement Vercel
 
 1. Pousser le repo sur GitHub, puis **Import Project** sur https://vercel.com.
@@ -112,8 +138,9 @@ géré par l'application elle-même.
    (`DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`, `NEXTAUTH_URL`,
    `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, `AUTH0_ISSUER`, `ADMIN_EMAIL`,
    `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `BLOB_READ_WRITE_TOKEN`,
-   `RESEND_*`, `RESTAURANT_NOTIFY_EMAIL`). Penser aussi à ajouter l'URL Vercel
-   réelle dans les **Application URIs** d'Auth0 (étape 2.4) une fois connue.
+   `RESEND_*`, `RESTAURANT_NOTIFY_EMAIL`, `CRON_SECRET`). Penser aussi à
+   ajouter l'URL Vercel réelle dans les **Application URIs** d'Auth0
+   (étape 2.4) une fois connue.
 4. **Build Command** : laisser la valeur par défaut, mais vérifier que l'installation
    utilise **`npm ci`** et non `npm install` — `next-auth` est en version beta et un
    `install` peut installer une beta plus récente qui casse l'authentification.
@@ -141,6 +168,7 @@ Cette liste correspond exactement aux `process.env.*` réellement lus par le cod
 | `BLOB_READ_WRITE_TOKEN` | Upload des photos (Vercel Blob) |
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Envoi des emails |
 | `RESTAURANT_NOTIFY_EMAIL` | Copie des commandes au restaurant |
+| `CRON_SECRET` | Autorise `GET /api/cron/abandoned-carts` (appelée par GitHub Actions, voir §5bis) |
 
 ## Comptes après seed
 

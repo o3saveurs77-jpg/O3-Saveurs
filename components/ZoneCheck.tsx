@@ -71,7 +71,10 @@ export function ZoneCheck() {
       </p>
 
       <form onSubmit={check} className="flex gap-2">
-        <div className="flex flex-1 items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4">
+        {/* `min-w-0` : sans ça l'input garde sa largeur minimale de contenu
+            (~180 px) au lieu de suivre `w-full`, et pousse « Vérifier » hors
+            champ sous ~375 px. */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4">
           <label htmlFor="zone-check" className="sr-only">
             Code postal ou ville de livraison
           </label>

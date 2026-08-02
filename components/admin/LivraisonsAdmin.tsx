@@ -511,8 +511,9 @@ export function LivraisonsAdmin() {
                       </span>
                     </header>
 
-                    {/* récapitulatif */}
-                    <dl className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-panel-2 p-3 text-center">
+                    {/* récapitulatif — sous ~420 px un montant à 4 chiffres passait sur
+                        deux lignes en grid-cols-3 fixe et désalignait les trois blocs. */}
+                    <dl className="mt-3 grid grid-cols-1 gap-2 rounded-xl bg-panel-2 p-3 text-center min-[420px]:grid-cols-3">
                       <div>
                         <dt className="text-[11px] font-semibold uppercase tracking-wide text-ink-2">
                           Arrêts
@@ -579,13 +580,18 @@ export function LivraisonsAdmin() {
                                   )}
                                 </p>
                               </div>
+                              {/* `h-7 w-7` (28 px) avec 4 px d'écart rapprochait trop les
+                                  boutons monter/descendre du bouton retirer — destructif — au
+                                  point qu'un doigt visant « descendre » pouvait détacher la
+                                  commande par erreur. Cibles à 40 px + bouton retirer séparé
+                                  par une bordure. */}
                               <div className="flex shrink-0 flex-col gap-1">
                                 <button
                                   type="button"
                                   onClick={() => move(run, i, -1)}
                                   disabled={busy || i === 0}
                                   aria-label={`Monter la commande ${o.ref}`}
-                                  className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-panel hover:border-primary disabled:opacity-30"
+                                  className="grid h-10 w-10 place-items-center rounded-lg border border-line bg-panel hover:border-primary disabled:opacity-30"
                                 >
                                   <Icon name="chevron" size={14} className="-rotate-90" />
                                 </button>
@@ -594,7 +600,7 @@ export function LivraisonsAdmin() {
                                   onClick={() => move(run, i, 1)}
                                   disabled={busy || i === run.orders.length - 1}
                                   aria-label={`Descendre la commande ${o.ref}`}
-                                  className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-panel hover:border-primary disabled:opacity-30"
+                                  className="grid h-10 w-10 place-items-center rounded-lg border border-line bg-panel hover:border-primary disabled:opacity-30"
                                 >
                                   <Icon name="chevron" size={14} className="rotate-90" />
                                 </button>
@@ -603,7 +609,7 @@ export function LivraisonsAdmin() {
                                   onClick={() => detach(run, o.id)}
                                   disabled={busy}
                                   aria-label={`Retirer la commande ${o.ref} de la tournée`}
-                                  className="grid h-7 w-7 place-items-center rounded-lg border border-line bg-panel text-brick hover:border-brick disabled:opacity-30"
+                                  className="mt-1 grid h-10 w-10 place-items-center rounded-lg border border-line bg-panel text-brick hover:border-brick disabled:opacity-30"
                                 >
                                   <Icon name="x" size={14} />
                                 </button>

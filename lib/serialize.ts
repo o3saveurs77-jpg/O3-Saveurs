@@ -20,6 +20,7 @@ import type {
   BudgetItem as BudgetItemRow,
   SupportTicket as TicketRow,
   TicketMessage as TicketMessageRow,
+  ContactMessage as ContactMessageRow,
 } from "@prisma/client";
 
 import type { Dish, DishOption, Zone } from "./menu";
@@ -39,6 +40,7 @@ import type {
   TicketCategory,
   TicketMessageView,
   TicketStatus,
+  ContactMessageView,
 } from "./types";
 import { ALLERGENS } from "./types";
 
@@ -290,5 +292,18 @@ export function rowToTicket(
     createdAt: r.createdAt.getTime(),
     updatedAt: r.updatedAt.getTime(),
     messages: (r.messages ?? []).map(rowToTicketMessage),
+  };
+}
+
+export function rowToContactMessage(r: ContactMessageRow): ContactMessageView {
+  return {
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    phone: r.phone,
+    subject: r.subject,
+    message: r.message,
+    handled: r.handled,
+    createdAt: r.createdAt.getTime(),
   };
 }

@@ -137,8 +137,11 @@ export function MenuClient({ initial = [] }: { initial?: Dish[] }) {
   const nbActifs = countActive(filters);
   const total = filtered.length;
 
+  // `min-w-0` sur le conteneur ci-dessous : un input flex sans ça garde sa
+  // largeur minimale de contenu (~180 px) au lieu de suivre `w-full`, et
+  // pousse le bouton Filtres hors champ sous ~375 px.
   const champRecherche = (
-    <div className="flex flex-1 items-center gap-2 rounded-full border border-line bg-panel px-4">
+    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-line bg-panel px-4">
       <label htmlFor="menu-search" className="sr-only">
         Rechercher un plat
       </label>

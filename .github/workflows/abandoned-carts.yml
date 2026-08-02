@@ -1,0 +1,34 @@
+name: Relance panier abandonné
+
+# Vercel Hobby limite les Cron Jobs intégrés à une exécution par jour, ce qui
+# ne convient pas à une fenêtre de relance de 30 minutes (durée de vie d'une
+# session Stripe Checkout, voir app/api/checkout/route.ts). On délègue donc la
+# planification à GitHub Actions, gratuit sur ce dépôt.
+#
+# Secrets requis (Settings → Secrets and variables → Actions) :
+#   SITE_URL     — l'URL de production, ex. https://o3saveurs.vercel.app
+#   CRON_SECRET  — la même valeur que la variable d'environnement Vercel du
+#                  même nom (Project Settings → Environment Variables).
+
+on:
+  schedule:
+    # Toutes les 10 minutes. GitHub Actions ne garantit pas l'horaire exact
+    # sous charge ; sans conséquence ici, la relance est idempotente (voir
+    # dedupeKey dans lib/email.ts).
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  relance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Appeler /api/cron/abandoned-carts
+        run: |
+          status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.SITE_URL }}/api/cron/abandoned-carts")
+          cat /tmp/response.json
+          if [ "$status" -ge 300 ]; then
+            echo "Échec HTTP $status"
+            exit 1
+          fi
