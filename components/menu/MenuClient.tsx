@@ -19,7 +19,7 @@ import type { FiltersState } from "./MenuFilters";
  * en direct, sans que la première peinture soit vide. */
 export function MenuClient({ initial = [] }: { initial?: Dish[] }) {
   const ctx = useDishes();
-  const { ready, error } = ctx;
+  const { ready, error, reset } = ctx;
   const dishes = ready && ctx.dishes.length > 0 ? ctx.dishes : initial;
 
   const [query, setQuery] = useState("");
@@ -241,12 +241,19 @@ export function MenuClient({ initial = [] }: { initial?: Dish[] }) {
         {/* ── Sections ──────────────────────────────────── */}
         <div>
           {error && (
-            <p
+            <div
               role="alert"
-              className="mb-6 rounded-xl border border-line bg-primary-soft p-4 text-sm text-brick"
+              className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-primary-soft p-4 text-sm text-brick"
             >
-              La carte n'a pas pu être chargée. Rechargez la page ou appelez-nous pour commander.
-            </p>
+              <p>La carte n'a pas pu être chargée. Réessayez ou appelez-nous pour commander.</p>
+              <button
+                type="button"
+                onClick={reset}
+                className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+              >
+                Réessayer
+              </button>
+            </div>
           )}
 
           {!ready && dishes.length === 0 ? (

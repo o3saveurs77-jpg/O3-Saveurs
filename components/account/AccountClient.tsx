@@ -100,6 +100,12 @@ export function AccountClient() {
   );
 }
 
+const PERKS: { icon: IconName; label: string }[] = [
+  { icon: "list", label: "Suivez vos commandes en temps réel" },
+  { icon: "euro", label: "Retrouvez toutes vos factures" },
+  { icon: "heart", label: "Enregistrez vos plats favoris" },
+];
+
 function AuthForm() {
   const { login } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -112,25 +118,63 @@ function AuthForm() {
   };
 
   return (
-    <div className="wrap flex justify-center py-16">
-      <div className="w-full max-w-md rounded-[var(--radius-card)] border border-line bg-panel p-8 shadow-[var(--shadow-soft)]">
-        <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft text-primary">
-          <Icon name="user" size={28} />
+    <>
+      {/* En-tête colorée, cohérente avec Contact / La Carte / Commander — la
+          page « Mon compte » était la seule sur fond crème nu. */}
+      <header className="bg-primary text-white">
+        <div className="wrap py-12 text-center">
+          <p className="font-script text-3xl text-gold">Bienvenue</p>
+          <h1 className="mt-1 text-4xl sm:text-5xl">Votre espace</h1>
         </div>
-        <h1 className="mt-4 text-center text-2xl">Votre espace</h1>
-        <p className="mt-2 text-center text-sm text-ink-2">
-          Connectez-vous pour suivre vos commandes, factures et favoris.
-        </p>
+        <div className="ots-band" />
+      </header>
 
-        <button
-          onClick={submit}
-          disabled={busy}
-          className="mt-6 w-full rounded-full bg-primary px-6 py-3.5 font-bold text-white hover:brightness-105 disabled:opacity-60"
-        >
-          {busy ? "…" : "Se connecter"}
-        </button>
+      <div className="wrap flex justify-center py-16">
+        <div className="relative w-full max-w-md overflow-hidden rounded-[var(--radius-card)] border border-line bg-panel p-8 shadow-[var(--shadow-lg)]">
+          <div
+            className="ots-sun pointer-events-none absolute -right-12 -top-12 h-44 w-44 opacity-[0.07]"
+            aria-hidden="true"
+          />
+
+          <div className="relative mx-auto grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br from-primary to-brick text-white shadow-[var(--shadow-soft)]">
+            <Icon name="user" size={30} />
+          </div>
+          <h2 className="relative mt-5 text-center text-2xl">Connectez-vous</h2>
+          <p className="relative mt-2 text-center text-sm text-ink-2">
+            Accédez à vos commandes, factures et favoris en un instant.
+          </p>
+
+          <ul className="relative mt-6 space-y-3 border-y border-line py-5">
+            {PERKS.map((p) => (
+              <li key={p.label} className="flex items-center gap-3 text-sm">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+                  <Icon name={p.icon} size={16} />
+                </span>
+                {p.label}
+              </li>
+            ))}
+          </ul>
+
+          <button
+            onClick={submit}
+            disabled={busy}
+            className="relative mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-bold text-white transition hover:-translate-y-0.5 hover:brightness-105 disabled:pointer-events-none disabled:opacity-60"
+          >
+            {busy ? (
+              "Connexion…"
+            ) : (
+              <>
+                Se connecter <Icon name="arrow" size={16} />
+              </>
+            )}
+          </button>
+
+          <p className="relative mt-4 text-center text-xs text-ink-2">
+            Nouveau ici ? La connexion crée votre compte automatiquement.
+          </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
