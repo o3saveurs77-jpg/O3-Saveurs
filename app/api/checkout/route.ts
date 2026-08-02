@@ -88,6 +88,15 @@ export async function POST(req: Request) {
     );
   }
 
+  // `"next"` n'a de sens que côté client (proposer le prochain service quand
+  // rien n'est disponible aujourd'hui) : on le résout ici en un horaire lisible
+  // pour la cuisine et l'admin, plutôt que de stocker le mot-clé tel quel.
+  const resolvedSlot = ((): string => {
+    if (slot !== "next") return slot;
+    const next = nextService(hours);
+    return next ? `${WEEKDAY_LABEL[next.weekday]} ${next.opensAt}` : slot;
+  })();
+
   // ── Calcul serveur intégral ──
   const session = await optionalUser();
   const priced = await computeOrder({
@@ -131,7 +140,7 @@ export async function POST(req: Request) {
           // Une commande n'entre en cuisine qu'une fois le paiement acquis.
           status: cash ? "confirmee" : "en_attente_paiement",
           zoneIdx: order.zone?.idx ?? null,
-          slot,
+          slot: resolvedSlot,
           customerName: name,
           customerEmail: email,
           customerPhone: phone,

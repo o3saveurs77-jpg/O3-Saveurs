@@ -166,16 +166,23 @@ export function CheckoutClient() {
     return slots?.open ? ["asap", ...list] : list;
   }, [slots]);
 
+  // Rien de proposable aujourd'hui, mais un prochain service existe : plutôt
+  // que de bloquer la commande, on la propose pour ce service — avec un
+  // avertissement (voir plus bas) plutôt qu'un blocage silencieux.
+  const canPreOrderNext = !!slots && slotOptions.length === 0 && !!slots.nextService;
+
   // Un créneau devenu indisponible (service terminé pendant la saisie) est réajusté.
   useEffect(() => {
     if (!slots) return;
     if (slotOptions.length > 0 && !slotOptions.includes(slot)) setSlot(slotOptions[0]);
-  }, [slots, slotOptions, slot]);
+    else if (slotOptions.length === 0 && canPreOrderNext && slot !== "next") setSlot("next");
+  }, [slots, slotOptions, slot, canPreOrderNext]);
 
   const valid = useMemo(() => {
     if (lines.length === 0 || belowMin || outOfZone) return false;
     if (!cgv) return false;
-    if (slotOptions.length === 0 || !slot) return false;
+    const slotOk = slotOptions.length > 0 ? slotOptions.includes(slot) : canPreOrderNext && slot === "next";
+    if (!slotOk) return false;
     if (form.name.trim().length < 2) return false;
     if (!EMAIL_RE.test(form.email.trim())) return false;
     if (form.phone.replace(/\D/g, "").length < 9) return false;
@@ -185,7 +192,7 @@ export function CheckoutClient() {
       if (!/^\d{5}$/.test(form.zip.trim())) return false;
     }
     return true;
-  }, [lines.length, belowMin, outOfZone, cgv, slot, slotOptions, form, mode]);
+  }, [lines.length, belowMin, outOfZone, cgv, slot, slotOptions, canPreOrderNext, form, mode]);
 
   const placeOrder = useCallback(async () => {
     if (!valid || placing) return; // garde de double soumission
@@ -396,10 +403,37 @@ export function CheckoutClient() {
                 {s === "asap" ? "Au plus vite" : s}
               </button>
             ))}
-            {slots && slotOptions.length === 0 && (
+            {canPreOrderNext && slots?.nextService && (
+              <button
+                type="button"
+                onClick={() => setSlot("next")}
+                aria-pressed={slot === "next"}
+                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                  slot === "next"
+                    ? "border-primary bg-primary text-white"
+                    : "border-line hover:border-primary/40"
+                }`}
+              >
+                {slots.nextService.weekdayLabel} {slots.nextService.opensAt}
+              </button>
+            )}
+            {slots && slotOptions.length === 0 && !slots.nextService && (
               <p className="text-sm text-ink-2">Aucun créneau disponible aujourd'hui.</p>
             )}
           </div>
+
+          {/* Commande posée alors que le restaurant est fermé : acceptée, mais
+              il faut que le client sache qu'elle ne partira en cuisine qu'à
+              l'ouverture — sans ça, un client qui commande la veille au soir
+              pourrait croire à une livraison immédiate. */}
+          {canPreOrderNext && slot === "next" && slots?.nextService && (
+            <p className="mt-3 flex items-start gap-2 rounded-xl bg-primary-soft p-3 text-sm text-brick">
+              <Icon name="warning" size={18} className="mt-0.5 shrink-0" />
+              Nous sommes fermés pour le moment. Votre commande sera transmise en cuisine à
+              l'ouverture du prochain service : {slots.nextService.weekdayLabel} à partir de{" "}
+              {slots.nextService.opensAt}.
+            </p>
+          )}
         </section>
 
         {/* coordonnées */}

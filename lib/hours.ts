@@ -166,7 +166,10 @@ export function availableSlots(
 /**
  * Un créneau est-il acceptable à cet instant ? Utilisé côté serveur pour
  * refuser une commande forgée hors service.
- * `"asap"` n'est valide que si le restaurant est ouvert.
+ * `"asap"` n'est valide que si le restaurant est ouvert. `"next"` — commande
+ * posée pour le prochain service — n'est valide que si aucun créneau n'est
+ * proposable aujourd'hui : sinon le client doit choisir parmi les créneaux du
+ * jour, pas sauter directement au service suivant.
  */
 export function isSlotAcceptable(
   hours: DayHours[],
@@ -175,7 +178,9 @@ export function isSlotAcceptable(
 ): boolean {
   const at = opts.at ?? new Date();
   if (slot === "asap") return isOpenAt(hours, at);
-  return availableSlots(hours, { ...opts, at }).includes(slot);
+  const today = availableSlots(hours, { ...opts, at });
+  if (slot === "next") return today.length === 0 && nextService(hours, at) !== null;
+  return today.includes(slot);
 }
 
 /** Rendu lisible pour le pied de page et la page Contact. */
