@@ -1,15 +1,19 @@
 import Link from "next/link";
 import { Emblem } from "./Brand";
 import { Icon } from "./Icon";
+import { NewsletterForm } from "./NewsletterForm";
 import { info } from "@/lib/menu";
 
 export function Footer() {
+  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(info.address)}`;
+
   return (
     <footer className="bg-footer-bg text-footer-ink">
       <div className="ots-band" />
-      <div className="wrap grid gap-10 py-12 sm:grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr] md:py-14">
+
+      <div className="wrap grid gap-10 py-12 sm:grid-cols-2 lg:grid-cols-[1.3fr_0.8fr_1fr_1fr] md:py-14">
         {/* marque */}
-        <div className="sm:col-span-2 md:col-span-1">
+        <div className="sm:col-span-2 lg:col-span-1">
           <div className="flex items-center gap-3">
             <Emblem size={48} />
             <div>
@@ -42,17 +46,33 @@ export function Footer() {
           )}
         </div>
 
+        {/* navigation */}
+        <div>
+          <h3 className="mb-4 text-gold">Navigation</h3>
+          <ul className="flex flex-col gap-2.5 text-sm opacity-90">
+            <li><Link href="/" className="link-underline">Accueil</Link></li>
+            <li><Link href="/carte" className="link-underline">La Carte</Link></li>
+            <li><Link href="/a-propos" className="link-underline">À propos</Link></li>
+            <li><Link href="/contact" className="link-underline">Contact</Link></li>
+            <li><Link href="/compte" className="link-underline">Mon compte</Link></li>
+          </ul>
+        </div>
+
         {/* coordonnées */}
         <div>
           <h3 className="mb-4 text-gold">Nous trouver</h3>
           <ul className="flex flex-col gap-3 text-sm opacity-90">
             <li className="flex items-start gap-2">
               <Icon name="pin" size={18} className="mt-0.5 shrink-0 text-primary" />
-              {info.address}
+              <a href={mapsHref} target="_blank" rel="noopener noreferrer" className="link-underline">
+                {info.address}
+              </a>
             </li>
             <li className="flex items-center gap-2">
               <Icon name="phone" size={18} className="shrink-0 text-primary" />
-              <a href={`tel:${info.phone.replace(/\s/g, "")}`}>{info.phone}</a>
+              <a href={`tel:${info.phone.replace(/\s/g, "")}`} className="link-underline">
+                {info.phone}
+              </a>
             </li>
             <li className="flex items-center gap-2">
               <Icon name="truck" size={18} className="shrink-0 text-primary" />
@@ -75,15 +95,39 @@ export function Footer() {
         </div>
       </div>
 
+      {/* Bandeau newsletter + paiement : une bande à part plutôt qu'une
+          cinquième colonne — la grille au-dessus était déjà pleine, et ces deux
+          blocs ont plus de poids qu'un lien de plus. */}
+      <div className="border-t border-white/10 bg-black/15">
+        <div className="wrap flex flex-col gap-8 py-10 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
+          <NewsletterForm variant="dark" />
+          <div>
+            <h4 className="mb-3 text-xs font-bold uppercase tracking-wide text-gold/80">
+              Moyens de paiement
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {info.payments.map((p) => (
+                <span
+                  key={p}
+                  className="rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-footer-ink/90"
+                >
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="border-t border-white/10">
         <div className="wrap flex flex-col items-center justify-between gap-2 py-5 text-center text-xs opacity-70 sm:flex-row sm:text-left">
           <p>© {new Date().getFullYear()} Ô 3 Saveurs — Chez Laila. Tous droits réservés.</p>
-          {/* `flex-wrap` : les quatre liens en ligne fixe dépassaient la largeur
+          {/* `flex-wrap` : plusieurs liens en ligne fixe dépassaient la largeur
               d'un écran de 320 px et créaient un défilement latéral. */}
           <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1">
-            <Link href="/carte" className="hover:text-gold">La Carte</Link>
-            <Link href="/a-propos" className="hover:text-gold">À propos</Link>
-            <Link href="/contact" className="hover:text-gold">Contact</Link>
+            <Link href="/mentions-legales" className="hover:text-gold">Mentions légales</Link>
+            <Link href="/cgv" className="hover:text-gold">CGV</Link>
+            <Link href="/confidentialite" className="hover:text-gold">Confidentialité</Link>
             <Link href="/admin" className="hover:text-gold">Back-office</Link>
           </nav>
         </div>

@@ -92,7 +92,9 @@ export default async function HomePage() {
       <Hero />
 
       {/* ── Trio des saveurs ─────────────────────────────── */}
-      <section className="wrap py-16">
+      {/* `id="saveurs"` : cible du bouton secondaire et du repère de défilement
+          de la hero — première section pleinement visible après la photo. */}
+      <section id="saveurs" className="wrap scroll-mt-20 py-16">
         <Reveal className="text-center">
           <p className="font-script text-3xl text-teal">Trois continents</p>
           <h2 className="mt-1 text-3xl sm:text-4xl">Une assiette, le monde entier</h2>

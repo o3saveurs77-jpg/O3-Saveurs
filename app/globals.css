@@ -62,6 +62,10 @@ html {
   /* Un texte agrandi par l'utilisateur ne doit pas être ramené de force à sa
      taille d'origine à la rotation de l'écran (bug iOS historique). */
   -webkit-text-size-adjust: 100%;
+  /* Ancres internes (repère de défilement de la hero, liens de pied de page) :
+     un saut sec lisait comme un bug de chargement. Neutralisé sous
+     `prefers-reduced-motion` par la règle globale plus bas. */
+  scroll-behavior: smooth;
 }
 
 body {
