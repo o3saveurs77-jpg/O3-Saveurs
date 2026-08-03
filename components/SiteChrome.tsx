@@ -11,11 +11,15 @@ export function SiteChrome({ children }: { children: React.ReactNode }) {
 
   if (isAdmin) return <>{children}</>;
 
+  // Sans `min-h-dvh` + `flex-1`, une page courte (ex. l'onglet Favoris vide de
+  // /compte) finissait plus tôt que l'écran : le pied de page remontait juste
+  // sous le contenu au lieu de rester ancré en bas, contrairement au
+  // back-office (`AdminShell`, qui a déjà `min-h-dvh`).
   return (
-    <>
+    <div className="flex min-h-dvh flex-col">
       <Nav />
-      <main>{children}</main>
+      <main className="flex-1">{children}</main>
       <Footer />
-    </>
+    </div>
   );
 }
