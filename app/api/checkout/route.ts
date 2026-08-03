@@ -24,6 +24,8 @@ interface Body {
     address?: string;
     city?: string;
     zip?: string;
+    /** identifiant Google de l'adresse choisie — indice de mesure, pas un tarif */
+    placeId?: string | null;
   };
   promoCode?: string | null;
   paymentMethod: string;
@@ -104,6 +106,10 @@ export async function POST(req: Request) {
     mode,
     zip,
     city,
+    address,
+    // Non validé comme une donnée métier : le serveur ne fait que le
+    // retransmettre à Google pour mesurer lui-même la distance.
+    placeId: typeof body.customer?.placeId === "string" ? body.customer.placeId : null,
     promoCode: body.promoCode ?? null,
     customerEmail: email,
   });
@@ -140,6 +146,7 @@ export async function POST(req: Request) {
           // Une commande n'entre en cuisine qu'une fois le paiement acquis.
           status: cash ? "confirmee" : "en_attente_paiement",
           zoneIdx: order.zone?.idx ?? null,
+          distanceKm: order.distanceKm,
           slot: resolvedSlot,
           customerName: name,
           customerEmail: email,

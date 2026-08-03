@@ -47,7 +47,8 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/facturation", label: "Facturation", icon: "euro" },
       { href: "/admin/livreurs", label: "Livreurs", icon: "scooter" },
-      { href: "/admin/zones", label: "Zones", icon: "pin" },
+      { href: "/admin/livraison", label: "Barème livraison", icon: "truck" },
+      { href: "/admin/zones", label: "Zones (repli)", icon: "pin" },
       { href: "/admin/reglages", label: "Réglages", icon: "settings" },
     ],
   },

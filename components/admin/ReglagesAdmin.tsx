@@ -26,10 +26,12 @@ interface FieldDef {
   key: keyof Settings;
   label: string;
   help?: string;
-  type?: "text" | "email" | "tel" | "url" | "number" | "textarea" | "checkbox";
+  type?: "text" | "email" | "tel" | "url" | "number" | "textarea" | "checkbox" | "select";
   placeholder?: string;
   /** unité affichée à droite du libellé (ex. « points de base ») */
   suffix?: string;
+  /** choix proposés — requis pour `type: "select"` */
+  options?: { value: string; label: string }[];
 }
 
 interface SectionDef {
@@ -118,6 +120,16 @@ const SECTIONS: SectionDef[] = [
         key: "order.slotCapacity",
         label: "Commandes maximum par créneau",
         type: "number",
+      },
+      {
+        key: "delivery.mode",
+        label: "Calcul des frais de livraison",
+        type: "select",
+        options: [
+          { value: "zones", label: "Par zone de code postal" },
+          { value: "distance", label: "Au kilomètre (distance routière)" },
+        ],
+        help: "« Au kilomètre » facture le trajet réel selon le barème de l'écran « Barème livraison » — deux adresses d'une même commune peuvent être à 2 et 9 km. Nécessite la clé GOOGLE_MAPS_API_KEY ; sans elle, ou si Google ne répond pas, les zones de code postal s'appliquent automatiquement.",
       },
       { key: "order.acceptCard", label: "Accepter le paiement par carte", type: "checkbox" },
       {
@@ -284,6 +296,34 @@ export function ReglagesAdmin({ initial }: { initial: Settings }) {
                         </p>
                       )}
                     </div>
+                  </div>
+                );
+              }
+
+              if (f.type === "select") {
+                return (
+                  <div key={f.key} className="sm:col-span-2">
+                    <label htmlFor={id} className="mb-1 block text-sm font-semibold text-ink-2">
+                      {f.label}
+                    </label>
+                    <select
+                      id={id}
+                      value={value}
+                      onChange={(e) => set(f.key, e.target.value)}
+                      aria-describedby={helpId}
+                      className={inputClass}
+                    >
+                      {(f.options ?? []).map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    {f.help && (
+                      <p id={helpId} className="mt-1 text-xs text-ink-2">
+                        {f.help}
+                      </p>
+                    )}
                   </div>
                 );
               }

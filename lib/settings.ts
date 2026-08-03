@@ -7,6 +7,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_HOURS, type DayHours } from "@/lib/hours";
+import type { DeliveryTier } from "@/lib/delivery";
+import { geocode, type LatLng } from "@/lib/geo";
 
 export const SETTING_DEFAULTS = {
   // Identité
@@ -35,6 +37,20 @@ export const SETTING_DEFAULTS = {
   "order.leadTimeMinutes": "35", // délai de préparation annoncé
   "order.acceptCash": "true",
   "order.acceptCard": "true",
+
+  /* Livraison — « distance » facture au trajet routier réel via le barème
+   * `DeliveryTier` ; « zones » conserve le rapprochement par code postal.
+   * Le mode « distance » replie **automatiquement** sur les zones si la clé
+   * Google manque ou si l'API ne répond pas : une panne d'un service tiers ne
+   * doit pas arrêter la vente. */
+  "delivery.mode": "zones",
+  /* Coordonnées du restaurant, géocodées une fois puis mémorisées ici. Vides
+   * tant que rien n'a été calculé ; l'adresse de `restaurant.*` fait foi et
+   * une modification d'adresse les invalide (voir `deliveryOrigin()`). */
+  "delivery.originLat": "",
+  "delivery.originLng": "",
+  /** Adresse ayant servi au géocodage ci-dessus — sert à détecter un changement. */
+  "delivery.originAddress": "",
 
   // Newsletter
   "newsletter.enabled": "true",
@@ -126,6 +142,55 @@ export async function getSlotConfig(): Promise<{
     leadTimeMinutes: Number(s["order.leadTimeMinutes"]) || 35,
     capacity: Number(s["order.slotCapacity"]) || 8,
   };
+}
+
+/**
+ * Paliers de livraison à la distance, triés par borne croissante.
+ * Table vide = barème non configuré : `computeOrder()` replie sur les zones.
+ */
+export async function getDeliveryTiers(): Promise<DeliveryTier[]> {
+  const rows = await prisma.deliveryTier.findMany({
+    where: { active: true },
+    orderBy: { maxKm: "asc" },
+  });
+  return rows.map((r) => ({
+    idx: r.idx,
+    maxKm: r.maxKm,
+    feeCents: r.feeCents,
+    minimumCents: r.minimumCents,
+  }));
+}
+
+/**
+ * Coordonnées du restaurant, point de départ de toutes les mesures.
+ *
+ * Géocodées à la première demande puis mémorisées en base : sans ce cache,
+ * chaque commande paierait un appel Google pour un point qui ne bouge jamais.
+ * Le cache est invalidé dès que l'adresse du restaurant change — sinon un
+ * déménagement facturerait les distances depuis l'ancienne adresse.
+ */
+export async function deliveryOrigin(): Promise<LatLng | null> {
+  const s = await getSettings();
+  const address = formatAddress(s);
+  if (!address) return null;
+
+  const lat = Number(s["delivery.originLat"]);
+  const lng = Number(s["delivery.originLng"]);
+  const fresh = s["delivery.originAddress"] === address;
+
+  if (fresh && Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+    return { lat, lng };
+  }
+
+  const found = await geocode(address);
+  if (!found) return null;
+
+  await setSettings({
+    "delivery.originLat": String(found.lat),
+    "delivery.originLng": String(found.lng),
+    "delivery.originAddress": address,
+  });
+  return found;
 }
 
 /** Adresse postale sur une ligne, pour les emails et les factures. */

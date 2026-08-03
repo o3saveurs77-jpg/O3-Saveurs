@@ -112,6 +112,25 @@ model Zone {
   active       Boolean @default(true)
 }
 
+/// Barème de livraison à la distance — remplace le rapprochement par code
+/// postal quand `delivery.mode` vaut « distance ». Une commune ne dit rien du
+/// trajet réel : deux adresses du même code postal peuvent être à 2 et 9 km.
+///
+/// Les paliers sont bornés par le haut et évalués du plus petit au plus grand :
+/// une distance tombe dans le premier palier dont `maxKm` la couvre. Au-delà du
+/// dernier palier, on ne livre pas.
+model DeliveryTier {
+  id           String  @id @default(cuid())
+  idx          Int     @unique
+  /// borne haute **incluse**, en kilomètres de route (pas à vol d'oiseau)
+  maxKm        Float
+  feeCents     Int
+  minimumCents Int
+  active       Boolean @default(true)
+
+  @@index([idx])
+}
+
 model OpeningHours {
   /// 0 = dimanche … 6 = samedi
   weekday Int     @id
@@ -277,7 +296,13 @@ model Order {
   /// en_attente_paiement | confirmee | cuisine | route | livree | annulee
   status String @default("en_attente_paiement")
 
+  /// Index de zone **ou** de palier de distance selon le mode de tarification
+  /// en vigueur au moment de la commande (voir `delivery.mode`).
   zoneIdx Int?
+  /// Distance routière retenue pour facturer, en km. `null` quand la commande a
+  /// été tarifée par zone. Figée à la commande : elle justifie le montant
+  /// facturé même si le barème change ensuite.
+  distanceKm Float?
   slot    String @default("asap")
 
   customerName  String

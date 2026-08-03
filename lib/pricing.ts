@@ -17,6 +17,9 @@ import { prisma } from "@/lib/prisma";
 import { rowToDish, rowToZone } from "@/lib/serialize";
 import { applyPercent, VAT_RATE_BP } from "@/lib/money";
 import { resolveZone } from "@/lib/zones";
+import { formatKm, maxDeliveryKm, tierForDistance } from "@/lib/delivery";
+import { isGeoConfigured, roadDistanceKm } from "@/lib/geo";
+import { deliveryOrigin, getDeliveryTiers, getSetting } from "@/lib/settings";
 import type { Dish, Zone } from "@/lib/menu";
 import type { OrderLine, OrderMode, PromotionKind } from "@/lib/types";
 import { err, ok, type Result } from "@/lib/validate";
@@ -36,6 +39,15 @@ export interface ComputeInput {
   /** adresse de livraison — sert à déduire la zone côté serveur */
   zip?: string | null;
   city?: string | null;
+  /** rue saisie — complète l'adresse mesurée en tarification à la distance */
+  address?: string | null;
+  /**
+   * Identifiant Google de l'adresse choisie dans l'autocomplétion. C'est un
+   * **indice de mesure**, pas un tarif : le serveur s'en sert pour interroger
+   * Google lui-même. Un client qui le falsifie ne peut que désigner une autre
+   * adresse, jamais imposer un prix.
+   */
+  placeId?: string | null;
   promoCode?: string | null;
   /** pour la règle « une seule fois par client » */
   customerEmail?: string | null;
@@ -59,6 +71,8 @@ export interface PricedOrder {
   totalCents: number;
   vatRateBp: number;
   zone: { idx: number; feeCents: number; minimumCents: number } | null;
+  /** Distance routière retenue, quand la tarification s'est faite à la distance. */
+  distanceKm: number | null;
   promotion: AppliedPromotion | null;
 }
 
@@ -243,26 +257,24 @@ export async function computeOrder(input: ComputeInput): Promise<Result<PricedOr
   const lines = priced.value;
   const subtotalCents = subtotalOf(lines);
 
-  // ── Zone et frais de livraison, déduits de l'adresse et jamais du client ──
+  // ── Frais de livraison, déduits de l'adresse et jamais du client ──
   let zone: PricedOrder["zone"] = null;
   let feeCents = 0;
+  let distanceKm: number | null = null;
 
   if (input.mode === "livraison") {
-    const match = resolveZone(zones, { zip: input.zip, city: input.city });
-    if (!match) {
-      return err(
-        "Nous ne livrons pas encore à cette adresse. Vérifiez le code postal, ou choisissez « à emporter ».",
-      );
-    }
-    const found = zoneRows.find((z) => z.idx === match.zoneIdx);
-    if (!found) return err("Zone de livraison introuvable");
+    const billed = await deliveryCharge(input, zones, zoneRows);
+    if (!billed.ok) return billed;
 
-    zone = { idx: found.idx, feeCents: found.feeCents, minimumCents: found.minimumCents };
-    feeCents = found.feeCents;
+    zone = billed.value.zone;
+    feeCents = billed.value.feeCents;
+    distanceKm = billed.value.distanceKm;
 
-    if (subtotalCents < found.minimumCents) {
+    if (subtotalCents < billed.value.minimumCents) {
       return err(
-        `Le minimum de commande pour cette zone est de ${(found.minimumCents / 100).toFixed(2)} €`,
+        `Le minimum de commande pour cette adresse est de ${(
+          billed.value.minimumCents / 100
+        ).toFixed(2)} €`,
       );
     }
   }
@@ -333,7 +345,91 @@ export async function computeOrder(input: ComputeInput): Promise<Result<PricedOr
     totalCents,
     vatRateBp: VAT_RATE_BP,
     zone,
+    distanceKm,
     promotion,
+  });
+}
+
+/**
+ * Frais et minimum de commande pour une adresse de livraison.
+ *
+ * Deux stratégies, dans cet ordre :
+ *
+ *  1. **Distance routière** (`delivery.mode = "distance"`), qui facture le
+ *     trajet réel — deux adresses d'un même code postal peuvent être à 2 et
+ *     9 km, et les traiter au même tarif fait perdre de l'argent sur l'une.
+ *  2. **Zones par code postal**, conservées comme filet de sécurité.
+ *
+ * Le repli est **silencieux et automatique** : clé Google absente, quota
+ * dépassé, API muette, adresse introuvable. Une dépendance externe en panne ne
+ * doit jamais empêcher une commande — c'est la règle appliquée partout ailleurs
+ * dans ce tunnel. Le seul refus possible reste « nous ne livrons pas là », et
+ * il vient toujours d'une donnée, jamais d'une panne.
+ */
+async function deliveryCharge(
+  input: ComputeInput,
+  zones: Zone[],
+  zoneRows: { idx: number; feeCents: number; minimumCents: number }[],
+): Promise<
+  Result<{
+    zone: PricedOrder["zone"];
+    feeCents: number;
+    minimumCents: number;
+    distanceKm: number | null;
+  }>
+> {
+  const mode = await getSetting("delivery.mode");
+
+  if (mode === "distance" && isGeoConfigured()) {
+    const tiers = await getDeliveryTiers();
+    if (tiers.length > 0) {
+      const origin = await deliveryOrigin();
+      if (origin) {
+        const address = [input.address, input.zip, input.city].filter(Boolean).join(", ");
+        const km = await roadDistanceKm(origin, {
+          placeId: input.placeId ?? null,
+          address: address || null,
+        });
+
+        if (km !== null) {
+          const tier = tierForDistance(tiers, km);
+          if (tier) {
+            return ok({
+              zone: { idx: tier.idx, feeCents: tier.feeCents, minimumCents: tier.minimumCents },
+              feeCents: tier.feeCents,
+              minimumCents: tier.minimumCents,
+              distanceKm: km,
+            });
+          }
+          /* Distance mesurée de façon fiable, mais au-delà du dernier palier :
+           * c'est un vrai refus, pas une panne. Replier sur les zones ici
+           * ferait livrer une adresse que la cliente a explicitement exclue. */
+          const limite = maxDeliveryKm(tiers);
+          return err(
+            limite !== null
+              ? `Cette adresse est à ${formatKm(km)} km, au-delà de notre rayon de livraison de ${formatKm(limite)} km. Vous pouvez commander à emporter.`
+              : "Nous ne livrons pas encore à cette adresse.",
+          );
+        }
+      }
+    }
+  }
+
+  // ── Repli : zones par code postal ──
+  const match = resolveZone(zones, { zip: input.zip, city: input.city });
+  if (!match) {
+    return err(
+      "Nous ne livrons pas encore à cette adresse. Vérifiez le code postal, ou choisissez « à emporter ».",
+    );
+  }
+  const found = zoneRows.find((z) => z.idx === match.zoneIdx);
+  if (!found) return err("Zone de livraison introuvable");
+
+  return ok({
+    zone: { idx: found.idx, feeCents: found.feeCents, minimumCents: found.minimumCents },
+    feeCents: found.feeCents,
+    minimumCents: found.minimumCents,
+    distanceKm: null,
   });
 }
 

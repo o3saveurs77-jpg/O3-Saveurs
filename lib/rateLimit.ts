@@ -99,4 +99,13 @@ export const LIMITS = {
   newsletter: { limit: 5, windowMs: 60 * 60_000 },
   /** Vérification d'un code promo (évite l'énumération de codes). */
   promoCheck: { limit: 20, windowMs: 10 * 60_000 },
+  /**
+   * Autocomplétion d'adresse. Chaque appel est **facturé par Google** : sans
+   * limite, un script transformerait la recherche d'adresse en note de frais.
+   * Généreux malgré tout — un client qui saisit son adresse déclenche plusieurs
+   * requêtes en quelques secondes.
+   */
+  addressSuggest: { limit: 40, windowMs: 5 * 60_000 },
+  /** Estimation des frais de livraison (appel Distance Matrix, facturé aussi). */
+  deliveryQuote: { limit: 30, windowMs: 10 * 60_000 },
 } as const;

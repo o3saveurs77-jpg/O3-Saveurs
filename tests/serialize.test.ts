@@ -63,6 +63,7 @@ const orderRow = (over: Partial<OrderRow> = {}): OrderRow => ({
   mode: "livraison",
   status: "confirmee",
   zoneIdx: 0,
+  distanceKm: null,
   slot: "asap",
   customerName: "Awa",
   customerEmail: "awa@x.fr",

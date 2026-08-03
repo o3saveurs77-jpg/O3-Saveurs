@@ -96,6 +96,37 @@ géré par l'application elle-même.
 3. L'admin **Plats** propose « Téléverser une photo » → upload vers Blob → URL
    stockée dans la fiche plat. (`next.config.mjs` autorise déjà le domaine Blob.)
 
+## 4bis. Livraison au kilomètre — Google Maps (facultatif)
+
+Par défaut, les frais de livraison sont calculés **par zone de code postal**
+(Admin → Zones). Deux adresses d'une même commune sont alors facturées au même
+tarif, même si l'une est à 2 km et l'autre à 9 km de route.
+
+Pour facturer au trajet réel :
+
+1. Console Google Cloud → **APIs & Services → Library**, activer :
+   - **Places API** (autocomplétion d'adresse)
+   - **Distance Matrix API** (mesure du trajet)
+2. **Credentials → Create credentials → API key** → `GOOGLE_MAPS_API_KEY`.
+3. Restreindre la clé **aux deux API ci-dessus**. Laisser la restriction
+   d'application sur « Aucune » : la clé n'est lue que côté serveur
+   (`lib/geo.ts` est marqué `server-only`), elle n'atteint jamais le navigateur
+   — l'autocomplétion passe par `/api/address/suggest`.
+4. Renseigner la variable en local et sur Vercel, puis **Redeploy**.
+5. Admin → **Réglages** → « Calcul des frais de livraison » → « Au kilomètre ».
+6. Admin → **Barème livraison** : régler les paliers (jusqu'à X km → frais +
+   minimum de commande). Au-delà du dernier palier, la livraison est refusée.
+
+> **Le repli est automatique.** Clé absente, quota dépassé, API muette : les
+> zones de code postal reprennent la main sans que la commande échoue. C'est
+> voulu — une panne chez Google ne doit pas arrêter la vente. Gardez donc les
+> zones renseignées même en mode « au kilomètre ».
+>
+> Les deux API sont facturées à l'usage (~5 $/1000 requêtes). Les distances et
+> géocodages sont mis en cache par adresse, la saisie est temporisée, et les
+> routes sont limitées en débit (`lib/rateLimit.ts`) pour éviter qu'un script
+> ne transforme la recherche d'adresse en note de frais.
+
 ## 5. Emails — Resend
 
 1. Compte sur https://resend.com → **API Keys** → `re_…` → `RESEND_API_KEY`.
@@ -169,6 +200,7 @@ Cette liste correspond exactement aux `process.env.*` réellement lus par le cod
 | `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | Envoi des emails |
 | `RESTAURANT_NOTIFY_EMAIL` | Copie des commandes au restaurant |
 | `CRON_SECRET` | Autorise `GET /api/cron/abandoned-carts` (appelée par GitHub Actions, voir §5bis) |
+| `GOOGLE_MAPS_API_KEY` | **Facultative** — livraison au kilomètre (§4bis). Absente : facturation par zone de code postal |
 
 ## Comptes après seed
 

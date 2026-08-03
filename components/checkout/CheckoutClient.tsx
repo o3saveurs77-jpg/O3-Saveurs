@@ -7,7 +7,10 @@ import { useAuth } from "@/components/providers/AuthContext";
 import { fmtPrice, info } from "@/lib/menu";
 import type { Zone } from "@/lib/menu";
 import { resolveZone } from "@/lib/zones";
+import { formatKm } from "@/lib/delivery";
 import { Icon } from "@/components/Icon";
+import { AddressAutocomplete } from "./AddressAutocomplete";
+import type { DeliveryQuote } from "@/app/api/delivery-quote/route";
 import type { OrderMode } from "@/lib/types";
 
 /** Doit rester aligné sur `PAYMENT_METHODS` de `app/api/checkout/route.ts`. */
@@ -65,6 +68,12 @@ export function CheckoutClient() {
    * technique est dit comme tel, avec un bouton pour réessayer. */
   const [zonesError, setZonesError] = useState(false);
   const [slotsError, setSlotsError] = useState(false);
+
+  /* Adresse choisie dans l'autocomplétion. C'est un **indice de mesure** envoyé
+   * au serveur, jamais un tarif : le serveur interroge Google lui-même. */
+  const [placeId, setPlaceId] = useState<string | null>(null);
+  const [quote, setQuote] = useState<DeliveryQuote | null>(null);
+  const [quoting, setQuoting] = useState(false);
 
   const [form, setForm] = useState({
     name: user?.name ?? "",
@@ -178,18 +187,69 @@ export function CheckoutClient() {
   );
 
   const addressFilled = form.zip.length === 5 || form.city.trim().length > 1;
-  const outOfZone = mode === "livraison" && !!zones && addressFilled && !zone;
 
-  const minimumCents = mode === "livraison" ? zone?.minimumCents ?? 0 : 0;
+  /* Estimation des frais auprès du serveur : c'est lui qui mesure la distance
+   * (le navigateur n'a ni la clé Google ni le barème). Même logique et mêmes
+   * données que `computeOrder()`, donc l'aperçu ne peut pas diverger du montant
+   * facturé. Débounce : la saisie du code postal ne doit pas déclencher un
+   * appel Distance Matrix par caractère. */
+  useEffect(() => {
+    if (mode !== "livraison" || !addressFilled) {
+      setQuote(null);
+      return;
+    }
+
+    let alive = true;
+    setQuoting(true);
+    const timer = setTimeout(() => {
+      fetch("/api/delivery-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: form.address,
+          zip: form.zip,
+          city: form.city,
+          placeId,
+        }),
+      })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error("quote"))))
+        .then((data: DeliveryQuote) => alive && setQuote(data))
+        // Échec silencieux : l'aperçu disparaît, le tarif reste déterminé à la
+        // commande. Afficher une erreur ici ferait croire à un refus.
+        .catch(() => alive && setQuote(null))
+        .finally(() => alive && setQuoting(false));
+    }, 500);
+
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [mode, addressFilled, form.address, form.zip, form.city, placeId]);
+
+  /* Hors zone : uniquement sur une réponse reçue. Le repli sur `zones` ne vaut
+   * que si l'estimation n'a rien dit — sinon une adresse jugée livrable à la
+   * distance serait affichée « hors zone » parce qu'aucun code postal ne
+   * correspond. */
+  const outOfZone =
+    mode === "livraison" &&
+    addressFilled &&
+    (quote ? !quote.deliverable : !!zones && !zone && !quoting);
+
+  const minimumCents =
+    mode === "livraison" ? quote?.minimumCents ?? zone?.minimumCents ?? 0 : 0;
   // Estimation client de la livraison offerte : le seuil vient de la même
   // promotion automatique que `computeOrder()` applique côté serveur, c'est
   // donc un aperçu fidèle, pas une garantie — le total réel reste recalculé
   // à la validation.
   const freeDeliveryReached =
     freeDeliveryThresholdCents !== null && subtotalCents >= freeDeliveryThresholdCents;
-  const feeCents = mode === "livraison" && !freeDeliveryReached ? zone?.feeCents ?? 0 : 0;
+  // L'estimation serveur prime sur la zone déduite localement : elle vient du
+  // barème réellement appliqué (distance ou zones).
+  const feeCents =
+    mode === "livraison" && !freeDeliveryReached ? quote?.feeCents ?? zone?.feeCents ?? 0 : 0;
   const totalCents = subtotalCents + feeCents;
-  const belowMin = mode === "livraison" && !!zone && subtotalCents < minimumCents;
+  const belowMin =
+    mode === "livraison" && (!!quote?.deliverable || !!zone) && subtotalCents < minimumCents;
 
   const slotOptions = useMemo(() => {
     const list = slots?.slots ?? [];
@@ -248,7 +308,12 @@ export function CheckoutClient() {
         email: form.email.trim(),
         phone: form.phone.trim(),
         ...(mode === "livraison"
-          ? { address: form.address.trim(), city: form.city.trim(), zip: form.zip.trim() }
+          ? {
+              address: form.address.trim(),
+              city: form.city.trim(),
+              zip: form.zip.trim(),
+              placeId,
+            }
           : {}),
       },
       promoCode: promoCode.trim() ? promoCode.trim().toUpperCase() : null,
@@ -293,7 +358,7 @@ export function CheckoutClient() {
       setError("Le paiement est momentanément indisponible. Réessayez dans un instant.");
       setPlacing(false);
     }
-  }, [valid, placing, lines, mode, slot, form, promoCode, payment, user, wantsAccount]);
+  }, [valid, placing, lines, mode, slot, form, placeId, promoCode, payment, user, wantsAccount]);
 
   if (lines.length === 0) {
     return (
@@ -320,6 +385,11 @@ export function CheckoutClient() {
     "w-full rounded-[var(--radius-soft)] border border-line bg-page px-4 py-3 outline-none focus:border-primary";
   const labelCls = "mb-1.5 block text-sm font-semibold text-ink-2";
   const configError = slotsError || zonesError;
+  /* Adresse retenue comme livrable, et tarif correspondant : l'estimation
+   * serveur fait foi, la zone déduite localement ne sert que de repli. */
+  const livrable = quote ? quote.deliverable : !!zone;
+  const fraisAffiches = quote?.feeCents ?? zone?.feeCents ?? 0;
+  const minimumAffiche = quote?.minimumCents ?? zone?.minimumCents ?? 0;
   // `closed` n'est vrai que sur une réponse réellement reçue : sans cette
   // garde, une panne de `/api/slots` afficherait « Nous sommes fermés ».
   const closed = !!slots && slotOptions.length === 0;
@@ -406,32 +476,46 @@ export function CheckoutClient() {
           {/* Plus de sélecteur de zone : la zone tarifaire est déduite du code
               postal côté serveur. Un client de Serris ne peut plus choisir
               « Zone 1 » et se faire livrer à 25 km pour 2,50 €. */}
+          {/* Le tarif affiché vient du serveur (`/api/delivery-quote`), qui
+              applique exactement le barème utilisé pour facturer — distance
+              routière si elle est configurée, zones sinon. Le client ne choisit
+              jamais sa propre tranche tarifaire. */}
           {mode === "livraison" && (
             <p className="mt-4 rounded-xl bg-panel-2 p-3 text-sm text-ink-2">
-              {zone ? (
+              {quoting && !quote ? (
+                <>Vérification de l&apos;adresse…</>
+              ) : livrable ? (
                 <>
-                  Cette adresse est livrable : frais de livraison{" "}
-                  <strong className="text-ink">{fmtPrice(zone.feeCents)}</strong>
+                  {quote?.distanceKm != null ? (
+                    <>
+                      Adresse à{" "}
+                      <strong className="text-ink">{formatKm(quote.distanceKm)} km</strong> par la
+                      route : frais de livraison{" "}
+                    </>
+                  ) : (
+                    <>Cette adresse est livrable : frais de livraison </>
+                  )}
+                  <strong className="text-ink">{fmtPrice(fraisAffiches)}</strong>
                   {freeDeliveryThresholdCents !== null && (
                     <>
                       {" "}
                       (offerts dès{" "}
                       <strong className="text-ink">{fmtPrice(freeDeliveryThresholdCents)}</strong>{" "}
-                      d'achat)
+                      d&apos;achat)
                     </>
                   )}
-                  , minimum de commande <strong className="text-ink">{fmtPrice(zone.minimumCents)}</strong>.
+                  , minimum de commande{" "}
+                  <strong className="text-ink">{fmtPrice(minimumAffiche)}</strong>.
                 </>
               ) : outOfZone ? (
+                // Message du serveur quand il en fournit un : il connaît la
+                // distance réelle et le rayon, l'interface non.
                 <>
-                  Nous ne livrons pas encore à cette adresse. Vérifiez le code postal, ou choisissez
-                  « à emporter ».
+                  {quote?.message ??
+                    "Nous ne livrons pas encore à cette adresse. Vérifiez le code postal, ou choisissez « à emporter »."}
                 </>
               ) : (
-                <>
-                  Renseignez votre code postal ci-dessous pour vérifier que votre adresse est
-                  livrable.
-                </>
+                <>Renseignez votre adresse ci-dessous pour vérifier qu&apos;elle est livrable.</>
               )}
             </p>
           )}
@@ -551,15 +635,23 @@ export function CheckoutClient() {
                   <label htmlFor="co-address" className={labelCls}>
                     Adresse
                   </label>
-                  <input
+                  <AddressAutocomplete
                     id="co-address"
-                    name="address"
-                    autoComplete="street-address"
                     className={inputCls}
                     value={form.address}
-                    onChange={set("address")}
-                    placeholder="N° et rue"
-                    required
+                    onChange={(address) => setForm((f) => ({ ...f, address }))}
+                    onPick={(picked) => setPlaceId(picked?.placeId ?? null)}
+                    // Code postal et ville sont remplis depuis la suggestion :
+                    // ils servent au repli par zones si Google est indisponible
+                    // au moment de la commande.
+                    onResolve={(parts) =>
+                      setForm((f) => ({
+                        ...f,
+                        zip: parts.zip ?? f.zip,
+                        city: parts.city ?? f.city,
+                      }))
+                    }
+                    placeholder="Commencez à taper votre adresse…"
                   />
                 </div>
                 <div>

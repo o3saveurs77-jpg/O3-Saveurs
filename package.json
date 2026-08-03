@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@react-pdf/renderer": "^4.5.1",
     "@vercel/blob": "^2.5.0",
     "bcryptjs": "^3.0.3",
     "next": "^15.1.6",
@@ -33,6 +34,7 @@
     "react-dom": "^19.0.0",
     "recharts": "^2.15.4",
     "resend": "^6.17.1",
+    "server-only": "^0.0.1",
     "stripe": "^22.3.0"
   },
   "devDependencies": {

@@ -17,6 +17,7 @@
 import { PrismaClient } from "@prisma/client";
 import { items, zones, platsDuJour, cats } from "../lib/menu";
 import { DEFAULT_HOURS } from "../lib/hours";
+import { DEFAULT_TIERS } from "../lib/delivery";
 import { SETTING_DEFAULTS } from "../lib/settings";
 
 const prisma = new PrismaClient();
@@ -114,6 +115,18 @@ async function seedZones() {
   }
 }
 
+async function seedDeliveryTiers() {
+  console.log(`📏 ${DEFAULT_TIERS.length} paliers de livraison…`);
+  for (const t of DEFAULT_TIERS) {
+    await prisma.deliveryTier.upsert({
+      where: { idx: t.idx },
+      create: { idx: t.idx, maxKm: t.maxKm, feeCents: t.feeCents, minimumCents: t.minimumCents },
+      // Un barème déjà réglé est un choix de la cliente : on ne l'écrase pas.
+      update: {},
+    });
+  }
+}
+
 async function seedHours() {
   console.log("🕒 horaires d'ouverture…");
   for (const h of DEFAULT_HOURS) {
@@ -169,6 +182,7 @@ async function main() {
   await seedCategories();
   await seedDishes();
   await seedZones();
+  await seedDeliveryTiers();
   await seedHours();
   await seedSettings();
   await seedDailySpecials();
