@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useCart } from "@/components/cart/CartContext";
 import { useAuth } from "@/components/providers/AuthContext";
-import { fmtPrice } from "@/lib/menu";
+import { fmtPrice, info } from "@/lib/menu";
 import type { Zone } from "@/lib/menu";
 import { resolveZone } from "@/lib/zones";
 import { Icon } from "@/components/Icon";
@@ -57,6 +57,15 @@ export function CheckoutClient() {
   const [slots, setSlots] = useState<SlotsResponse | null>(null);
   const [freeDeliveryThresholdCents, setFreeDeliveryThresholdCents] = useState<number | null>(null);
 
+  /* Une panne de `/api/zones` ou `/api/slots` était présentée au client comme
+   * un refus du restaurant : zones à `[]` faisait afficher « hors zone de
+   * livraison », créneaux à `[]` faisait afficher « Nous sommes fermés ». Le
+   * client repartait en croyant qu'on ne le livrait pas, alors que le serveur
+   * était simplement indisponible. On distingue désormais les deux, et l'échec
+   * technique est dit comme tel, avec un bouton pour réessayer. */
+  const [zonesError, setZonesError] = useState(false);
+  const [slotsError, setSlotsError] = useState(false);
+
   const [form, setForm] = useState({
     name: user?.name ?? "",
     email: user?.email ?? "",
@@ -94,16 +103,29 @@ export function CheckoutClient() {
   /* Zones de livraison lues en base — le tunnel utilisait la constante `zones`
    * de `lib/menu.ts`, si bien que modifier les frais dans l'administration ne
    * changeait rien pour le client, qui payait l'ancien tarif indéfiniment. */
+  const [reloadKey, setReloadKey] = useState(0);
+  const retryConfig = useCallback(() => setReloadKey((k) => k + 1), []);
+
   useEffect(() => {
     let alive = true;
+    setZonesError(false);
     fetch("/api/zones", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("zones"))))
-      .then((data: Zone[]) => alive && setZones(data))
-      .catch(() => alive && setZones([]));
+      .then((data: Zone[]) => {
+        if (!alive) return;
+        setZones(data);
+      })
+      // `zones` reste `null` : une liste vide signifierait « aucune zone ne
+      // correspond », donc « hors zone », ce qui est faux.
+      .catch(() => {
+        if (!alive) return;
+        setZones(null);
+        setZonesError(true);
+      });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   // Seuil de livraison offerte — affiché ici, appliqué pour de vrai par `computeOrder()`.
   useEffect(() => {
@@ -122,6 +144,7 @@ export function CheckoutClient() {
   // Créneaux réels : plus de liste codée en dur proposant le midi les jours de fermeture.
   useEffect(() => {
     let alive = true;
+    setSlotsError(false);
     fetch("/api/slots", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("slots"))))
       .then((data: SlotsResponse) => {
@@ -129,11 +152,18 @@ export function CheckoutClient() {
         setSlots(data);
         if (!data.open) setSlot(data.slots[0] ?? "");
       })
-      .catch(() => alive && setSlots({ open: false, slots: [], leadTimeMinutes: 35, nextService: null }));
+      // `slots` reste `null` : une réponse « fermé, aucun créneau » fabriquée
+      // ici annoncerait au client que le restaurant est fermé alors que c'est
+      // le serveur qui n'a pas répondu.
+      .catch(() => {
+        if (!alive) return;
+        setSlots(null);
+        setSlotsError(true);
+      });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   /* Zone déduite du code postal, comme le fera le serveur. C'est un affichage :
    * la zone facturée est celle que `computeOrder()` recalcule. */
@@ -289,6 +319,9 @@ export function CheckoutClient() {
   const inputCls =
     "w-full rounded-[var(--radius-soft)] border border-line bg-page px-4 py-3 outline-none focus:border-primary";
   const labelCls = "mb-1.5 block text-sm font-semibold text-ink-2";
+  const configError = slotsError || zonesError;
+  // `closed` n'est vrai que sur une réponse réellement reçue : sans cette
+  // garde, une panne de `/api/slots` afficherait « Nous sommes fermés ».
   const closed = !!slots && slotOptions.length === 0;
 
   return (
@@ -315,6 +348,31 @@ export function CheckoutClient() {
                 : "Revenez à l'ouverture du prochain service."}
             </span>
           </p>
+        )}
+
+        {/* Panne serveur — jamais confondue avec « fermé » ou « hors zone » :
+            le client doit savoir que le restaurant n'a rien refusé. */}
+        {configError && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-line bg-primary-soft p-4 text-sm text-brick"
+          >
+            <span className="flex items-start gap-2">
+              <Icon name="warning" size={18} className="mt-0.5 shrink-0" />
+              <span>
+                <strong>La commande en ligne est momentanément indisponible.</strong> Réessayez dans
+                un instant, ou appelez-nous au {info.phone} — nous prenons votre commande par
+                téléphone.
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={retryConfig}
+              className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+            >
+              Réessayer
+            </button>
+          </div>
         )}
 
         {/* mode */}
