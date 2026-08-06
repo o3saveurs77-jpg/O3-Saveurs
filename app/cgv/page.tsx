@@ -266,7 +266,50 @@ export default async function CgvPage() {
           </p>
         </LegalSection>
 
-        <LegalSection id="responsabilite" title="12. Responsabilité">
+        {/* La page Traiteur affiche des engagements chiffrés — devis sous 24 h,
+            acompte de 30 %, solde à J-7 — qu'aucune clause ne couvrait : ces
+            prestations ne relèvent ni du même mode de conclusion, ni de la même
+            exclusion de rétractation que la vente de plats à emporter. */}
+        <LegalSection id="traiteur" title="12. Prestations traiteur">
+          <p>
+            Les prestations traiteur présentées sur la page{" "}
+            <Link href="/traiteur" className="font-semibold text-brick underline">
+              Traiteur
+            </Link>{" "}
+            ne sont pas vendues en ligne. Le formulaire de cette page constitue une{" "}
+            <strong>demande de devis</strong> : il n&apos;engage ni le client ni le restaurant et ne
+            vaut pas commande.
+          </p>
+          <p>
+            Le restaurant adresse une proposition chiffrée sous vingt-quatre heures ouvrées. Le
+            contrat n&apos;est formé qu&apos;à l&apos;acceptation écrite de ce devis, qui précise la
+            composition de la prestation, le nombre de convives, la date, le lieu, le prix et la
+            durée de validité de l&apos;offre.
+          </p>
+          <p>
+            <strong>Acompte.</strong> Un acompte de 30 % du montant du devis est demandé à son
+            acceptation ; la date de l&apos;événement n&apos;est réservée qu&apos;à compter de son
+            encaissement. S&apos;agissant d&apos;un acompte et non d&apos;arrhes au sens de
+            l&apos;article L214-1 du code de la consommation, il vaut engagement ferme des deux
+            parties. Le solde est réglable jusqu&apos;à sept jours avant la date de
+            l&apos;événement.
+          </p>
+          <p>
+            <strong>Modification et annulation.</strong> Le nombre de convives peut être ajusté
+            jusqu&apos;à sept jours avant l&apos;événement, dans les limites indiquées au devis. Les
+            conditions d&apos;annulation, de report et de retenue sur acompte sont celles fixées au
+            devis accepté. En cas de force majeure empêchant l&apos;exécution, le restaurant propose
+            un report ou rembourse les sommes versées.
+          </p>
+          <p className="rounded-xl border border-brick/40 bg-primary-soft p-4 font-semibold text-brick">
+            Conformément à l&apos;article L221-28 12° du code de la consommation, le droit de
+            rétractation ne s&apos;applique pas aux prestations de restauration devant être fournies
+            à une date déterminée. Une prestation traiteur retenue pour une date donnée
+            n&apos;ouvre donc pas de droit de rétractation.
+          </p>
+        </LegalSection>
+
+        <LegalSection id="responsabilite" title="13. Responsabilité">
           <p>
             Le restaurant est responsable de la conformité et de la qualité des plats livrés. Sa
             responsabilité ne peut être engagée en cas de force majeure, de renseignement erroné
@@ -280,7 +323,7 @@ export default async function CgvPage() {
           </p>
         </LegalSection>
 
-        <LegalSection id="donnees" title="13. Données personnelles">
+        <LegalSection id="donnees" title="14. Données personnelles">
           <p>
             Le traitement des données personnelles collectées lors d&apos;une commande est décrit
             dans notre{" "}
@@ -291,7 +334,7 @@ export default async function CgvPage() {
           </p>
         </LegalSection>
 
-        <LegalSection id="mediation" title="14. Médiation de la consommation">
+        <LegalSection id="mediation" title="15. Médiation de la consommation">
           <p>
             Conformément à l&apos;article L612-1 du code de la consommation, le client a le droit de
             recourir gratuitement à un médiateur de la consommation en vue de la résolution amiable
@@ -314,7 +357,7 @@ export default async function CgvPage() {
           )}
         </LegalSection>
 
-        <LegalSection id="droit" title="15. Droit applicable et litiges">
+        <LegalSection id="droit" title="16. Droit applicable et litiges">
           <p>
             Les présentes conditions sont soumises au droit français. En cas de litige, et après
             échec d&apos;une résolution amiable ou d&apos;une médiation, les tribunaux français sont
@@ -322,7 +365,7 @@ export default async function CgvPage() {
           </p>
         </LegalSection>
 
-        <LegalSection id="contact" title="16. Contact">
+        <LegalSection id="contact" title="17. Contact">
           <p>
             Pour toute question relative à une commande ou aux présentes conditions :{" "}
             <a

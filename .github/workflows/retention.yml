@@ -1,0 +1,34 @@
+name: Purge RGPD des données périmées
+
+# Applique les durées de conservation annoncées dans la politique de
+# confidentialité (art. 5.1.e du RGPD). Voir lib/retention.ts pour les seuils
+# et la raison de chacun.
+#
+# Une exécution par jour suffit : les durées se comptent en mois ou en années,
+# et la purge est idempotente. On passe par GitHub Actions comme la relance de
+# panier, pour n'avoir qu'un seul mécanisme de planification à maintenir.
+#
+# Secrets requis (Settings → Secrets and variables → Actions) :
+#   SITE_URL     — l'URL de production
+#   CRON_SECRET  — la même valeur que la variable d'environnement Vercel
+
+on:
+  schedule:
+    # 3 h 15 UTC, hors des heures de service du restaurant.
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Appeler /api/cron/retention
+        run: |
+          status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.SITE_URL }}/api/cron/retention")
+          cat /tmp/response.json
+          if [ "$status" -ge 300 ]; then
+            echo "Échec HTTP $status"
+            exit 1
+          fi

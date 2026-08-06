@@ -38,7 +38,7 @@ const TRAITEMENTS = [
   },
   {
     finalite: "Gérer votre compte client",
-    donnees: "Nom, email, téléphone, mot de passe (chiffré), adresses, favoris",
+    donnees: "Nom, email, téléphone, adresses, favoris",
     base: "Exécution du contrat (art. 6.1.b)",
     duree: "Jusqu'à la suppression du compte",
   },
@@ -66,6 +66,19 @@ const TRAITEMENTS = [
     base: "Intérêt légitime (art. 6.1.f)",
     duree: "1 an",
   },
+  {
+    finalite: "Traiter vos demandes de devis traiteur",
+    donnees:
+      "Nom, téléphone, email, type d'événement, date, lieu, nombre de convives, message",
+    base: "Mesures précontractuelles à votre demande (art. 6.1.b)",
+    duree: "3 ans après le dernier échange",
+  },
+  {
+    finalite: "Calculer les frais de livraison et proposer votre adresse",
+    donnees: "Adresse saisie au moment de la commande",
+    base: "Exécution du contrat (art. 6.1.b)",
+    duree: "Non conservée par le prestataire de cartographie",
+  },
 ];
 
 const SOUS_TRAITANTS = [
@@ -73,6 +86,16 @@ const SOUS_TRAITANTS = [
     nom: "Stripe Payments Europe, Ltd.",
     role: "Traitement des paiements par carte bancaire",
     lieu: "Union européenne (Irlande)",
+  },
+  {
+    nom: "Okta, Inc. (Auth0)",
+    role: "Authentification et gestion des comptes clients",
+    lieu: "États-Unis — clauses contractuelles types",
+  },
+  {
+    nom: "Google Ireland Limited (Maps Platform)",
+    role: "Autocomplétion des adresses de livraison et calcul de la distance routière",
+    lieu: "Irlande, avec transferts encadrés par clauses contractuelles types",
   },
   {
     nom: "Neon, Inc.",
@@ -157,9 +180,20 @@ export default async function ConfidentialitePage() {
             </table>
           </div>
           <p>
-            Votre mot de passe n&apos;est jamais stocké en clair : seule une empreinte
-            cryptographique irréversible est conservée. Vos données de carte bancaire ne transitent
-            jamais par nos serveurs et ne sont jamais conservées par le restaurant.
+            Ces durées ne sont pas seulement déclaratives : une purge automatique s&apos;exécute
+            chaque nuit et efface ou anonymise ce qui les a dépassées. Les commandes déjà facturées
+            font exception le temps des dix ans que la loi comptable impose, puis leur identité est
+            retirée à son tour ; seuls les montants et les dates, qui ne désignent plus personne,
+            restent alors dans nos comptes.
+          </p>
+
+          <p>
+            <strong>Votre mot de passe ne nous est jamais transmis.</strong> La connexion est
+            déléguée à notre prestataire d&apos;authentification (Auth0, voir le tableau des
+            sous-traitants) : nous ne recevons que votre adresse email et votre nom une fois
+            l&apos;identification réussie. De la même façon, vos données de carte bancaire ne
+            transitent jamais par nos serveurs et ne sont jamais conservées par le restaurant —
+            elles sont saisies directement sur la page sécurisée de Stripe.
           </p>
         </LegalSection>
 
