@@ -31,7 +31,14 @@ export const RETENTION_DAYS = {
   invoicedOrder: 10 * 365,
   /** Messages du formulaire de contact public. */
   contactMessage: 365,
-  /** Demandes de devis traiteur, décomptées depuis le dernier échange. */
+  /**
+   * Demandes de devis traiteur, décomptées depuis le dernier échange.
+   *
+   * Seuil déclaré mais **pas encore appliqué** : le modèle `CateringInquiry`
+   * et sa migration ne sont pas commités. Voir le bloc laissé en commentaire
+   * dans `app/api/cron/retention/route.ts`, à rétablir dès qu'ils le seront.
+   * Sans table en base, il n'y a rien à effacer entre-temps.
+   */
   cateringInquiry: 3 * 365,
   /** Réclamations, décomptées depuis la clôture. */
   supportTicket: 3 * 365,

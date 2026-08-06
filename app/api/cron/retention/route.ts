@@ -49,11 +49,21 @@ export async function GET(req: Request) {
       where: { createdAt: { lt: c.contactMessage } },
     });
 
-    // Décompté depuis le dernier échange (`updatedAt`), pas depuis la demande :
-    // un devis relancé six mois plus tard redémarre le délai.
-    const cateringInquiries = await prisma.cateringInquiry.deleteMany({
-      where: { updatedAt: { lt: c.cateringInquiry } },
-    });
+    /* Les demandes de devis traiteur (`CateringInquiry`) ne sont pas encore
+       purgées : le modèle vit dans une modification de `prisma/schema.prisma`
+       qui n'est pas commitée, et sa migration non plus. Le référencer ici
+       casserait la CI, qui régénère le client depuis le schéma du dépôt.
+       Le seuil existe déjà dans `lib/retention.ts` (RETENTION_DAYS.cateringInquiry) :
+       il ne reste qu'à rétablir le deleteMany ci-dessous une fois le modèle
+       livré — la table n'existe pas encore en base, il n'y a donc rien à
+       effacer entre-temps.
+
+         const cateringInquiries = await prisma.cateringInquiry.deleteMany({
+           where: { updatedAt: { lt: c.cateringInquiry } },
+         });
+
+       Le délai se décompte depuis le dernier échange (`updatedAt`), pas depuis
+       la demande : un devis relancé six mois plus tard redémarre le délai. */
 
     // Seules les réclamations closes sont purgées : un dossier resté ouvert
     // trois ans est une anomalie à traiter, pas une donnée à effacer.
@@ -76,7 +86,6 @@ export async function GET(req: Request) {
     const report = {
       ordersAnonymized: orders.count,
       contactMessagesDeleted: contactMessages.count,
-      cateringInquiriesDeleted: cateringInquiries.count,
       supportTicketsDeleted: supportTickets.count,
       unconfirmedSubscribersDeleted: unconfirmed.count,
       unsubscribedSubscribersDeleted: unsubscribed.count,
