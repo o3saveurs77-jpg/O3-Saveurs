@@ -2,23 +2,20 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
 import { useAuth } from "@/components/providers/AuthContext";
+import { fetchAllOrders } from "@/lib/analytics";
 import type { Order } from "@/lib/types";
 
 interface OrdersCtx {
   orders: Order[];
-  /** nombre total de commandes accessibles (la liste est paginée) */
+  /** nombre total de commandes accessibles (peut dépasser `orders.length` si `truncated`) */
   total: number;
   ready: boolean;
+  /** vrai quand `/api/orders` a échoué — la liste affichée est alors incomplète ou vide */
+  error: boolean;
+  /** vrai si le plafond de sécurité (`MAX_FETCHED_ORDERS`) a coupé la liste avant `total` */
+  truncated: boolean;
   refresh: () => Promise<void>;
   getById: (id: string) => Order | undefined;
-}
-
-/** Réponse de `GET /api/orders` — enveloppe paginée, et non plus un tableau nu. */
-interface OrdersResponse {
-  orders: Order[];
-  total: number;
-  take: number;
-  skip: number;
 }
 
 const Ctx = createContext<OrdersCtx | null>(null);
@@ -42,21 +39,27 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [total, setTotal] = useState(0);
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState(false);
+  const [truncated, setTruncated] = useState(false);
 
+  /* `/api/orders` sans `take` ne renvoyait que la première page (50 lignes,
+   * la plus récente d'abord) : au-delà, une facture, un client ou une commande
+   * en cuisine plus ancienne que les 50 dernières disparaissait silencieusement
+   * des écrans qui lisent ce contexte (admin comme espace client). `fetchAllOrders`
+   * reconstitue l'historique complet, page après page, jusqu'au plafond de
+   * sécurité `MAX_FETCHED_ORDERS`. */
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/orders", { cache: "no-store" });
-      if (res.ok) {
-        const data = (await res.json()) as OrdersResponse;
-        setOrders(Array.isArray(data.orders) ? data.orders : []);
-        setTotal(Number(data.total) || 0);
-      } else {
-        setOrders([]);
-        setTotal(0);
-      }
+      const data = await fetchAllOrders();
+      setOrders(data.orders);
+      setTotal(data.total);
+      setTruncated(data.truncated);
+      setError(false);
     } catch {
       setOrders([]);
       setTotal(0);
+      setTruncated(false);
+      setError(true);
     } finally {
       setReady(true);
     }
@@ -68,6 +71,8 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
       // Visiteur anonyme : aucune requête, et surtout aucune donnée client.
       setOrders([]);
       setTotal(0);
+      setError(false);
+      setTruncated(false);
       setReady(true);
       return;
     }
@@ -77,8 +82,8 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
   const getById = useCallback((id: string) => orders.find((o) => o.id === id), [orders]);
 
   const value = useMemo<OrdersCtx>(
-    () => ({ orders, total, ready, refresh, getById }),
-    [orders, total, ready, refresh, getById],
+    () => ({ orders, total, ready, error, truncated, refresh, getById }),
+    [orders, total, ready, error, truncated, refresh, getById],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

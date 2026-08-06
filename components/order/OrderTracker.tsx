@@ -266,7 +266,7 @@ export function OrderTracker({ id }: { id: string }) {
               aria-hidden="true"
             />
             <div
-              className="absolute left-0 top-5 h-1 -translate-y-1/2 rounded bg-teal transition-all duration-700"
+              className="absolute left-0 top-5 h-1 -translate-y-1/2 rounded bg-primary transition-all duration-700"
               style={{
                 width: `${(Math.max(0, currentIdx) / (STATUS_FLOW.length - 1)) * 100}%`,
               }}
@@ -288,8 +288,10 @@ export function OrderTracker({ id }: { id: string }) {
                 >
                   <span
                     className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border-2 transition ${
-                      done ? "border-teal bg-teal text-white" : "border-line bg-panel text-ink-2"
-                    } ${active ? "ring-4 ring-teal/20" : ""}`}
+                      done
+                        ? "border-primary bg-primary text-white"
+                        : "border-line bg-panel text-ink-2"
+                    } ${active ? "ring-4 ring-primary/20" : ""}`}
                   >
                     <Icon name={STEP_ICON[status]} size={18} />
                   </span>
@@ -313,6 +315,29 @@ export function OrderTracker({ id }: { id: string }) {
               ? "Bon appétit ! 🍽️"
               : "Cette page se met à jour automatiquement. Vous recevez aussi un email à chaque étape."}
           </p>
+        </div>
+      )}
+
+      {/* livreur assigné, en route */}
+      {order.driverName && order.status === "route" && (
+        <div className="mt-6 flex items-center gap-4 rounded-[var(--radius-card)] bg-primary-soft p-4 shadow-[var(--shadow-soft)] sm:p-5">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-lg font-bold text-white">
+            {order.driverName.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-bold text-ink">{order.driverName}</p>
+            <p className="text-sm text-ink-2">Livreur · arrive bientôt</p>
+          </div>
+          {/* pas de numéro réel disponible ici : bouton décoratif, non fonctionnel */}
+          <button
+            type="button"
+            disabled
+            title="Numéro non disponible"
+            aria-label="Appeler le livreur"
+            className="grid h-11 w-11 shrink-0 cursor-not-allowed place-items-center rounded-full bg-panel text-primary opacity-60"
+          >
+            <Icon name="phone" size={18} />
+          </button>
         </div>
       )}
 

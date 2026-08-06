@@ -31,7 +31,7 @@ interface Body {
   paymentMethod: string;
 }
 
-const PAYMENT_METHODS = ["Carte bancaire", "Apple Pay", "Google Pay", "Espèces sur place"] as const;
+const PAYMENT_METHODS = ["Carte bancaire", "Apple Pay", "Google Pay", "PayPal", "Espèces sur place"] as const;
 
 /**
  * POST /api/checkout — crée la commande puis la session Stripe Checkout.

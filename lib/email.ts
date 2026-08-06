@@ -21,7 +21,10 @@ import { rowToOrder } from "@/lib/serialize";
 import { fmtCents, vatBreakdown, fmtVatRate, formatInvoiceNumber } from "@/lib/money";
 import { escapeHtml } from "@/lib/validate";
 import { STATUS_LABEL } from "@/lib/types";
-import type { Order as OrderRow } from "@prisma/client";
+import { getSettings } from "@/lib/settings";
+import { sellerFromSettings } from "@/lib/invoice";
+import { renderInvoicePdf } from "@/lib/pdf/renderInvoicePdf";
+import type { Order as OrderRow, CateringInquiry } from "@prisma/client";
 
 const isConfigured = () =>
   !!process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes("placeholder");
@@ -37,7 +40,8 @@ export type EmailKind =
   | "facture"
   | "relance"
   | "newsletter"
-  | "sav";
+  | "sav"
+  | "traiteur";
 
 interface SendArgs {
   to: string;
@@ -47,6 +51,7 @@ interface SendArgs {
   orderId?: string;
   /** Clé d'unicité métier, ex. `paiement:<orderId>`. Si l'envoi a déjà eu lieu, on n'insiste pas. */
   dedupeKey?: string;
+  attachments?: { filename: string; content: Buffer }[];
 }
 
 /**
@@ -60,6 +65,7 @@ export async function send({
   kind,
   orderId,
   dedupeKey,
+  attachments,
 }: SendArgs): Promise<boolean> {
   if (dedupeKey) {
     const already = await prisma.emailLog.findUnique({ where: { dedupeKey } });
@@ -72,7 +78,7 @@ export async function send({
   }
 
   try {
-    await client().emails.send({ from: FROM, to, subject, html });
+    await client().emails.send({ from: FROM, to, subject, html, attachments });
     await prisma.emailLog.create({
       data: { kind, orderId: orderId ?? null, to, dedupeKey: dedupeKey ?? null, ok: true },
     });
@@ -102,7 +108,7 @@ function layout(title: string, body: string): string {
   return `
   <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:560px;margin:auto;color:#2c1d11;background:#f7e9d2;padding:24px;border-radius:16px">
     <h2 style="margin:0 0 4px;color:#a6243a">Ô 3 Saveurs <span style="font-weight:400">— Chez Laila</span></h2>
-    <p style="margin:0 0 20px;color:#856a50;font-size:13px">Cuisine du monde · Lognes</p>
+    <p style="margin:0 0 20px;color:#856a50;font-size:13px">Cuisine du monde · Pontault-Combault</p>
     <div style="background:#fff;padding:20px;border-radius:12px">
       <h3 style="margin:0 0 14px;font-size:17px">${escapeHtml(title)}</h3>
       ${body}
@@ -269,29 +275,39 @@ export async function sendStatusUpdate(row: OrderRow): Promise<void> {
   });
 }
 
-/** Facture, envoyée une fois le paiement acquis. */
+/**
+ * Facture, envoyée une fois le paiement acquis. Le PDF est joint directement
+ * à l'email (mêmes gabarit et données que `/facture/[id]`) : le lien reste en
+ * repli pour le consulter ou le réimprimer en ligne.
+ */
 export async function sendInvoice(row: OrderRow, invoiceUrl: string): Promise<void> {
   const order = rowToOrder(row);
   const vat = vatBreakdown(order.totalCents, order.vatRateBp);
+  const number = formatInvoiceNumber(order.invoiceNumber, new Date(order.createdAt));
 
   const html = layout(
-    `Facture ${formatInvoiceNumber(order.invoiceNumber, new Date(order.createdAt))}`,
+    `Facture ${number}`,
     orderSummary(order) +
       `<table style="width:100%;font-size:13px;margin:0 0 14px">
          <tr><td>Total HT</td><td style="text-align:right">${fmtCents(vat.netCents)}</td></tr>
          <tr><td>TVA ${fmtVatRate(vat.rateBp)}</td><td style="text-align:right">${fmtCents(vat.vatCents)}</td></tr>
          <tr><td style="font-weight:bold">Total TTC</td><td style="text-align:right;font-weight:bold">${fmtCents(vat.grossCents)}</td></tr>
        </table>
-       <p style="margin:0"><a href="${escapeHtml(invoiceUrl)}" style="color:#e8732a;font-weight:bold">Voir et imprimer la facture</a></p>`,
+       <p style="margin:0">Votre facture est jointe à cet email, au format PDF.
+       Vous pouvez aussi <a href="${escapeHtml(invoiceUrl)}" style="color:#e8732a;font-weight:bold">la consulter en ligne</a>.</p>`,
   );
+
+  const settings = await getSettings();
+  const pdf = await renderInvoicePdf(order, sellerFromSettings(settings));
 
   await send({
     to: order.customer.email,
-    subject: `Votre facture ${formatInvoiceNumber(order.invoiceNumber)} — Ô 3 Saveurs`,
+    subject: `Votre facture ${number} — Ô 3 Saveurs`,
     html,
     kind: "facture",
     orderId: order.id,
     dedupeKey: `facture:${order.id}`,
+    attachments: [{ filename: `${number === "—" ? order.ref : number}.pdf`, content: pdf }],
   });
 }
 
@@ -398,4 +414,55 @@ export async function sendTicketOpened(
       dedupeKey: `sav-open-resto:${ticketId}`,
     });
   }
+}
+
+// ─── Traiteur ──────────────────────────────────────────────────
+
+const CATERING_EVENT_LABEL: Record<string, string> = {
+  bureau: "Réunion / séminaire de bureau",
+  mariage: "Mariage & réception",
+  autre: "Anniversaire, baptême ou autre réception",
+};
+
+const dateFmtLong = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+
+/** Accusé de réception d'une demande de devis traiteur. */
+export async function sendCateringInquiryReceived(inquiry: CateringInquiry): Promise<void> {
+  const eventLabel = CATERING_EVENT_LABEL[inquiry.eventType] ?? inquiry.eventType;
+  await send({
+    to: inquiry.customerEmail,
+    subject: "Votre demande de devis traiteur — Ô 3 Saveurs",
+    html: layout(
+      `Merci ${escapeHtml(inquiry.customerName)}, votre demande est bien arrivée !`,
+      `<p style="margin:0 0 8px"><strong>${escapeHtml(eventLabel)}</strong></p>
+       <p style="margin:0 0 4px">Lieu : ${escapeHtml(inquiry.location)}</p>
+       ${inquiry.eventDate ? `<p style="margin:0 0 4px">Date : ${dateFmtLong.format(inquiry.eventDate)}</p>` : ""}
+       ${inquiry.guestCount ? `<p style="margin:0 0 4px">Convives : ${inquiry.guestCount}</p>` : ""}
+       <p style="margin:12px 0 0;color:#856a50;font-size:13px">Nous revenons vers vous sous 24 h ouvrées avec un devis chiffré.</p>`,
+    ),
+    kind: "traiteur",
+    dedupeKey: `traiteur-recu:${inquiry.id}`,
+  });
+}
+
+/** Alerte au restaurant pour une nouvelle demande de devis traiteur. */
+export async function sendCateringInquiryNotify(inquiry: CateringInquiry): Promise<void> {
+  if (!NOTIFY) return;
+  const eventLabel = CATERING_EVENT_LABEL[inquiry.eventType] ?? inquiry.eventType;
+  await send({
+    to: NOTIFY,
+    subject: `💍 Nouvelle demande traiteur — ${eventLabel}`,
+    html: layout(
+      "Nouvelle demande de devis traiteur",
+      `<p style="margin:0 0 4px"><strong>${escapeHtml(inquiry.customerName)}</strong></p>
+       <p style="margin:0 0 4px">${escapeHtml(inquiry.customerPhone)} · ${escapeHtml(inquiry.customerEmail)}</p>
+       <p style="margin:0 0 4px">${escapeHtml(eventLabel)}</p>
+       <p style="margin:0 0 4px">Lieu : ${escapeHtml(inquiry.location)}</p>
+       ${inquiry.eventDate ? `<p style="margin:0 0 4px">Date : ${dateFmtLong.format(inquiry.eventDate)}</p>` : ""}
+       ${inquiry.guestCount ? `<p style="margin:0 0 4px">Convives : ${inquiry.guestCount}</p>` : ""}
+       ${inquiry.message ? `<p style="margin:12px 0 0;white-space:pre-wrap">${escapeHtml(inquiry.message)}</p>` : ""}`,
+    ),
+    kind: "traiteur",
+    dedupeKey: `traiteur-resto:${inquiry.id}`,
+  });
 }

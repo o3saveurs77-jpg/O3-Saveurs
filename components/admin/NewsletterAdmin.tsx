@@ -96,18 +96,16 @@ export function NewsletterAdmin() {
       const ds = (await rs.json()) as {
         subscribers: Subscriber[];
         total: number;
-        confirmed: number;
-        pending: number;
-        unsubscribed: number;
+        stats: { confirmed: number; pending: number; unsubscribed: number };
       };
       const dc = (await rc.json()) as { campaigns: Campaign[]; reachable: number };
 
       setSubs(ds.subscribers);
       setStats({
         total: ds.total,
-        confirmed: ds.confirmed,
-        pending: ds.pending,
-        unsubscribed: ds.unsubscribed,
+        confirmed: ds.stats.confirmed,
+        pending: ds.stats.pending,
+        unsubscribed: ds.stats.unsubscribed,
       });
       setCampagnes(dc.campaigns);
       setReachable(dc.reachable);

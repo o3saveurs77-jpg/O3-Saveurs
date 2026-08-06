@@ -109,12 +109,23 @@ const PERKS: { icon: IconName; label: string }[] = [
 function AuthForm() {
   const { login } = useAuth();
   const [busy, setBusy] = useState(false);
+  // `login()` redirige la page vers Auth0 : en cas de succès, on ne revient
+  // jamais ici. Mais un échec (réseau, config Auth0) rejetait la promesse
+  // sans que `busy` ne retombe jamais à `false` — le bouton restait bloqué
+  // sur « Connexion… » jusqu'au rechargement de la page.
+  const [error, setError] = useState(false);
   const params = useSearchParams();
   const suivant = params.get("suivant");
 
   const submit = async () => {
     setBusy(true);
-    await login(suivant || "/compte");
+    setError(false);
+    try {
+      await login(suivant || "/compte");
+    } catch {
+      setBusy(false);
+      setError(true);
+    }
   };
 
   return (
@@ -169,6 +180,16 @@ function AuthForm() {
             )}
           </button>
 
+          {error && (
+            <div
+              role="alert"
+              className="relative mt-4 flex items-start gap-2 rounded-[var(--radius-soft)] border border-line bg-primary-soft p-3 text-sm text-brick"
+            >
+              <Icon name="warning" size={16} className="mt-0.5 shrink-0" />
+              <span>La connexion a échoué. Vérifiez votre connexion internet et réessayez.</span>
+            </div>
+          )}
+
           <p className="relative mt-4 text-center text-xs text-ink-2">
             Nouveau ici ? La connexion crée votre compte automatiquement.
           </p>
@@ -180,8 +201,9 @@ function AuthForm() {
 
 function useMyOrders() {
   const { user } = useAuth();
-  const { orders } = useOrders();
-  return orders.filter((o) => o.customer.email === user?.email);
+  const { orders, ready } = useOrders();
+  const mine = orders.filter((o) => o.customer.email === user?.email);
+  return { orders: mine, ready };
 }
 
 function dateFr(ts: number) {
@@ -189,7 +211,8 @@ function dateFr(ts: number) {
 }
 
 function OrdersTab() {
-  const mine = useMyOrders();
+  const { orders: mine, ready } = useMyOrders();
+  if (!ready) return <p className="py-24 text-center text-ink-2">Chargement de vos commandes…</p>;
   if (mine.length === 0)
     return (
       <Empty icon="list" title="Aucune commande pour l'instant">
@@ -202,27 +225,34 @@ function OrdersTab() {
     <ul className="space-y-3">
       {mine.map((o) => (
         <li key={o.id} className="rounded-[var(--radius-card)] border border-line bg-panel p-4 shadow-[var(--shadow-soft)]">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <span className="font-bold">{o.ref}</span>
-              <span className="ml-2 text-sm text-ink-2">{dateFr(o.createdAt)}</span>
-            </div>
-            <span className={`rounded-full px-3 py-1 text-xs font-bold ${STATUS_COLOR[o.status]}`}>
-              {STATUS_LABEL[o.status]}
+          <div className="flex gap-3">
+            <span className="mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+              <Icon name={o.mode === "livraison" ? "scooter" : "bag"} size={18} />
             </span>
-          </div>
-          <p className="mt-2 text-sm text-ink-2">
-            {o.lines.map((l) => `${l.qty}× ${l.name}`).join(" · ")}
-          </p>
-          <div className="mt-3 flex items-center justify-between">
-            <span className="font-bold text-brick">{fmtPrice(o.totalCents)}</span>
-            <div className="flex gap-2">
-              <Link href={`/commande/${o.id}`} className="rounded-full border border-line px-4 py-2 text-sm font-semibold hover:bg-panel-2">
-                Suivre
-              </Link>
-              <Link href={`/facture/${o.id}`} className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white hover:brightness-105">
-                Facture
-              </Link>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="font-bold">{o.ref}</span>
+                  <span className="ml-2 text-sm text-ink-2">{dateFr(o.createdAt)}</span>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-bold ${STATUS_COLOR[o.status]}`}>
+                  {STATUS_LABEL[o.status]}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-ink-2">
+                {o.lines.map((l) => `${l.qty}× ${l.name}`).join(" · ")}
+              </p>
+              <div className="mt-3 flex items-center justify-between">
+                <span className="font-bold text-brick">{fmtPrice(o.totalCents)}</span>
+                <div className="flex gap-2">
+                  <Link href={`/commande/${o.id}`} className="rounded-full border border-line px-4 py-2 text-sm font-semibold hover:bg-panel-2">
+                    Suivre
+                  </Link>
+                  <Link href={`/facture/${o.id}`} className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white hover:brightness-105">
+                    Facture
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         </li>
@@ -232,7 +262,9 @@ function OrdersTab() {
 }
 
 function InvoicesTab() {
-  const mine = useMyOrders().filter((o) => o.paid);
+  const { orders, ready } = useMyOrders();
+  const mine = orders.filter((o) => o.paid);
+  if (!ready) return <p className="py-24 text-center text-ink-2">Chargement de vos factures…</p>;
   if (mine.length === 0) return <Empty icon="euro" title="Aucune facture disponible" />;
   return (
     /* `overflow-hidden` seul rognait la table sur téléphone : les quatre
@@ -330,8 +362,22 @@ function AddressesTab() {
 
 function FavoritesTab() {
   const { user, toggleFavorite } = useAuth();
-  const { dishes } = useDishes();
+  const { dishes, ready, error } = useDishes();
   const favs = dishes.filter((i) => user!.favorites.includes(i.id));
+
+  // `dishes` vaut `[]` tant que `/api/dishes` n'a pas répondu (et le reste si
+  // la requête échoue) : sans ce garde, un favori bien enregistré s'affichait
+  // comme « Aucun favori » le temps du chargement, ou en permanence si la
+  // carte ne chargeait pas.
+  if (!ready) return <p className="py-24 text-center text-ink-2">Chargement de vos favoris…</p>;
+
+  if (error)
+    return (
+      <Empty icon="heart" title="Impossible de charger vos favoris">
+        <p className="text-sm text-ink-2">La carte n'a pas pu être chargée. Réessayez plus tard.</p>
+      </Empty>
+    );
+
   if (favs.length === 0)
     return (
       <Empty icon="heart" title="Aucun favori">

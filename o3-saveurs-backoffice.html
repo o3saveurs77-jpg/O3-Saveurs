@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ô3 Saveurs — Back-office · Caisse · Facturation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --cream:#FDF1DE;--cream-2:#F9E7C9;--terra:#C1451B;--terra-d:#A93A15;--red:#9E2620;
+  --red-d:#84201B;--green:#3D7A34;--gold:#E3A93C;--ink:#2A1B12;--muted:#7B6553;
+  --line:#E8D6B8;--dark:#2A160E;--ok:#EAF3E6;--warn:#FCF0D8;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3,.serif{font-family:"Playfair Display",Georgia,serif}
+button,input,select,textarea{font-family:inherit;font-size:14px;color:var(--ink)}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
+
+aside{background:var(--dark);color:#F6E3C6;padding:18px 14px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;align-items:center;gap:11px;margin-bottom:22px}
+.logo{width:44px;height:44px;border-radius:50%;background:var(--terra);color:var(--cream);display:grid;
+  place-content:center;font-family:"Playfair Display",serif;font-size:15px;border:2px solid var(--cream);text-align:center;line-height:1}
+.logo small{display:block;font-size:5.5px;letter-spacing:2px;font-family:Inter,sans-serif}
+.brand h4{margin:0;font-family:"Playfair Display",serif;font-size:17px}
+.brand p{margin:2px 0 0;font-size:8.5px;letter-spacing:2.5px;color:var(--gold)}
+nav .item{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:10px;font-size:14.5px;
+  font-weight:600;opacity:.72;cursor:pointer;border:0;background:none;color:inherit;width:100%;text-align:left;margin-bottom:2px}
+nav .item:hover{opacity:1;background:rgba(255,255,255,.06)}
+nav .item.on{background:var(--terra);color:#fff;opacity:1}
+.sep{border-top:1px solid rgba(255,255,255,.12);margin:14px 4px}
+.calltile{background:rgba(227,169,60,.14);border:1px solid rgba(227,169,60,.35);border-radius:12px;padding:12px;margin-top:14px}
+.calltile b{display:block;font-size:12px;color:var(--gold);letter-spacing:1px;margin-bottom:8px}
+.calltile input{width:100%;padding:9px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);
+  background:rgba(0,0,0,.25);color:#fff;margin-bottom:8px}
+.calltile input::placeholder{color:#C3AA8C}
+
+main{padding:22px 26px 60px;max-width:1500px}
+.head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+.head h1{margin:0;font-size:30px}
+.head .right{margin-left:auto;display:flex;gap:10px;align-items:center}
+.badge{background:var(--ok);color:var(--green);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600}
+.avatar{width:38px;height:38px;border-radius:50%;background:var(--terra);color:#fff;display:grid;place-content:center;font-weight:700}
+.view{display:none}.view.on{display:block}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.kpi{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px}
+.kpi .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.kpi .ico{width:38px;height:38px;border-radius:10px;background:var(--cream-2);display:grid;place-content:center;font-size:18px}
+.kpi .d{font-size:11px;font-weight:700;color:var(--green);background:var(--ok);border-radius:6px;padding:3px 8px}
+.kpi .v{font-family:"Playfair Display",serif;font-size:29px;line-height:1.1}
+.kpi .l{font-size:12.5px;color:var(--muted);margin-top:3px}
+
+.cols{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;margin-bottom:16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px}
+.card h3{margin:0 0 14px;font-size:18px}
+.card .hint{font-size:12.5px;color:var(--muted);margin:-8px 0 14px}
+.rowb{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;padding:10px 10px;font-size:11px;letter-spacing:.8px;color:var(--red);background:var(--cream-2);white-space:nowrap}
+th:first-child{border-radius:8px 0 0 8px}th:last-child{border-radius:0 8px 8px 0}
+td{padding:11px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.st{font-size:10.5px;font-weight:700;border-radius:6px;padding:3px 8px;white-space:nowrap}
+.st.g{background:var(--ok);color:var(--green)}
+.st.o{background:#FDE9E2;color:var(--terra)}
+.st.y{background:var(--warn);color:#A87A17}
+.st.n{background:#EEE7DA;color:var(--muted)}
+
+.btn{background:var(--terra);color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer}
+.btn:hover{background:var(--terra-d)}
+.btn.sm{padding:7px 13px;font-size:12.5px}
+.btn.ghost{background:#fff;color:var(--red);border:1px solid var(--line)}
+.btn.dark{background:var(--red)}.btn.dark:hover{background:var(--red-d)}
+.btn.green{background:var(--green)}
+.btn.full{width:100%}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{padding:10px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;width:100%}
+label.f{display:block;font-size:11.5px;font-weight:600;color:var(--muted);margin:0 0 5px}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field{margin-bottom:11px}
+
+/* caisse */
+.pos{display:grid;grid-template-columns:1fr 372px;gap:16px;align-items:start}
+.tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.tabs button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}
+.tabs button[aria-pressed="true"]{background:var(--red);border-color:var(--red);color:#fff}
+.prods{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.prod{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;text-align:left;cursor:pointer}
+.prod:hover{border-color:var(--terra);box-shadow:0 4px 14px rgba(193,69,27,.12)}
+.prod b{display:block;font-size:13.5px;line-height:1.3;margin-bottom:8px;min-height:35px}
+.prod span{color:var(--terra);font-family:"Playfair Display",serif;font-size:18px}
+.ticket{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px;position:sticky;top:20px}
+.tline{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.tline .nm{flex:1;line-height:1.3}
+.tline .qty{display:flex;align-items:center;gap:5px}
+.tline .qty button{width:24px;height:24px;border-radius:6px;border:1px solid var(--line);background:var(--cream);cursor:pointer;font-weight:700}
+.tot{display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0}
+.tot.big{font-size:16px;font-weight:700;border-top:2px solid var(--line);margin-top:8px;padding-top:10px}
+.tot.big b{font-family:"Playfair Display",serif;font-size:27px;color:var(--terra)}
+.seg{display:flex;gap:6px;margin-bottom:10px}
+.seg button{flex:1;border:1px solid var(--line);background:#fff;border-radius:9px;padding:9px 4px;font-size:12.5px;font-weight:600;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--green);border-color:var(--green);color:#fff}
+
+/* modal */
+.mask{position:fixed;inset:0;background:rgba(42,22,14,.55);display:none;align-items:center;justify-content:center;padding:20px;z-index:100}
+.mask.on{display:flex}
+.modal{background:var(--cream);border-radius:16px;max-width:620px;width:100%;max-height:92vh;overflow:auto;padding:24px;box-shadow:0 30px 70px rgba(0,0,0,.35)}
+.modal h3{margin:0 0 4px;font-size:23px;color:var(--red)}
+.modal .sub{font-size:13px;color:var(--muted);margin:0 0 18px}
+.close{float:right;border:0;background:none;font-size:22px;cursor:pointer;color:var(--muted)}
+.pads{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.pads button{padding:14px 0;border:1px solid var(--line);background:#fff;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer}
+
+/* facture */
+.inv{background:#fff;padding:34px;border:1px solid var(--line);border-radius:12px;font-size:13px}
+.inv .top{display:flex;justify-content:space-between;gap:20px;margin-bottom:26px}
+.inv h2{margin:0 0 4px;font-size:26px;color:var(--red)}
+.inv .mono{font-variant-numeric:tabular-nums}
+.inv table{margin:16px 0}
+.inv .legal{font-size:10.5px;color:var(--muted);line-height:1.6;border-top:1px solid var(--line);padding-top:12px;margin-top:18px}
+.pill{display:inline-block;background:var(--cream-2);border-radius:999px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--muted)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+.day{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px}
+.day .d{font-size:10.5px;letter-spacing:1.5px;font-weight:700;color:var(--green);margin-bottom:8px}
+.day input{padding:8px;font-size:12.5px;margin-bottom:6px}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:7px}
+.chk input{width:auto}
+.msgbox{width:100%;min-height:130px;font-size:13.5px;line-height:1.55;resize:vertical}
+.preview{background:#EAF7E4;border:1px solid #C9E2BE;border-radius:12px;padding:14px;font-size:13.5px;line-height:1.55;white-space:pre-wrap}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--dark);color:#fff;
+  padding:13px 22px;border-radius:999px;font-size:14px;z-index:200;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.on{opacity:1}
+.note{font-size:12px;color:var(--muted);line-height:1.6}
+.warnbox{background:var(--warn);border:1px solid #EBD08A;border-radius:12px;padding:14px;font-size:12.5px;line-height:1.6;color:#6B4E12}
+.searchbar{display:flex;gap:8px;margin-bottom:14px}
+.searchbar input{flex:1}
+@media print{
+  aside,.head,.noprint{display:none!important}
+  .app{display:block}main{padding:0}
+  .inv{border:0;padding:0}
+}
+@media (max-width:1200px){.cols,.grid2,.grid3,.pos{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}.week{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:800px){.app{grid-template-columns:1fr}aside{position:static;height:auto}.kpis{grid-template-columns:1fr}.week{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="brand">
+    <div class="logo">Ô3<small>SAVEURS</small></div>
+    <div><h4>Ô3 Saveurs</h4><p>BACK-OFFICE</p></div>
+  </div>
+  <nav id="nav">
+    <button class="item on" data-v="dash">▦ Vue d'ensemble</button>
+    <button class="item" data-v="caisse">🧾 Caisse</button>
+    <button class="item" data-v="commandes">☰ Commandes</button>
+    <button class="item" data-v="clients">👤 Clients</button>
+    <button class="item" data-v="semaine">📅 Menu de la semaine</button>
+    <button class="item" data-v="factures">📄 Facturation</button>
+    <button class="item" data-v="compta">📊 BPF & Comptabilité</button>
+    <button class="item" data-v="param">⚙︎ Paramètres</button>
+  </nav>
+  <div class="sep"></div>
+  <div class="calltile">
+    <b>☎ LIGNE ENTRANTE</b>
+    <input id="callNum" placeholder="06 12 34 56 78" inputmode="tel">
+    <button class="btn full sm" onclick="appelEntrant()">Identifier l'appelant</button>
+  </div>
+  <div class="sep"></div>
+  <div class="note" style="color:#C3AA8C;font-size:11.5px;padding:0 6px">
+    Données enregistrées sur cet appareil.<br>
+    <button class="btn ghost sm" style="margin-top:8px" onclick="exportSauvegarde()">Sauvegarde JSON</button>
+  </div>
+</aside>
+
+<main>
+  <div class="head">
+    <h1 id="vtitle">Vue d'ensemble</h1>
+    <div class="right">
+      <span class="badge">● En ligne · <span id="today"></span></span>
+      <span class="avatar">L</span>
+    </div>
+  </div>
+
+  <!-- ================= DASHBOARD ================= -->
+  <section class="view on" id="v-dash">
+    <div class="kpis" id="kpis"></div>
+    <div class="cols">
+      <div class="card">
+        <div class="rowb"><h3 style="margin:0">Chiffre d'affaires · 14 jours</h3><span class="pill" id="caSemaine"></span></div>
+        <div id="chart"></div>
+      </div>
+      <div class="card">
+        <h3>Modes de commande</h3>
+        <div id="donut"></div>
+      </div>
+    </div>
+    <div class="cols">
+      <div class="card">
+        <h3>Top plats vendus</h3>
+        <div id="topPlats"></div>
+      </div>
+      <div class="card">
+        <h3>Commandes en cours</h3>
+        <div id="pipeline"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CAISSE ================= -->
+  <section class="view" id="v-caisse">
+    <div class="pos">
+      <div>
+        <div class="tabs" id="posTabs"></div>
+        <div class="prods" id="posProds"></div>
+      </div>
+      <div class="ticket">
+        <div class="seg">
+          <button data-m="sur place" aria-pressed="true" onclick="setMode(this)">Sur place</button>
+          <button data-m="à emporter" aria-pressed="false" onclick="setMode(this)">À emporter</button>
+          <button data-m="livraison" aria-pressed="false" onclick="setMode(this)">Livraison</button>
+        </div>
+        <div class="field">
+          <label class="f" for="posClient">Client (nom ou téléphone)</label>
+          <input id="posClient" list="clientList" placeholder="Facultatif — ex : 06 12 34 56 78">
+          <datalist id="clientList"></datalist>
+        </div>
+        <div id="ticketLines"><p class="note">Ticket vide — touchez un plat pour l'ajouter.</p></div>
+        <div class="field" style="margin-top:12px">
+          <label class="f" for="remise">Remise (€)</label>
+          <input id="remise" type="number" min="0" step="0.5" value="0" oninput="renderTicket()">
+        </div>
+        <div id="ticketTot"></div>
+        <button class="btn dark full" style="margin-top:12px" onclick="ouvrirPaiement()">Encaisser</button>
+        <button class="btn ghost full sm" style="margin-top:8px" onclick="viderTicket()">Vider le ticket</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= COMMANDES ================= -->
+  <section class="view" id="v-commandes">
+    <div class="card">
+      <div class="rowb">
+        <h3 style="margin:0">Commandes</h3>
+        <div style="display:flex;gap:8px">
+          <select id="filtreStatut" onchange="renderCommandes()" style="width:auto">
+            <option value="">Tous les statuts</option>
+            <option>Confirmée</option><option>En cuisine</option><option>En route</option><option>Livrée</option>
+          </select>
+          <button class="btn ghost sm" onclick="exportCSV('commandes')">Export CSV</button>
+        </div>
+      </div>
+      <div id="tblCommandes"></div>
+    </div>
+  </section>
+
+  <!-- ================= CLIENTS ================= -->
+  <section class="view" id="v-clients">
+    <div class="grid2">
+      <div class="card">
+        <div class="rowb"><h3 style="margin:0">Fichier clients</h3>
+          <div style="display:flex;gap:8px">
+            <button class="btn sm" onclick="modalClient()">+ Nouveau</button>
+            <button class="btn ghost sm" onclick="exportCSV('clients')">Export CSV</button>
+          </div>
+        </div>
+        <div class="searchbar"><input id="qClient" placeholder="Rechercher : nom, téléphone, ville…" oninput="renderClients()"></div>
+        <div id="tblClients"></div>
+      </div>
+      <div class="card" id="ficheClient">
+        <h3>Fiche client</h3>
+        <p class="note">Sélectionnez un client, ou identifiez un appel entrant depuis le menu de gauche.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MENU SEMAINE ================= -->
+  <section class="view" id="v-semaine">
+    <div class="card" style="margin-bottom:16px">
+      <div class="rowb"><h3 style="margin:0">Plats du jour de la semaine</h3>
+        <span class="pill" id="semLabel"></span></div>
+      <div class="week" id="week"></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Message de campagne</h3>
+        <p class="hint">Variables disponibles : {prenom} · {nom} · {ville} · {menu}</p>
+        <div class="seg" style="margin-bottom:12px">
+          <button data-c="SMS" aria-pressed="true" onclick="setCanal(this)">SMS</button>
+          <button data-c="WhatsApp" aria-pressed="false" onclick="setCanal(this)">WhatsApp</button>
+          <button data-c="E-mail" aria-pressed="false" onclick="setCanal(this)">E-mail</button>
+        </div>
+        <textarea class="msgbox" id="msgCampagne" oninput="renderCampagne()"></textarea>
+        <div class="rowb" style="margin-top:12px">
+          <span class="note" id="compteurSms"></span>
+          <div style="display:flex;gap:8px">
+            <button class="btn ghost sm" onclick="exportCSV('campagne')">Export CSV (Brevo / Ringover)</button>
+            <button class="btn sm" onclick="envoyerCampagne()">Envoyer</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:16px">
+          <h3>Destinataires</h3>
+          <div id="destinataires"></div>
+          <div class="preview" id="previewMsg" style="margin-top:14px"></div>
+        </div>
+        <div class="card">
+          <h3>Historique des envois</h3>
+          <div id="histoCampagnes"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FACTURES ================= -->
+  <section class="view" id="v-factures">
+    <div class="card" style="margin-bottom:16px">
+      <div class="rowb"><h3 style="margin:0">Factures</h3>
+        <button class="btn ghost sm" onclick="exportCSV('factures')">Export CSV</button></div>
+      <div id="tblFactures"></div>
+    </div>
+    <div id="zoneFacture"></div>
+  </section>
+
+  <!-- ================= COMPTA ================= -->
+  <section class="view" id="v-compta">
+    <div class="card" style="margin-bottom:16px">
+      <div class="rowb">
+        <h3 style="margin:0">Bilan Périodique Financier (BPF)</h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="date" id="du" onchange="renderCompta()" style="width:auto">
+          <input type="date" id="au" onchange="renderCompta()" style="width:auto">
+          <button class="btn ghost sm" onclick="periode('mois')">Mois en cours</button>
+          <button class="btn ghost sm" onclick="periode('30')">30 jours</button>
+        </div>
+      </div>
+      <div class="kpis" id="bpfKpis"></div>
+      <div class="grid3" style="margin-top:6px">
+        <div><h3 style="font-size:16px">Ventilation TVA</h3><div id="tvaTable"></div></div>
+        <div><h3 style="font-size:16px">Moyens de paiement</h3><div id="payTable"></div></div>
+        <div><h3 style="font-size:16px">Modes de vente</h3><div id="modeTable"></div></div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Extractions comptables (CSV)</h3>
+        <p class="hint">Séparateur « ; », encodage UTF-8 avec BOM, décimales à la virgule — prêt pour Excel et la plupart des logiciels de compta.</p>
+        <div style="display:grid;gap:9px">
+          <button class="btn ghost full" onclick="exportCSV('bpf')">📊 BPF financier de la période</button>
+          <button class="btn ghost full" onclick="exportCSV('ventes')">🧾 Journal des ventes détaillé (ligne à ligne)</button>
+          <button class="btn ghost full" onclick="exportCSV('ecritures')">📚 Écritures comptables (411 / 707 / 44571 / 530 / 512)</button>
+          <button class="btn ghost full" onclick="exportCSV('tva')">💶 Ventilation TVA par taux</button>
+          <button class="btn ghost full" onclick="exportCSV('factures')">📄 Liste des factures</button>
+          <button class="btn ghost full" onclick="exportCSV('z')">🔒 Ticket Z — clôture de caisse du jour</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Clôture de caisse (Z)</h3>
+        <div id="zCaisse"></div>
+        <div class="warnbox" style="margin-top:14px">
+          <b>À savoir avant l'usage réel.</b> En France, un logiciel de caisse utilisé par un assujetti à la TVA
+          doit respecter les conditions d'inaltérabilité, sécurisation, conservation et archivage, et être couvert
+          par un certificat ou une attestation de l'éditeur. Cette maquette n'est pas certifiée : elle sert à valider
+          le fonctionnel avant de la faire auditer, ou de la brancher sur une caisse déjà certifiée.
+          Côté facturation électronique, le calendrier et le choix de la plateforme (PDP) sont à confirmer avec votre
+          expert-comptable — le format Factur-X est prévu ici dans les mentions, pas encore dans le flux.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= PARAMÈTRES ================= -->
+  <section class="view" id="v-param">
+    <div class="grid2">
+      <div class="card">
+        <h3>Identité de l'établissement</h3>
+        <p class="hint">Ces informations apparaissent sur les factures et les tickets.</p>
+        <div class="field"><label class="f">Raison sociale</label><input id="s_nom"></div>
+        <div class="field"><label class="f">Adresse</label><input id="s_adr"></div>
+        <div class="frow">
+          <div class="field"><label class="f">SIRET</label><input id="s_siret"></div>
+          <div class="field"><label class="f">N° TVA intracom.</label><input id="s_tva"></div>
+        </div>
+        <div class="frow">
+          <div class="field"><label class="f">Téléphone</label><input id="s_tel"></div>
+          <div class="field"><label class="f">E-mail</label><input id="s_mail"></div>
+        </div>
+        <div class="frow">
+          <div class="field"><label class="f">TVA sur place</label><input id="s_tva1" type="number" step="0.5"></div>
+          <div class="field"><label class="f">TVA emporter / livraison</label><input id="s_tva2" type="number" step="0.5"></div>
+        </div>
+        <button class="btn" onclick="saveParams()">Enregistrer</button>
+      </div>
+      <div class="card">
+        <h3>Données</h3>
+        <p class="note">Tout est stocké localement dans le navigateur. Sauvegardez régulièrement.</p>
+        <div style="display:grid;gap:9px;margin-top:14px">
+          <button class="btn ghost full" onclick="exportSauvegarde()">⬇ Exporter une sauvegarde JSON</button>
+          <label class="btn ghost full" style="text-align:center;cursor:pointer">⬆ Importer une sauvegarde
+            <input type="file" accept="application/json" style="display:none" onchange="importSauvegarde(event)"></label>
+          <button class="btn ghost full" onclick="resetDemo()">↺ Réinitialiser avec les données de démo</button>
+        </div>
+        <div class="warnbox" style="margin-top:16px">
+          <b>RGPD.</b> Les consentements SMS et e-mail sont enregistrés par client et horodatés.
+          Chaque campagne ne part qu'aux clients ayant coché le canal concerné. Prévoyez la mention
+          de désinscription (STOP au 36111 pour le SMS) dans vos messages.
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+</div>
+
+<div class="mask" id="mask"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   Ô3 Saveurs — back-office : caisse, CRM, campagnes, factures, compta
+   ============================================================ */
+const CARTE = {"items": [{"id": 1, "n": "Pastels Thon", "p": 6.0, "c": "entrees"}, {"id": 2, "n": "Pastels Viande hachée", "p": 7.0, "c": "entrees"}, {"id": 3, "n": "Pastels Poulet", "p": 7.0, "c": "entrees"}, {"id": 4, "n": "Salade composée", "p": 4.0, "c": "entrees"}, {"id": 5, "n": "Patates fourrées au fromage", "p": 4.0, "c": "entrees"}, {"id": 6, "n": "Salade Saumon Avocat", "p": 9.0, "c": "salades"}, {"id": 7, "n": "Salade Pâtes & Poulet", "p": 8.4, "c": "salades"}, {"id": 8, "n": "Salade Poulet Mozzarella", "p": 8.4, "c": "salades"}, {"id": 9, "n": "Salade César Avocat", "p": 9.0, "c": "salades"}, {"id": 10, "n": "Cecina de Bœuf", "p": 10.0, "c": "salades"}, {"id": 11, "n": "Tajine Veau & Pruneaux", "p": 10.5, "c": "maghreb"}, {"id": 12, "n": "Tajine Poulet aux Légumes", "p": 9.0, "c": "maghreb"}, {"id": 13, "n": "Tajine Boulettes de Bœuf", "p": 9.5, "c": "maghreb"}, {"id": 14, "n": "Chakchouka", "p": 5.0, "c": "medit"}, {"id": 15, "n": "Salade d'Aubergines", "p": 5.0, "c": "medit"}, {"id": 16, "n": "Sardines Frites", "p": 8.0, "c": "medit"}, {"id": 17, "n": "Thiéboudiène Poulet", "p": 8.5, "c": "afrique"}, {"id": 18, "n": "Thiéboudiène Bœuf", "p": 9.5, "c": "afrique"}, {"id": 19, "n": "Thiéboudiène Poisson", "p": 13.0, "c": "afrique"}, {"id": 20, "n": "Yassa Poulet", "p": 8.5, "c": "afrique"}, {"id": 21, "n": "Mafé Bœuf", "p": 9.5, "c": "afrique"}, {"id": 22, "n": "Brochette Poulet", "p": 7.0, "c": "grillades"}, {"id": 23, "n": "Brochette Bœuf", "p": 8.0, "c": "grillades"}, {"id": 24, "n": "Poulet Rôti", "p": 8.0, "c": "grillades"}, {"id": 25, "n": "Cuisse de Poulet", "p": 3.0, "c": "grillades"}, {"id": 26, "n": "Pilon de Poulet", "p": 5.0, "c": "grillades"}, {"id": 27, "n": "Ailes de Poulet", "p": 5.0, "c": "grillades"}, {"id": 28, "n": "Poisson Entier Grillé", "p": 18.0, "c": "grillades"}, {"id": 29, "n": "Sandwich Merguez", "p": 6.5, "c": "sandwichs"}, {"id": 30, "n": "Sandwich Brochette Poulet", "p": 7.0, "c": "sandwichs"}, {"id": 31, "n": "Sandwich Kefta", "p": 7.5, "c": "sandwichs"}, {"id": 32, "n": "Sandwich Brochette Bœuf", "p": 8.0, "c": "sandwichs"}, {"id": 33, "n": "Riz Blanc", "p": 2.5, "c": "accomp"}, {"id": 34, "n": "Alloco", "p": 4.0, "c": "accomp"}, {"id": 35, "n": "Riz Rouge", "p": 4.0, "c": "accomp"}, {"id": 36, "n": "Thiéboudiène blanc", "p": 4.0, "c": "accomp"}, {"id": 37, "n": "Frites Maison", "p": 4.0, "c": "accomp"}, {"id": 38, "n": "Salade Composée", "p": 4.0, "c": "accomp"}, {"id": 39, "n": "Patate fourrée au fromage", "p": 4.0, "c": "accomp"}, {"id": 40, "n": "Sauce Ô3 Verte", "p": 1.0, "c": "accomp"}, {"id": 41, "n": "Sauce Ô3 Piquante", "p": 1.0, "c": "accomp"}, {"id": 42, "n": "Piment frais", "p": 0.5, "c": "accomp"}, {"id": 43, "n": "Ananas frais", "p": 2.5, "c": "desserts"}, {"id": 44, "n": "Tiramisu", "p": 2.5, "c": "desserts"}, {"id": 45, "n": "Fondant Chocolat", "p": 3.0, "c": "desserts"}, {"id": 46, "n": "Mousse au Chocolat", "p": 3.0, "c": "desserts"}, {"id": 47, "n": "Tarte du jour", "p": 3.0, "c": "desserts"}, {"id": 48, "n": "Jus de Gingembre", "p": 3.5, "c": "boissons"}, {"id": 49, "n": "Jus de Bissap", "p": 3.5, "c": "boissons"}, {"id": 50, "n": "Cocktail Maison", "p": 3.5, "c": "boissons"}, {"id": 51, "n": "Jus d'Avocat", "p": 4.0, "c": "boissons"}, {"id": 52, "n": "Jus d'Orange", "p": 3.5, "c": "boissons"}, {"id": 53, "n": "Canette 33 cl", "p": 2.0, "c": "boissons"}], "cats": {"entrees": "Entrées", "salades": "Salades & Bowls", "maghreb": "Saveur du Maghreb", "medit": "Saveur Méditerranéenne", "afrique": "Saveur d'Afrique de l'Ouest", "grillades": "Grillades", "sandwichs": "Sandwichs", "accomp": "Accompagnements", "desserts": "Desserts", "boissons": "Boissons"}};
+const CATS = CARTE.cats, ITEMS = CARTE.items;
+const JOURS = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+
+/* ---------- utilitaires ---------- */
+const eur = n => (Math.round(n*100)/100).toFixed(2).replace('.',',')+' €';
+const nb  = n => (Math.round(n*100)/100).toFixed(2).replace('.',',');
+const iso = d => d.toISOString().slice(0,10);
+const fdate = s => new Date(s).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid = p => p+'-'+Math.random().toString(36).slice(2,8);
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600);}
+
+/* Normalisation des numéros français en E.164 (+33…) */
+function normTel(v){
+  let d = String(v||'').replace(/[^0-9+]/g,'');
+  if(d.startsWith('+33')) d = '0'+d.slice(3);
+  else if(d.startsWith('0033')) d = '0'+d.slice(4);
+  else if(d.startsWith('33') && d.length===11) d = '0'+d.slice(2);
+  d = d.replace(/\D/g,'');
+  if(d.length===9 && !d.startsWith('0')) d = '0'+d;
+  return d.length===10 ? '+33'+d.slice(1) : (v||'');
+}
+const telAffiche = t => { const d=String(t).replace('+33','0'); return d.replace(/(\d{2})(?=\d)/g,'$1 ').trim(); };
+const cleTel = t => String(normTel(t)).replace(/\D/g,'').slice(-9);
+
+/* ---------- stockage ---------- */
+const KEY='o3-backoffice-v1';
+let S = null;
+async function charger(){
+  try{ if(window.storage){ const r = await window.storage.get(KEY); if(r && r.value) return JSON.parse(r.value); } }catch(e){}
+  return null;
+}
+async function sauver(){
+  try{ if(window.storage) await window.storage.set(KEY, JSON.stringify(S)); }catch(e){}
+}
+
+/* ---------- TVA & totaux ---------- */
+const tauxTVA = mode => mode==='sur place' ? S.params.tvaSurPlace : S.params.tvaEmporter;
+function totaux(o){
+  const brut = o.lines.reduce((s,l)=>s+l.p*l.q,0);
+  const ttc = Math.max(0, brut - (o.remise||0)) + (o.fraisLiv||0);
+  const t = tauxTVA(o.mode)/100;
+  const ht = ttc/(1+t);
+  return {brut, ttc, ht, tva: ttc-ht, taux: tauxTVA(o.mode)};
+}
+
+/* ============================================================
+   DONNÉES DE DÉMO
+   ============================================================ */
+function demo(){
+  const params = {nom:'Ô3 SAVEURS', adresse:'38 rue des Prés Saint-Martin, 77340 Pontault-Combault',
+    siret:'000 000 000 00000', tvaNum:'FR00 000000000', tel:'+33600000000', email:'contact@o3saveurs.fr',
+    tvaSurPlace:10, tvaEmporter:5.5};
+  const noms=[['Sophie','Diallo','Pontault-Combault','0612345678'],['Karim','Benali','Roissy-en-Brie','0623456789'],
+    ['Awa','Traoré','Ozoir-la-Ferrière','0634567890'],['Julien','Moreau','Émerainville','0645678901'],
+    ['Fatou','Ndiaye','Lognes','0656789012'],['Mehdi','Cherif','Pontault-Combault','0667890123'],
+    ['Claire','Petit','Torcy','0678901234'],['Moussa','Camara','Noisiel','0689012345']];
+  const clients = noms.map((n,i)=>({id:'C'+(101+i), prenom:n[0], nom:n[1], ville:n[2], tel:normTel(n[3]),
+    email:(n[0]+'.'+n[1]).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')+'@exemple.fr',
+    optinSms:i%4!==3, optinEmail:i%3!==2, notes:'', cree:iso(new Date(Date.now()-(60-i*5)*864e5))}));
+
+  const orders=[], invoices=[];
+  let no=1240, nf=1;
+  const modes=['sur place','à emporter','livraison'], pays=['CB','Espèces','Titre-restaurant','Apple Pay'];
+  const rnd=(a)=>a[Math.floor(Math.random()*a.length)];
+  for(let j=13;j>=0;j--){
+    const d = new Date(Date.now()-j*864e5);
+    const n = 4+Math.floor(Math.random()*5);
+    for(let k=0;k<n;k++){
+      const cl = rnd(clients);
+      const lines=[]; const nl=1+Math.floor(Math.random()*3);
+      for(let l=0;l<nl;l++){ const it=rnd(ITEMS); const e=lines.find(x=>x.id===it.id);
+        e ? e.q++ : lines.push({id:it.id,n:it.n,p:it.p,q:1+Math.floor(Math.random()*2)}); }
+      const mode=rnd(modes);
+      const dt=new Date(d); dt.setHours(11+Math.floor(Math.random()*10), Math.floor(Math.random()*60));
+      const o={id:uid('o'), num:'#'+(++no), date:dt.toISOString(), clientId:cl.id, mode,
+        lines, remise:0, fraisLiv: mode==='livraison'?2.5:0, paiement:rnd(pays),
+        statut: j===0 ? rnd(['Confirmée','En cuisine','En route']) : 'Livrée'};
+      orders.push(o);
+      if(o.statut==='Livrée' || j>0){
+        invoices.push({id:uid('f'), num:'FA-2026-'+String(nf++).padStart(4,'0'), orderId:o.id,
+          date:o.date, statut:'Payée'});
+      }
+    }
+  }
+  const lundi=new Date(); lundi.setDate(lundi.getDate()-((lundi.getDay()+6)%7));
+  return {params, clients, orders, invoices, campagnes:[],
+    semaine:{debut:iso(lundi), canal:'SMS',
+      plats:{0:{p:'Mafé Bœuf',x:9.5},1:{p:'Yassa Poulet',x:8.5},2:{p:'Sardines grillées',x:8},
+             3:{p:'Paëlla',x:12},4:{p:'Couscous Royal',x:13},5:{p:'Thiéboudiène Poisson',x:13},6:{p:'',x:0}},
+      message:"Bonjour {prenom} ! 🍲 Le menu de la semaine chez Ô3 Saveurs :\n{menu}\nCommandez au 01 60 00 00 00 ou sur sl-o3saveurs.fr — livraison à {ville}.\nSTOP au 36111"},
+    compteurs:{order:no, facture:nf}};
+}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+const TITRES={dash:"Vue d'ensemble",caisse:"Caisse enregistreuse",commandes:"Commandes",clients:"Clients",
+  semaine:"Menu de la semaine",factures:"Facturation",compta:"BPF & Comptabilité",param:"Paramètres"};
+function go(v){
+  document.querySelectorAll('#nav .item').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(s=>s.classList.toggle('on', s.id==='v-'+v));
+  document.getElementById('vtitle').textContent=TITRES[v];
+  if(v==='dash') renderDash();
+  if(v==='caisse') renderPos();
+  if(v==='commandes') renderCommandes();
+  if(v==='clients') renderClients();
+  if(v==='semaine') renderSemaine();
+  if(v==='factures') renderFactures();
+  if(v==='compta') renderCompta();
+  if(v==='param') renderParams();
+  window.scrollTo(0,0);
+}
+document.getElementById('nav').addEventListener('click',e=>{const b=e.target.closest('.item'); if(b) go(b.dataset.v);});
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+function renderDash(){
+  const auj = iso(new Date());
+  const jour = S.orders.filter(o=>o.date.slice(0,10)===auj);
+  const caJour = jour.reduce((s,o)=>s+totaux(o).ttc,0);
+  const tous = S.orders;
+  const panier = tous.length ? tous.reduce((s,o)=>s+totaux(o).ttc,0)/tous.length : 0;
+  const liv = tous.filter(o=>o.mode==='livraison').length;
+  document.getElementById('kpis').innerHTML = [
+    ['📈', eur(caJour), "CA aujourd'hui", '+12%'],
+    ['☰', jour.length, 'Commandes du jour', '+5%'],
+    ['🛒', eur(panier), 'Panier moyen', ''],
+    ['🛵', Math.round(liv/Math.max(tous.length,1)*100)+'%', 'Part livraison', '']
+  ].map(k=>`<div class="kpi"><div class="top"><span class="ico">${k[0]}</span>${k[3]?`<span class="d">${k[3]}</span>`:''}</div>
+    <div class="v">${k[1]}</div><div class="l">${k[2]}</div></div>`).join('');
+
+  // graphique 14 jours
+  const jours=[]; for(let i=13;i>=0;i--){const d=new Date(Date.now()-i*864e5); jours.push(iso(d));}
+  const vals = jours.map(j=>S.orders.filter(o=>o.date.slice(0,10)===j).reduce((s,o)=>s+totaux(o).ttc,0));
+  const max = Math.max(...vals,1), W=560, H=190;
+  const pts = vals.map((v,i)=>[30+i*(W-50)/13, H-20-(v/max)*(H-45)]);
+  const path = pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  document.getElementById('chart').innerHTML =
+   `<svg viewBox="0 0 ${W} ${H}" width="100%" height="200" role="img" aria-label="Chiffre d'affaires sur 14 jours">
+      ${[0,.5,1].map(f=>`<line x1="28" x2="${W-15}" y1="${20+f*(H-45)}" y2="${20+f*(H-45)}" stroke="#EFE0C4"/>`).join('')}
+      <path d="${path} L ${pts[13][0]} ${H-20} L ${pts[0][0]} ${H-20} Z" fill="#C1451B" opacity=".08"/>
+      <path d="${path}" fill="none" stroke="#C1451B" stroke-width="2.5"/>
+      ${pts.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.5" fill="#C1451B"/>`).join('')}
+      ${[0,4,8,13].map(i=>`<text x="${pts[i][0]}" y="${H-4}" font-size="10" fill="#7B6553" text-anchor="middle">${jours[i].slice(8)}/${jours[i].slice(5,7)}</text>`).join('')}
+    </svg>`;
+  const sem = vals.slice(7).reduce((a,b)=>a+b,0);
+  document.getElementById('caSemaine').textContent = 'Semaine : '+eur(sem);
+
+  // donut modes
+  const parMode = {}; S.orders.forEach(o=>parMode[o.mode]=(parMode[o.mode]||0)+1);
+  const total = S.orders.length, coul={'livraison':'#C1451B','à emporter':'#3D7A34','sur place':'#E3A93C'};
+  let a0=-Math.PI/2, arcs='';
+  Object.entries(parMode).forEach(([m,v])=>{
+    const a1=a0+v/total*2*Math.PI, big=a1-a0>Math.PI?1:0, R=70, r=44, cx=100, cy=100;
+    const P=(ang,rr)=>[cx+rr*Math.cos(ang),cy+rr*Math.sin(ang)];
+    const [x1,y1]=P(a0,R),[x2,y2]=P(a1,R),[x3,y3]=P(a1,r),[x4,y4]=P(a0,r);
+    arcs+=`<path d="M${x1} ${y1} A${R} ${R} 0 ${big} 1 ${x2} ${y2} L${x3} ${y3} A${r} ${r} 0 ${big} 0 ${x4} ${y4} Z" fill="${coul[m]}"/>`;
+    a0=a1;
+  });
+  document.getElementById('donut').innerHTML =
+   `<svg viewBox="0 0 200 200" width="100%" height="200">${arcs}
+      <text x="100" y="98" text-anchor="middle" font-size="30" font-family="Playfair Display,serif">${total}</text>
+      <text x="100" y="116" text-anchor="middle" font-size="10" fill="#7B6553">commandes</text></svg>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;font-size:12.5px">
+    ${Object.entries(parMode).map(([m,v])=>`<span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${coul[m]}"></span> ${m} (${v})</span>`).join('')}</div>`;
+
+  // top plats
+  const cnt={}; S.orders.forEach(o=>o.lines.forEach(l=>cnt[l.n]=(cnt[l.n]||0)+l.q));
+  const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,6), mx=top.length?top[0][1]:1;
+  document.getElementById('topPlats').innerHTML = top.map((t,i)=>
+   `<div style="display:flex;align-items:center;gap:12px;margin-bottom:11px">
+      <b style="color:var(--terra);width:14px">${i+1}</b>
+      <span style="flex:0 0 190px;font-weight:600;font-size:13.5px">${esc(t[0])}</span>
+      <span style="flex:1;height:11px;background:#EFE0C4;border-radius:99px;overflow:hidden">
+        <span style="display:block;height:100%;width:${t[1]/mx*100}%;background:linear-gradient(90deg,#E3A93C,#C1451B)"></span></span>
+      <span class="note" style="width:74px;text-align:right">${t[1]} vendus</span></div>`).join('');
+
+  // pipeline
+  const st=['Confirmée','En cuisine','En route','Livrée'], col=['#E3A93C','#C1451B','#3D7A34','#9E2620'];
+  const c=st.map(s=>S.orders.filter(o=>o.statut===s && o.date.slice(0,10)===auj).length), m2=Math.max(...c,1);
+  document.getElementById('pipeline').innerHTML =
+   `<div style="display:flex;align-items:flex-end;gap:16px;height:190px;padding:0 10px">
+    ${st.map((s,i)=>`<div style="flex:1;text-align:center">
+      <div style="font-weight:700;margin-bottom:6px">${c[i]}</div>
+      <div style="height:${Math.max(c[i]/m2*120,6)}px;background:${col[i]};border-radius:8px 8px 0 0"></div>
+      <div class="note" style="margin-top:7px">${s}</div></div>`).join('')}</div>`;
+}
+
+/* ============================================================
+   CAISSE
+   ============================================================ */
+let ticket = {mode:'sur place', lines:[], clientId:null};
+function renderPos(){
+  const cats = Object.entries(CATS);
+  document.getElementById('posTabs').innerHTML =
+    `<button aria-pressed="true" onclick="posCat('tout',this)">Tout</button>` +
+    cats.map(([k,l])=>`<button aria-pressed="false" onclick="posCat('${k}',this)">${esc(l)}</button>`).join('');
+  posCat('tout');
+  document.getElementById('clientList').innerHTML = S.clients.map(c=>
+    `<option value="${esc(c.prenom+' '+c.nom+' — '+telAffiche(c.tel))}">`).join('');
+  renderTicket();
+}
+function posCat(c, el){
+  if(el){document.querySelectorAll('#posTabs button').forEach(b=>b.setAttribute('aria-pressed','false'));el.setAttribute('aria-pressed','true');}
+  const list = c==='tout' ? ITEMS : ITEMS.filter(i=>i.c===c);
+  document.getElementById('posProds').innerHTML = list.map(i=>
+    `<button class="prod" onclick="addLigne(${i.id})"><b>${esc(i.n)}</b><span>${eur(i.p)}</span></button>`).join('');
+}
+function addLigne(id){
+  const it = ITEMS.find(i=>i.id===id);
+  const l = ticket.lines.find(x=>x.id===id);
+  l ? l.q++ : ticket.lines.push({id:it.id, n:it.n, p:it.p, q:1});
+  renderTicket();
+}
+function majQte(id,d){
+  const l = ticket.lines.find(x=>x.id===id); if(!l) return;
+  l.q+=d; if(l.q<=0) ticket.lines = ticket.lines.filter(x=>x.id!==id);
+  renderTicket();
+}
+function setMode(el){
+  document.querySelectorAll('.seg [data-m]').forEach(b=>b.setAttribute('aria-pressed','false'));
+  el.setAttribute('aria-pressed','true'); ticket.mode = el.dataset.m; renderTicket();
+}
+function viderTicket(){ ticket.lines=[]; document.getElementById('remise').value=0; renderTicket(); }
+function renderTicket(){
+  const box=document.getElementById('ticketLines');
+  box.innerHTML = ticket.lines.length ? ticket.lines.map(l=>
+    `<div class="tline"><span class="nm">${esc(l.n)}<br><span class="note">${eur(l.p)}</span></span>
+      <span class="qty"><button onclick="majQte(${l.id},-1)">−</button><b>${l.q}</b><button onclick="majQte(${l.id},1)">+</button></span>
+      <span class="num" style="width:62px">${eur(l.p*l.q)}</span></div>`).join('')
+    : '<p class="note">Ticket vide — touchez un plat pour l\'ajouter.</p>';
+  const remise = parseFloat(document.getElementById('remise').value)||0;
+  const frais = ticket.mode==='livraison' ? 2.5 : 0;
+  const t = totaux({lines:ticket.lines, remise, fraisLiv:frais, mode:ticket.mode});
+  document.getElementById('ticketTot').innerHTML =
+   `<div class="tot"><span>Sous-total</span><span>${eur(t.brut)}</span></div>
+    ${remise?`<div class="tot"><span>Remise</span><span>−${eur(remise)}</span></div>`:''}
+    ${frais?`<div class="tot"><span>Livraison</span><span>${eur(frais)}</span></div>`:''}
+    <div class="tot"><span class="note">Total HT</span><span class="note">${eur(t.ht)}</span></div>
+    <div class="tot"><span class="note">TVA ${nb(t.taux)} %</span><span class="note">${eur(t.tva)}</span></div>
+    <div class="tot big"><span>Total TTC</span><b>${eur(t.ttc)}</b></div>`;
+}
+function ouvrirPaiement(){
+  if(!ticket.lines.length) return toast('Le ticket est vide.');
+  const remise=parseFloat(document.getElementById('remise').value)||0;
+  const t = totaux({lines:ticket.lines, remise, fraisLiv:ticket.mode==='livraison'?2.5:0, mode:ticket.mode});
+  ouvrir(`<button class="close" onclick="fermer()">×</button>
+    <h3>Encaissement</h3><p class="sub">Total à régler : <b>${eur(t.ttc)}</b> · ${ticket.mode}</p>
+    <div class="pads">
+      ${['CB','Espèces','Titre-restaurant','Apple Pay','PayPal','Virement'].map(p=>
+        `<button onclick="choisirPaiement('${p}',this)">${p}</button>`).join('')}
+    </div>
+    <div id="cashZone"></div>
+    <button class="btn dark full" style="margin-top:14px" onclick="valider(${t.ttc})">Valider et éditer la facture</button>
+    <p class="note" style="margin-top:10px">La facture est numérotée automatiquement, séquentielle et sans rupture.</p>`);
+  choisirPaiement('CB');
+}
+let moyen='CB';
+function choisirPaiement(p, el){
+  moyen=p;
+  document.querySelectorAll('.pads button').forEach(b=>b.style.background = b.textContent===p ? 'var(--gold)' : '#fff');
+  const t = totaux({lines:ticket.lines, remise:parseFloat(document.getElementById('remise').value)||0,
+    fraisLiv:ticket.mode==='livraison'?2.5:0, mode:ticket.mode});
+  document.getElementById('cashZone').innerHTML = p==='Espèces'
+    ? `<div class="frow"><div class="field"><label class="f">Reçu</label>
+        <input id="recu" type="number" step="0.5" oninput="rendu(${t.ttc})" placeholder="${nb(t.ttc)}"></div>
+        <div class="field"><label class="f">Rendu monnaie</label><input id="rendu" readonly value="0,00 €"></div></div>` : '';
+}
+function rendu(ttc){
+  const r = parseFloat(document.getElementById('recu').value)||0;
+  document.getElementById('rendu').value = eur(Math.max(0, r-ttc));
+}
+function valider(){
+  const remise=parseFloat(document.getElementById('remise').value)||0;
+  const saisi = document.getElementById('posClient').value.trim();
+  let clientId = null;
+  if(saisi){
+    const k = cleTel(saisi);
+    let c = k.length>=9 ? S.clients.find(x=>cleTel(x.tel)===k) : null;
+    if(!c) c = S.clients.find(x=>saisi.toLowerCase().includes((x.prenom+' '+x.nom).toLowerCase()));
+    if(!c && k.length>=9){ c={id:uid('C'),prenom:'Client',nom:telAffiche(normTel(saisi)),ville:'',tel:normTel(saisi),
+      email:'',optinSms:false,optinEmail:false,notes:'Créé depuis la caisse',cree:iso(new Date())}; S.clients.push(c); }
+    if(c) clientId=c.id;
+  }
+  const o = {id:uid('o'), num:'#'+(++S.compteurs.order), date:new Date().toISOString(), clientId,
+    mode:ticket.mode, lines:JSON.parse(JSON.stringify(ticket.lines)), remise,
+    fraisLiv: ticket.mode==='livraison'?2.5:0, paiement:moyen,
+    statut: ticket.mode==='livraison' ? 'Confirmée' : 'Livrée'};
+  S.orders.push(o);
+  const f = {id:uid('f'), num:'FA-2026-'+String(S.compteurs.facture++).padStart(4,'0'), orderId:o.id,
+    date:o.date, statut: moyen==='Virement' ? 'À régler' : 'Payée'};
+  S.invoices.push(f);
+  sauver(); fermer(); viderTicket();
+  document.getElementById('posClient').value='';
+  toast('Commande '+o.num+' encaissée · facture '+f.num);
+  go('factures'); voirFacture(f.id);
+}
+
+/* ============================================================
+   COMMANDES
+   ============================================================ */
+const STCLASS={'Confirmée':'y','En cuisine':'o','En route':'g','Livrée':'n'};
+function renderCommandes(){
+  const f = document.getElementById('filtreStatut').value;
+  const list = S.orders.filter(o=>!f||o.statut===f).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60);
+  document.getElementById('tblCommandes').innerHTML = `<table><thead><tr>
+    <th>N°</th><th>DATE</th><th>CLIENT</th><th>MODE</th><th>DÉTAIL</th><th class="num">TOTAL</th><th>PAIEMENT</th><th>STATUT</th><th></th>
+    </tr></thead><tbody>${list.map(o=>{
+      const c = S.clients.find(x=>x.id===o.clientId);
+      const t = totaux(o);
+      return `<tr><td><b>${o.num}</b></td><td>${fdate(o.date)}</td>
+        <td>${c?esc(c.prenom+' '+c.nom):'<span class="note">Comptoir</span>'}</td>
+        <td>${o.mode}</td>
+        <td class="note">${o.lines.map(l=>l.q+'× '+esc(l.n)).join(', ').slice(0,60)}…</td>
+        <td class="num"><b>${eur(t.ttc)}</b></td><td>${o.paiement}</td>
+        <td><span class="st ${STCLASS[o.statut]}">${o.statut.toUpperCase()}</span></td>
+        <td><select onchange="majStatut('${o.id}',this.value)" style="width:auto;padding:5px">
+          ${['Confirmée','En cuisine','En route','Livrée'].map(s=>`<option ${s===o.statut?'selected':''}>${s}</option>`).join('')}
+        </select></td></tr>`;}).join('')}</tbody></table>`;
+}
+function majStatut(id,v){ const o=S.orders.find(x=>x.id===id); o.statut=v; sauver(); renderCommandes(); toast(o.num+' → '+v); }
+
+/* ============================================================
+   CLIENTS & RECONNAISSANCE DE NUMÉRO
+   ============================================================ */
+function statsClient(id){
+  const os = S.orders.filter(o=>o.clientId===id).sort((a,b)=>b.date.localeCompare(a.date));
+  const ca = os.reduce((s,o)=>s+totaux(o).ttc,0);
+  const cnt={}; os.forEach(o=>o.lines.forEach(l=>cnt[l.n]=(cnt[l.n]||0)+l.q));
+  const fav = Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
+  return {os, ca, nb:os.length, panier: os.length?ca/os.length:0, fav: fav?fav[0]:'—', dernier: os[0]};
+}
+function renderClients(){
+  const q = (document.getElementById('qClient').value||'').toLowerCase();
+  const k = cleTel(q);
+  const list = S.clients.filter(c=>{
+    if(!q) return true;
+    if(k.length>=6 && cleTel(c.tel).includes(k)) return true;
+    return (c.prenom+' '+c.nom+' '+c.ville+' '+c.email).toLowerCase().includes(q);
+  });
+  document.getElementById('tblClients').innerHTML = `<table><thead><tr>
+    <th>CLIENT</th><th>TÉLÉPHONE</th><th>VILLE</th><th class="num">CDES</th><th class="num">CA</th><th>OPT-IN</th>
+    </tr></thead><tbody>${list.map(c=>{const s=statsClient(c.id);
+    return `<tr style="cursor:pointer" onclick="voirClient('${c.id}')">
+      <td><b>${esc(c.prenom)} ${esc(c.nom)}</b></td><td>${telAffiche(c.tel)}</td><td>${esc(c.ville||'—')}</td>
+      <td class="num">${s.nb}</td><td class="num">${eur(s.ca)}</td>
+      <td>${c.optinSms?'<span class="st g">SMS</span> ':''}${c.optinEmail?'<span class="st o">MAIL</span>':''}
+      ${!c.optinSms&&!c.optinEmail?'<span class="st n">AUCUN</span>':''}</td></tr>`;}).join('')}</tbody></table>`;
+}
+function voirClient(id){
+  const c = S.clients.find(x=>x.id===id), s = statsClient(id);
+  document.getElementById('ficheClient').innerHTML = `
+    <div class="rowb"><h3 style="margin:0">${esc(c.prenom)} ${esc(c.nom)}</h3>
+      <button class="btn sm" onclick="modalClient('${c.id}')">Modifier</button></div>
+    <p class="note">${telAffiche(c.tel)} · ${esc(c.email||'—')} · ${esc(c.ville||'—')} · client depuis le ${fdate(c.cree)}</p>
+    <div class="kpis" style="grid-template-columns:repeat(3,1fr);margin:14px 0">
+      <div class="kpi"><div class="v">${s.nb}</div><div class="l">Commandes</div></div>
+      <div class="kpi"><div class="v">${eur(s.ca)}</div><div class="l">CA cumulé</div></div>
+      <div class="kpi"><div class="v">${eur(s.panier)}</div><div class="l">Panier moyen</div></div>
+    </div>
+    <p style="font-size:13.5px"><b>Plat préféré :</b> ${esc(s.fav)}</p>
+    <div class="chk"><input type="checkbox" id="ck_sms" ${c.optinSms?'checked':''} onchange="optin('${c.id}','optinSms',this.checked)">
+      <label for="ck_sms">Consent SMS / WhatsApp</label></div>
+    <div class="chk"><input type="checkbox" id="ck_mail" ${c.optinEmail?'checked':''} onchange="optin('${c.id}','optinEmail',this.checked)">
+      <label for="ck_mail">Consent e-mail</label></div>
+    <h3 style="margin-top:18px;font-size:16px">Historique</h3>
+    <table><tbody>${s.os.slice(0,8).map(o=>`<tr><td><b>${o.num}</b><br><span class="note">${fdate(o.date)}</span></td>
+      <td class="note">${o.lines.map(l=>l.q+'× '+esc(l.n)).join(', ')}</td>
+      <td class="num">${eur(totaux(o).ttc)}</td>
+      <td><button class="btn ghost sm" onclick="recommander('${o.id}')">↺ Recommander</button></td></tr>`).join('')
+      || '<tr><td class="note">Aucune commande.</td></tr>'}</tbody></table>`;
+}
+function optin(id,champ,v){ S.clients.find(x=>x.id===id)[champ]=v; sauver(); renderClients(); toast('Consentement mis à jour'); }
+function recommander(oid){
+  const o = S.orders.find(x=>x.id===oid);
+  ticket.lines = JSON.parse(JSON.stringify(o.lines)); ticket.mode=o.mode;
+  go('caisse');
+  document.querySelectorAll('.seg [data-m]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.m===o.mode));
+  const c = S.clients.find(x=>x.id===o.clientId);
+  if(c) document.getElementById('posClient').value = c.prenom+' '+c.nom+' — '+telAffiche(c.tel);
+  renderTicket(); toast('Commande '+o.num+' chargée dans la caisse');
+}
+function modalClient(id){
+  const c = id ? S.clients.find(x=>x.id===id) : {prenom:'',nom:'',tel:'',email:'',ville:'',optinSms:false,optinEmail:false,notes:''};
+  ouvrir(`<button class="close" onclick="fermer()">×</button>
+    <h3>${id?'Modifier le client':'Nouveau client'}</h3><p class="sub">Le numéro est enregistré au format international (+33).</p>
+    <div class="frow"><div class="field"><label class="f">Prénom</label><input id="m_prenom" value="${esc(c.prenom)}"></div>
+    <div class="field"><label class="f">Nom</label><input id="m_nom" value="${esc(c.nom)}"></div></div>
+    <div class="frow"><div class="field"><label class="f">Téléphone</label><input id="m_tel" value="${esc(telAffiche(c.tel))}"></div>
+    <div class="field"><label class="f">Ville</label><input id="m_ville" value="${esc(c.ville)}"></div></div>
+    <div class="field"><label class="f">E-mail</label><input id="m_email" value="${esc(c.email)}"></div>
+    <div class="field"><label class="f">Notes (allergies, préférences…)</label><input id="m_notes" value="${esc(c.notes)}"></div>
+    <div class="chk"><input type="checkbox" id="m_sms" ${c.optinSms?'checked':''}><label for="m_sms">Accepte les SMS / WhatsApp</label></div>
+    <div class="chk"><input type="checkbox" id="m_mail" ${c.optinEmail?'checked':''}><label for="m_mail">Accepte les e-mails</label></div>
+    <button class="btn full" style="margin-top:12px" onclick="saveClient('${id||''}')">Enregistrer</button>`);
+}
+function saveClient(id){
+  const d = {prenom:m_prenom.value.trim(), nom:m_nom.value.trim(), tel:normTel(m_tel.value),
+    ville:m_ville.value.trim(), email:m_email.value.trim(), notes:m_notes.value.trim(),
+    optinSms:m_sms.checked, optinEmail:m_mail.checked};
+  if(!d.prenom && !d.nom) return toast('Indiquez au moins un nom.');
+  if(id){ Object.assign(S.clients.find(x=>x.id===id), d); }
+  else { d.id=uid('C'); d.cree=iso(new Date()); S.clients.push(d); id=d.id; }
+  sauver(); fermer(); renderClients(); voirClient(id); toast('Client enregistré');
+}
+/* --- reconnaissance du numéro appelant --- */
+function appelEntrant(){
+  const brut = document.getElementById('callNum').value;
+  if(!brut) return toast('Saisissez un numéro.');
+  const tel = normTel(brut), k = cleTel(tel);
+  const c = S.clients.find(x=>cleTel(x.tel)===k);
+  if(!c){
+    ouvrir(`<button class="close" onclick="fermer()">×</button>
+      <h3>☎ Appel entrant · numéro inconnu</h3><p class="sub">${telAffiche(tel)} — aucune fiche à ce numéro.</p>
+      <p class="note">Créez la fiche pendant l'appel : le numéro est déjà pré-rempli.</p>
+      <button class="btn full" style="margin-top:14px" onclick="fermer();modalClient();setTimeout(()=>{document.getElementById('m_tel').value='${telAffiche(tel)}'},50)">Créer la fiche client</button>`);
+    return;
+  }
+  const s = statsClient(c.id);
+  ouvrir(`<button class="close" onclick="fermer()">×</button>
+    <h3>☎ ${esc(c.prenom)} ${esc(c.nom)}</h3>
+    <p class="sub">${telAffiche(c.tel)} · ${esc(c.ville||'—')} · ${s.nb} commande(s) · panier moyen ${eur(s.panier)}</p>
+    <div class="preview"><b>Plat préféré :</b> ${esc(s.fav)}<br>
+      <b>Dernière commande :</b> ${s.dernier ? s.dernier.num+' du '+fdate(s.dernier.date)+' — '+s.dernier.lines.map(l=>l.q+'× '+l.n).join(', ') : 'aucune'}
+      ${c.notes?'<br><b>Notes :</b> '+esc(c.notes):''}</div>
+    <div style="display:grid;gap:9px;margin-top:16px">
+      ${s.dernier?`<button class="btn full" onclick="fermer();recommander('${s.dernier.id}')">↺ Reprendre sa dernière commande en caisse</button>`:''}
+      <button class="btn ghost full" onclick="fermer();go('clients');voirClient('${c.id}')">Ouvrir la fiche complète</button>
+    </div>
+    <p class="note" style="margin-top:12px">En production, ce panneau s'ouvre automatiquement sur l'événement d'appel entrant
+    du standard (webhook Ringover ou équivalent) : le numéro reçu est normalisé en +33 puis rapproché du fichier client.</p>`);
+}
+
+/* ============================================================
+   MENU DE LA SEMAINE / CAMPAGNES
+   ============================================================ */
+function renderSemaine(){
+  const d0 = new Date(S.semaine.debut);
+  document.getElementById('semLabel').textContent = 'Semaine du '+fdate(S.semaine.debut);
+  document.getElementById('week').innerHTML = JOURS.map((j,i)=>{
+    const d=new Date(d0); d.setDate(d0.getDate()+i);
+    const p = S.semaine.plats[i]||{p:'',x:0};
+    return `<div class="day"><div class="d">${j.toUpperCase()} ${d.getDate()}/${String(d.getMonth()+1).padStart(2,'0')}</div>
+      <input value="${esc(p.p)}" placeholder="Plat du jour" oninput="majJour(${i},'p',this.value)" list="platsList">
+      <input type="number" step="0.5" value="${p.x||''}" placeholder="Prix €" oninput="majJour(${i},'x',this.value)"></div>`;
+  }).join('') + `<datalist id="platsList">${ITEMS.map(i=>`<option value="${esc(i.n)}">`).join('')}</datalist>`;
+  document.getElementById('msgCampagne').value = S.semaine.message;
+  document.querySelectorAll('.seg [data-c]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.c===S.semaine.canal));
+  renderCampagne();
+}
+function majJour(i,champ,v){
+  S.semaine.plats[i] = S.semaine.plats[i]||{p:'',x:0};
+  S.semaine.plats[i][champ] = champ==='x' ? parseFloat(v)||0 : v;
+  sauver(); renderCampagne();
+}
+function setCanal(el){
+  document.querySelectorAll('.seg [data-c]').forEach(b=>b.setAttribute('aria-pressed','false'));
+  el.setAttribute('aria-pressed','true'); S.semaine.canal = el.dataset.c; sauver(); renderCampagne();
+}
+function texteMenu(){
+  return JOURS.map((j,i)=>{const p=S.semaine.plats[i]; return p&&p.p ? `${j} : ${p.p}${p.x?' — '+eur(p.x):''}` : null;})
+    .filter(Boolean).join('\n');
+}
+function fusion(msg, c){
+  return msg.replace(/{prenom}/g,c.prenom||'').replace(/{nom}/g,c.nom||'')
+            .replace(/{ville}/g,c.ville||'votre ville').replace(/{menu}/g,texteMenu());
+}
+function destinataires(){
+  const canal = S.semaine.canal;
+  return S.clients.filter(c => canal==='E-mail' ? (c.optinEmail && c.email) : (c.optinSms && c.tel));
+}
+function renderCampagne(){
+  S.semaine.message = document.getElementById('msgCampagne').value;
+  const dest = destinataires();
+  const ex = dest[0] || {prenom:'Sophie',nom:'Diallo',ville:'Pontault-Combault'};
+  const rendu = fusion(S.semaine.message, ex);
+  document.getElementById('previewMsg').textContent = rendu;
+  const l = rendu.length;
+  document.getElementById('compteurSms').textContent = S.semaine.canal==='SMS'
+    ? `${l} caractères · ${Math.ceil(l/160)} SMS × ${dest.length} destinataires` : `${dest.length} destinataires`;
+  document.getElementById('destinataires').innerHTML =
+    `<p class="note">Canal <b>${S.semaine.canal}</b> — seuls les clients ayant donné leur consentement sont comptés.</p>
+     <div class="kpis" style="grid-template-columns:1fr 1fr;margin:10px 0">
+       <div class="kpi"><div class="v">${dest.length}</div><div class="l">Destinataires éligibles</div></div>
+       <div class="kpi"><div class="v">${S.clients.length-dest.length}</div><div class="l">Exclus (pas d'opt-in)</div></div>
+     </div>`;
+  document.getElementById('histoCampagnes').innerHTML = S.campagnes.length
+    ? `<table><tbody>${S.campagnes.slice().reverse().slice(0,8).map(c=>
+      `<tr><td>${fdate(c.date)}</td><td>${c.canal}</td><td class="num">${c.dest} envois</td>
+       <td><button class="btn ghost sm" onclick="revoirCampagne('${c.id}')">Voir</button></td></tr>`).join('')}</tbody></table>`
+    : '<p class="note">Aucun envoi pour le moment.</p>';
+  sauver();
+}
+function envoyerCampagne(){
+  const dest = destinataires();
+  if(!dest.length) return toast('Aucun destinataire avec consentement.');
+  if(!texteMenu()) return toast('Renseignez au moins un plat du jour.');
+  const c = {id:uid('k'), date:new Date().toISOString(), canal:S.semaine.canal, dest:dest.length,
+    message:S.semaine.message, menu:texteMenu()};
+  S.campagnes.push(c); sauver(); renderCampagne();
+  toast(dest.length+' messages préparés pour '+S.semaine.canal);
+  ouvrir(`<button class="close" onclick="fermer()">×</button>
+    <h3>Campagne prête</h3><p class="sub">${dest.length} destinataires · canal ${S.semaine.canal}</p>
+    <div class="preview">${esc(fusion(S.semaine.message, dest[0]))}</div>
+    <p class="note" style="margin-top:14px">Cette maquette n'expédie pas les messages elle-même. Deux options :
+    exporter le CSV et l'importer dans Brevo / Ringover, ou brancher l'API du fournisseur sur cette fonction
+    (une requête par lot de destinataires, avec le message déjà fusionné).</p>
+    <button class="btn full" style="margin-top:12px" onclick="exportCSV('campagne');fermer()">Exporter le CSV d'envoi</button>`);
+}
+function revoirCampagne(id){
+  const c = S.campagnes.find(x=>x.id===id);
+  ouvrir(`<button class="close" onclick="fermer()">×</button><h3>Campagne du ${fdate(c.date)}</h3>
+    <p class="sub">${c.canal} · ${c.dest} destinataires</p><div class="preview">${esc(c.message)}</div>
+    <p class="note" style="margin-top:12px">Menu diffusé :</p><div class="preview">${esc(c.menu)}</div>`);
+}
+
+/* ============================================================
+   FACTURES
+   ============================================================ */
+function renderFactures(){
+  const list = S.invoices.slice().sort((a,b)=>b.num.localeCompare(a.num)).slice(0,40);
+  document.getElementById('tblFactures').innerHTML = `<table><thead><tr>
+    <th>N° FACTURE</th><th>DATE</th><th>CLIENT</th><th class="num">HT</th><th class="num">TVA</th><th class="num">TTC</th><th>STATUT</th><th></th>
+    </tr></thead><tbody>${list.map(f=>{
+      const o = S.orders.find(x=>x.id===f.orderId); if(!o) return '';
+      const t = totaux(o), c = S.clients.find(x=>x.id===o.clientId);
+      return `<tr><td><b>${f.num}</b></td><td>${fdate(f.date)}</td>
+        <td>${c?esc(c.prenom+' '+c.nom):'<span class="note">Client comptoir</span>'}</td>
+        <td class="num">${eur(t.ht)}</td><td class="num">${eur(t.tva)}</td><td class="num"><b>${eur(t.ttc)}</b></td>
+        <td><span class="st ${f.statut==='Payée'?'g':'y'}">${f.statut.toUpperCase()}</span></td>
+        <td><button class="btn ghost sm" onclick="voirFacture('${f.id}')">Ouvrir</button></td></tr>`;}).join('')}</tbody></table>`;
+}
+function voirFacture(id){
+  const f = S.invoices.find(x=>x.id===id), o = S.orders.find(x=>x.id===f.orderId);
+  const t = totaux(o), c = S.clients.find(x=>x.id===o.clientId), P = S.params;
+  document.getElementById('zoneFacture').innerHTML = `
+   <div class="rowb noprint" style="margin-bottom:10px">
+     <h3 style="margin:0">Facture ${f.num}</h3>
+     <div style="display:flex;gap:8px">
+       <button class="btn ghost sm" onclick="basculerStatut('${f.id}')">Marquer ${f.statut==='Payée'?'à régler':'payée'}</button>
+       <button class="btn sm" onclick="window.print()">Imprimer / PDF</button>
+     </div>
+   </div>
+   <div class="inv">
+     <div class="top">
+       <div><h2>${esc(P.nom)}</h2>
+         <div class="note">${esc(P.adresse)}<br>SIRET ${esc(P.siret)} · TVA ${esc(P.tvaNum)}<br>
+         ${telAffiche(P.tel)} · ${esc(P.email)}</div></div>
+       <div style="text-align:right">
+         <div class="pill">FACTURE</div>
+         <div class="mono" style="font-size:19px;font-weight:700;margin:6px 0">${f.num}</div>
+         <div class="note">Date d'émission : ${fdate(f.date)}<br>
+         Date de la prestation : ${fdate(o.date)}<br>Commande ${o.num} · ${o.mode}</div>
+       </div>
+     </div>
+     <div style="display:flex;gap:40px;margin-bottom:8px">
+       <div><div class="pill">CLIENT</div>
+         <div style="margin-top:8px">${c?`<b>${esc(c.prenom)} ${esc(c.nom)}</b><br><span class="note">${telAffiche(c.tel)}<br>${esc(c.ville||'')}</span>`
+           :'<b>Client comptoir</b><br><span class="note">Vente au détail</span>'}</div></div>
+       <div><div class="pill">RÈGLEMENT</div>
+         <div style="margin-top:8px">${o.paiement}<br><span class="note">${f.statut==='Payée'?'Réglée le '+fdate(f.date):'À régler sous 30 jours'}</span></div></div>
+     </div>
+     <table><thead><tr><th>DÉSIGNATION</th><th class="num">QTÉ</th><th class="num">P.U. TTC</th><th class="num">TVA</th><th class="num">TOTAL TTC</th></tr></thead>
+       <tbody>${o.lines.map(l=>`<tr><td>${esc(l.n)}</td><td class="num">${l.q}</td>
+         <td class="num">${eur(l.p)}</td><td class="num">${nb(t.taux)} %</td><td class="num">${eur(l.p*l.q)}</td></tr>`).join('')}
+         ${o.remise?`<tr><td>Remise commerciale</td><td class="num">1</td><td class="num">−${eur(o.remise)}</td><td class="num">${nb(t.taux)} %</td><td class="num">−${eur(o.remise)}</td></tr>`:''}
+         ${o.fraisLiv?`<tr><td>Frais de livraison</td><td class="num">1</td><td class="num">${eur(o.fraisLiv)}</td><td class="num">${nb(t.taux)} %</td><td class="num">${eur(o.fraisLiv)}</td></tr>`:''}
+       </tbody></table>
+     <div style="display:flex;justify-content:flex-end">
+       <table style="width:320px">
+         <tr><td>Total HT</td><td class="num">${eur(t.ht)}</td></tr>
+         <tr><td>TVA ${nb(t.taux)} %</td><td class="num">${eur(t.tva)}</td></tr>
+         <tr><td><b>Total TTC</b></td><td class="num"><b style="font-size:18px;color:var(--terra)">${eur(t.ttc)}</b></td></tr>
+       </table>
+     </div>
+     <div class="legal">
+       TVA acquittée sur les encaissements. Taux appliqué : ${nb(t.taux)} % (${o.mode==='sur place'?'consommation sur place':'vente à emporter / livraison de produits alimentaires'}).<br>
+       En cas de retard de paiement, pénalités au taux d'intérêt légal majoré et indemnité forfaitaire pour frais de recouvrement de 40 € (professionnels, art. L441-10 du Code de commerce). Pas d'escompte pour paiement anticipé.<br>
+       Facture émise par un logiciel de caisse — conservation de l'exemplaire dans les conditions prévues par la réglementation. Format Factur-X (facture électronique) prévu pour les clients professionnels.
+     </div>
+   </div>`;
+  document.getElementById('zoneFacture').scrollIntoView({behavior:'smooth'});
+}
+function basculerStatut(id){ const f=S.invoices.find(x=>x.id===id); f.statut = f.statut==='Payée'?'À régler':'Payée'; sauver(); renderFactures(); voirFacture(id); }
+
+/* ============================================================
+   BPF & COMPTABILITÉ
+   ============================================================ */
+function periode(p){
+  const a = new Date();
+  const d = p==='mois' ? new Date(a.getFullYear(), a.getMonth(), 1) : new Date(Date.now()-30*864e5);
+  document.getElementById('du').value = iso(d);
+  document.getElementById('au').value = iso(a);
+  renderCompta();
+}
+function bornes(){
+  const du = document.getElementById('du').value || iso(new Date(Date.now()-30*864e5));
+  const au = document.getElementById('au').value || iso(new Date());
+  return [du, au];
+}
+function commandesPeriode(){
+  const [du,au] = bornes();
+  return S.orders.filter(o=>{const d=o.date.slice(0,10); return d>=du && d<=au;});
+}
+function renderCompta(){
+  if(!document.getElementById('du').value) periode('mois');
+  const os = commandesPeriode();
+  const ttc = os.reduce((s,o)=>s+totaux(o).ttc,0);
+  const ht  = os.reduce((s,o)=>s+totaux(o).ht,0);
+  const tva = ttc-ht;
+  document.getElementById('bpfKpis').innerHTML = [
+    ['💶', eur(ht), 'Chiffre d\'affaires HT'],
+    ['🧾', eur(tva), 'TVA collectée'],
+    ['🛒', eur(ttc), 'Encaissements TTC'],
+    ['📦', os.length, 'Tickets / commandes']
+  ].map(k=>`<div class="kpi"><div class="top"><span class="ico">${k[0]}</span></div>
+    <div class="v">${k[1]}</div><div class="l">${k[2]}</div></div>`).join('');
+
+  const agr = (cle) => { const m={}; os.forEach(o=>{const t=totaux(o); const k=cle(o,t);
+    m[k]=m[k]||{ht:0,tva:0,ttc:0,n:0}; m[k].ht+=t.ht; m[k].tva+=t.tva; m[k].ttc+=t.ttc; m[k].n++;}); return m; };
+  const tbl = (m, entete) => `<table><thead><tr><th>${entete}</th><th class="num">HT</th><th class="num">TVA</th><th class="num">TTC</th></tr></thead>
+    <tbody>${Object.entries(m).map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${eur(v.ht)}</td>
+      <td class="num">${eur(v.tva)}</td><td class="num"><b>${eur(v.ttc)}</b></td></tr>`).join('')}</tbody></table>`;
+  document.getElementById('tvaTable').innerHTML  = tbl(agr((o,t)=>'TVA '+nb(t.taux)+' %'),'TAUX');
+  document.getElementById('payTable').innerHTML  = tbl(agr(o=>o.paiement),'MOYEN');
+  document.getElementById('modeTable').innerHTML = tbl(agr(o=>o.mode),'MODE');
+
+  // Z du jour
+  const auj = iso(new Date());
+  const zo = S.orders.filter(o=>o.date.slice(0,10)===auj);
+  const zttc = zo.reduce((s,o)=>s+totaux(o).ttc,0);
+  const cumul = S.orders.reduce((s,o)=>s+totaux(o).ttc,0);
+  document.getElementById('zCaisse').innerHTML = `<table><tbody>
+    <tr><td>Date</td><td class="num">${fdate(auj)}</td></tr>
+    <tr><td>Tickets du jour</td><td class="num">${zo.length}</td></tr>
+    <tr><td>Total TTC du jour</td><td class="num"><b>${eur(zttc)}</b></td></tr>
+    <tr><td>dont espèces</td><td class="num">${eur(zo.filter(o=>o.paiement==='Espèces').reduce((s,o)=>s+totaux(o).ttc,0))}</td></tr>
+    <tr><td>dont CB</td><td class="num">${eur(zo.filter(o=>o.paiement==='CB').reduce((s,o)=>s+totaux(o).ttc,0))}</td></tr>
+    <tr><td>Grand total perpétuel</td><td class="num">${eur(cumul)}</td></tr>
+    </tbody></table>`;
+}
+
+/* ============================================================
+   EXPORTS CSV
+   ============================================================ */
+function dl(nom, lignes){
+  const csv = '\uFEFF' + lignes.map(l=>l.map(c=>{
+    const s = String(c??'').replace(/"/g,'""');
+    return /[";\n]/.test(s) ? '"'+s+'"' : s;
+  }).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));
+  a.download = nom; a.click(); URL.revokeObjectURL(a.href);
+  toast('Export : '+nom);
+}
+function exportCSV(type){
+  const [du,au] = document.getElementById('du') ? bornes() : ['',''];
+  const nomC = o => { const c=S.clients.find(x=>x.id===o.clientId); return c ? c.prenom+' '+c.nom : 'Client comptoir'; };
+  const telC = o => { const c=S.clients.find(x=>x.id===o.clientId); return c ? c.tel : ''; };
+
+  if(type==='commandes'){
+    dl('o3-commandes.csv', [['N°','Date','Heure','Client','Téléphone','Mode','Détail','HT','TVA','TTC','Paiement','Statut'],
+      ...S.orders.map(o=>{const t=totaux(o); return [o.num, o.date.slice(0,10), o.date.slice(11,16), nomC(o), telC(o), o.mode,
+        o.lines.map(l=>l.q+'x '+l.n).join(' | '), nb(t.ht), nb(t.tva), nb(t.ttc), o.paiement, o.statut];})]);
+  }
+  else if(type==='clients'){
+    dl('o3-clients.csv', [['ID','Prénom','Nom','Téléphone E164','Email','Ville','Optin SMS','Optin Email','Commandes','CA TTC','Panier moyen','Dernière commande','Créé le','Notes'],
+      ...S.clients.map(c=>{const s=statsClient(c.id); return [c.id,c.prenom,c.nom,c.tel,c.email,c.ville,
+        c.optinSms?'OUI':'NON', c.optinEmail?'OUI':'NON', s.nb, nb(s.ca), nb(s.panier),
+        s.dernier?s.dernier.date.slice(0,10):'', c.cree, c.notes];})]);
+  }
+  else if(type==='campagne'){
+    const dest = destinataires();
+    if(!dest.length) return toast('Aucun destinataire.');
+    dl('o3-campagne-menu-semaine.csv', [['PRENOM','NOM','SMS','EMAIL','VILLE','CANAL','MESSAGE'],
+      ...dest.map(c=>[c.prenom,c.nom,c.tel,c.email,c.ville,S.semaine.canal,fusion(S.semaine.message,c)])]);
+  }
+  else if(type==='factures'){
+    dl('o3-factures.csv', [['N° facture','Date','Client','Mode','Taux TVA','HT','TVA','TTC','Paiement','Statut'],
+      ...S.invoices.map(f=>{const o=S.orders.find(x=>x.id===f.orderId); if(!o) return null; const t=totaux(o);
+        return [f.num, f.date.slice(0,10), nomC(o), o.mode, nb(t.taux), nb(t.ht), nb(t.tva), nb(t.ttc), o.paiement, f.statut];}).filter(Boolean)]);
+  }
+  else if(type==='ventes'){
+    const rows=[['Date','N° commande','N° facture','Client','Mode','Article','Catégorie','Qté','PU TTC','Total TTC','Taux TVA','Total HT','TVA']];
+    commandesPeriode().forEach(o=>{
+      const t=totaux(o), f=S.invoices.find(x=>x.orderId===o.id);
+      o.lines.forEach(l=>{
+        const it=ITEMS.find(i=>i.id===l.id), lttc=l.p*l.q, lht=lttc/(1+t.taux/100);
+        rows.push([o.date.slice(0,10), o.num, f?f.num:'', nomC(o), o.mode, l.n, it?CATS[it.c]:'', l.q,
+          nb(l.p), nb(lttc), nb(t.taux), nb(lht), nb(lttc-lht)]);
+      });
+    });
+    dl('o3-journal-ventes_'+du+'_'+au+'.csv', rows);
+  }
+  else if(type==='ecritures'){
+    const rows=[['Journal','Date','Pièce','Compte','Libellé compte','Libellé écriture','Débit','Crédit']];
+    commandesPeriode().forEach(o=>{
+      const t=totaux(o), f=S.invoices.find(x=>x.orderId===o.id), p=f?f.num:o.num, d=o.date.slice(0,10);
+      const lib='Vente '+o.mode+' '+nomC(o);
+      rows.push(['VE',d,p,'411000','Clients',lib,nb(t.ttc),'']);
+      rows.push(['VE',d,p,'707000','Ventes de marchandises',lib,'',nb(t.ht)]);
+      rows.push(['VE',d,p,t.taux===20?'445713':(t.taux===10?'445712':'445711'),'TVA collectée '+nb(t.taux)+' %',lib,'',nb(t.tva)]);
+      const cpt = o.paiement==='Espèces' ? '530000' : '512000';
+      rows.push(['BQ',d,p, cpt, o.paiement==='Espèces'?'Caisse':'Banque','Encaissement '+p,nb(t.ttc),'']);
+      rows.push(['BQ',d,p,'411000','Clients','Encaissement '+p,'',nb(t.ttc)]);
+    });
+    dl('o3-ecritures-comptables_'+du+'_'+au+'.csv', rows);
+  }
+  else if(type==='tva'){
+    const m={}; commandesPeriode().forEach(o=>{const t=totaux(o); const k=nb(t.taux);
+      m[k]=m[k]||{ht:0,tva:0,ttc:0,n:0}; m[k].ht+=t.ht; m[k].tva+=t.tva; m[k].ttc+=t.ttc; m[k].n++;});
+    dl('o3-tva_'+du+'_'+au+'.csv', [['Période du',du,'au',au],[],['Taux TVA','Base HT','TVA collectée','TTC','Nb tickets'],
+      ...Object.entries(m).map(([k,v])=>[k+' %', nb(v.ht), nb(v.tva), nb(v.ttc), v.n])]);
+  }
+  else if(type==='bpf'){
+    const os = commandesPeriode();
+    const somme = f => os.reduce((s,o)=>s+f(totaux(o),o),0);
+    const grp = (cle) => { const m={}; os.forEach(o=>{const t=totaux(o); const k=cle(o,t);
+      m[k]=m[k]||{ht:0,tva:0,ttc:0,n:0}; m[k].ht+=t.ht;m[k].tva+=t.tva;m[k].ttc+=t.ttc;m[k].n++;}); return m; };
+    const bloc=(titre,m)=>[[],[titre],['Libellé','HT','TVA','TTC','Nb'],
+      ...Object.entries(m).map(([k,v])=>[k, nb(v.ht), nb(v.tva), nb(v.ttc), v.n])];
+    const cnt={}; os.forEach(o=>o.lines.forEach(l=>{cnt[l.n]=cnt[l.n]||{q:0,ca:0};
+      cnt[l.n].q+=l.q; cnt[l.n].ca+=l.p*l.q;}));
+    dl('o3-BPF_'+du+'_'+au+'.csv', [
+      ['BILAN PÉRIODIQUE FINANCIER — '+S.params.nom],
+      ['Période', du, 'au', au],
+      ['SIRET', S.params.siret, 'TVA', S.params.tvaNum],
+      [],
+      ['SYNTHÈSE'],
+      ['Chiffre d\'affaires HT', nb(somme(t=>t.ht))],
+      ['TVA collectée', nb(somme(t=>t.tva))],
+      ['Chiffre d\'affaires TTC', nb(somme(t=>t.ttc))],
+      ['Nombre de tickets', os.length],
+      ['Panier moyen TTC', nb(os.length?somme(t=>t.ttc)/os.length:0)],
+      ['Remises accordées', nb(os.reduce((s,o)=>s+(o.remise||0),0))],
+      ['Frais de livraison encaissés', nb(os.reduce((s,o)=>s+(o.fraisLiv||0),0))],
+      ...bloc('VENTILATION PAR TAUX DE TVA', grp((o,t)=>'TVA '+nb(t.taux)+' %')),
+      ...bloc('VENTILATION PAR MODE DE VENTE', grp(o=>o.mode)),
+      ...bloc('VENTILATION PAR MOYEN DE PAIEMENT', grp(o=>o.paiement)),
+      ...bloc('VENTILATION PAR JOUR', grp(o=>o.date.slice(0,10))),
+      [],['TOP ARTICLES'],['Article','Quantité','CA TTC'],
+      ...Object.entries(cnt).sort((a,b)=>b[1].ca-a[1].ca).map(([k,v])=>[k, v.q, nb(v.ca)])
+    ]);
+  }
+  else if(type==='z'){
+    const auj = iso(new Date());
+    const zo = S.orders.filter(o=>o.date.slice(0,10)===auj);
+    const sum = f => zo.reduce((s,o)=>s+f(totaux(o),o),0);
+    const parPay={}, parTaux={};
+    zo.forEach(o=>{const t=totaux(o); parPay[o.paiement]=(parPay[o.paiement]||0)+t.ttc;
+      parTaux[nb(t.taux)]=(parTaux[nb(t.taux)]||0)+t.tva;});
+    dl('o3-ticketZ_'+auj+'.csv', [
+      ['TICKET Z — CLÔTURE DE CAISSE'],[S.params.nom],['Date', fdate(auj)],['Édité le', new Date().toLocaleString('fr-FR')],
+      [],['Nombre de tickets', zo.length],['Total TTC', nb(sum(t=>t.ttc))],['Total HT', nb(sum(t=>t.ht))],['TVA', nb(sum(t=>t.tva))],
+      [],['PAR MOYEN DE PAIEMENT'], ...Object.entries(parPay).map(([k,v])=>[k, nb(v)]),
+      [],['TVA PAR TAUX'], ...Object.entries(parTaux).map(([k,v])=>[k+' %', nb(v)]),
+      [],['Grand total perpétuel TTC', nb(S.orders.reduce((s,o)=>s+totaux(o).ttc,0))]
+    ]);
+  }
+}
+
+/* ============================================================
+   PARAMÈTRES / SAUVEGARDE
+   ============================================================ */
+function renderParams(){
+  const P=S.params;
+  s_nom.value=P.nom; s_adr.value=P.adresse; s_siret.value=P.siret; s_tva.value=P.tvaNum;
+  s_tel.value=telAffiche(P.tel); s_mail.value=P.email; s_tva1.value=P.tvaSurPlace; s_tva2.value=P.tvaEmporter;
+}
+function saveParams(){
+  Object.assign(S.params,{nom:s_nom.value, adresse:s_adr.value, siret:s_siret.value, tvaNum:s_tva.value,
+    tel:normTel(s_tel.value), email:s_mail.value,
+    tvaSurPlace:parseFloat(s_tva1.value)||10, tvaEmporter:parseFloat(s_tva2.value)||5.5});
+  sauver(); toast('Paramètres enregistrés');
+}
+function exportSauvegarde(){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));
+  a.download='o3-sauvegarde-'+iso(new Date())+'.json'; a.click(); URL.revokeObjectURL(a.href);
+  toast('Sauvegarde téléchargée');
+}
+function importSauvegarde(e){
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ S=JSON.parse(r.result); sauver(); go('dash'); toast('Sauvegarde importée'); }
+    catch(err){ toast('Fichier illisible'); } };
+  r.readAsText(f);
+}
+function resetDemo(){ S=demo(); sauver(); go('dash'); toast('Données de démo rechargées'); }
+
+/* ---------- modale ---------- */
+function ouvrir(html){ document.getElementById('modal').innerHTML=html; document.getElementById('mask').classList.add('on'); }
+function fermer(){ document.getElementById('mask').classList.remove('on'); }
+document.getElementById('mask').addEventListener('click',e=>{ if(e.target.id==='mask') fermer(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') fermer(); });
+document.getElementById('callNum').addEventListener('keydown',e=>{ if(e.key==='Enter') appelEntrant(); });
+
+/* ---------- démarrage ---------- */
+(async function init(){
+  S = await charger() || demo();
+  document.getElementById('today').textContent = new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  go('dash'); sauver();
+})();
+</script>
+</body>
+</html>

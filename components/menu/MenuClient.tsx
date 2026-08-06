@@ -6,9 +6,47 @@ import type { Dish } from "@/lib/menu";
 import type { Allergen } from "@/lib/types";
 import { useDishes } from "@/components/providers/DishesContext";
 import { DishCard } from "@/components/DishCard";
-import { Icon } from "@/components/Icon";
+import { Icon, type IconName } from "@/components/Icon";
 import { MenuFilters, EMPTY_FILTERS, countActive } from "./MenuFilters";
 import type { FiltersState } from "./MenuFilters";
+
+/**
+ * « Vous avez une envie de… ? » — raccourcis de découverte, en plus des
+ * filtres classiques. Chaque envie est un test sur les données déjà présentes
+ * (tags, catégorie, badge) : pas de nouveau champ en base.
+ */
+interface Envie {
+  key: string;
+  label: string;
+  icon: IconName;
+  test: (d: Dish) => boolean;
+}
+
+const hasTag = (d: Dish, re: RegExp) => d.tags.some((t) => re.test(t));
+
+const ENVIES: Envie[] = [
+  { key: "epice", label: "Épicé", icon: "flame", test: (d) => hasTag(d, /épic|piquant/i) },
+  {
+    key: "leger",
+    label: "Léger",
+    icon: "leaf",
+    test: (d) => d.badge === "Healthy" || hasTag(d, /frais|léger|salade/i),
+  },
+  {
+    key: "copieux",
+    label: "Copieux",
+    icon: "flame",
+    test: (d) => ["grillades", "africaine", "maghreb"].includes(d.cat),
+  },
+  { key: "vege", label: "Végé", icon: "leaf", test: (d) => hasTag(d, /végé/i) },
+  { key: "sucre", label: "Sucré", icon: "sparkle", test: (d) => d.cat === "desserts" },
+  {
+    key: "rapide",
+    label: "Rapide",
+    icon: "clock",
+    test: (d) => ["sandwichs", "accompagnements"].includes(d.cat),
+  },
+];
 
 /* La carte n'existait que côté navigateur : `useDishes()` part d'une liste vide
  * et appelle `/api/dishes` au montage. Le HTML servi pour `/carte` ne contenait
@@ -24,6 +62,7 @@ export function MenuClient({ initial = [] }: { initial?: Dish[] }) {
 
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState<FiltersState>(EMPTY_FILTERS);
+  const [envie, setEnvie] = useState<string | null>(null);
   const [activeCat, setActiveCat] = useState<string>(cats[0].id);
   const [drawer, setDrawer] = useState(false);
 
@@ -50,8 +89,11 @@ export function MenuClient({ initial = [] }: { initial?: Dish[] }) {
     return [...s].sort();
   }, [dishes]);
 
+  const envieDef = envie ? ENVIES.find((e) => e.key === envie) : undefined;
+
   const filtered = useMemo(() => {
     const out = dishes.filter((it) => {
+      if (envieDef && !envieDef.test(it)) return false;
       if (filters.badges.size > 0) {
         const match =
           (filters.badges.has("popular") && it.popular) ||
@@ -81,7 +123,7 @@ export function MenuClient({ initial = [] }: { initial?: Dish[] }) {
       });
     }
     return out;
-  }, [dishes, q, filters]);
+  }, [dishes, q, filters, envieDef]);
 
   // regroupe par catégorie en gardant l'ordre de `cats`
   const grouped = useMemo(
@@ -201,6 +243,46 @@ export function MenuClient({ initial = [] }: { initial?: Dish[] }) {
         </div>
       </div>
 
+      {/* ── Vous avez une envie de… ? ─────────────────────
+          Raccourci de découverte, séparé du panneau de filtres : une question
+          amicale plutôt qu'un formulaire, pour quelqu'un qui ne sait pas
+          encore quel plat il veut plutôt que quelqu'un qui cherche un plat
+          précis. Cliquer une pastille filtre la carte comme n'importe quel
+          autre filtre — chaque plat qui reste a déjà son bouton d'ajout
+          rapide. */}
+      <div className="wrap pt-6">
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel-2 p-4 sm:p-5">
+          <p className="mb-3 font-display text-lg text-brick">Vous avez une envie de…&nbsp;?</p>
+          <div className="flex flex-wrap gap-2">
+            {ENVIES.map((e) => (
+              <button
+                key={e.key}
+                type="button"
+                onClick={() => setEnvie((cur) => (cur === e.key ? null : e.key))}
+                aria-pressed={envie === e.key}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                  envie === e.key
+                    ? "border-primary bg-primary text-white"
+                    : "border-line bg-panel text-ink hover:border-primary/40"
+                }`}
+              >
+                <Icon name={e.icon} size={15} />
+                {e.label}
+              </button>
+            ))}
+            {envie && (
+              <button
+                type="button"
+                onClick={() => setEnvie(null)}
+                className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-ink-2 hover:text-brick"
+              >
+                <Icon name="x" size={14} /> Effacer
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Mention allergènes — obligation d'information (règlement UE 1169/2011).
           Le texte annonçait « les allergènes majeurs sont indiqués sous chaque
           plat » quel que soit l'état réel du catalogue. Tant qu'aucune fiche
@@ -263,12 +345,13 @@ export function MenuClient({ initial = [] }: { initial?: Dish[] }) {
               <Icon name="search" size={48} className="opacity-30" />
               <p className="text-lg font-bold">Aucun plat trouvé</p>
               <p>Essayez un autre mot-clé ou réinitialisez les filtres.</p>
-              {(nbActifs > 0 || q) && (
+              {(nbActifs > 0 || q || envie) && (
                 <button
                   type="button"
                   onClick={() => {
                     setFilters(EMPTY_FILTERS);
                     setQuery("");
+                    setEnvie(null);
                   }}
                   className="mt-1 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white transition hover:brightness-105"
                 >

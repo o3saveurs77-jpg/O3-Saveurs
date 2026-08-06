@@ -80,13 +80,43 @@ export interface Zone {
   zips: string[];
 }
 
-export interface Formule {
+/**
+ * Formule servie par l'API, lue depuis la base.
+ *
+ * Une formule n'est pas un plat : c'est un prix fixe et une composition. Le
+ * client choisit un plat par créneau, le serveur facture le prix de la formule
+ * plus les suppléments des plats retenus (voir `lib/formulas.ts`).
+ */
+export interface Formula {
   id: string;
+  /** pastille courte : F1, F2… */
+  code: string;
   name: string;
-  /** en centimes */
-  priceCents: number;
   desc: string;
   extra: string;
+  /** en centimes */
+  priceCents: number;
+  active: boolean;
+  position: number;
+  slots: FormulaSlot[];
+}
+
+export interface FormulaSlot {
+  id: string;
+  label: string;
+  required: boolean;
+  position: number;
+  choices: FormulaChoice[];
+}
+
+export interface FormulaChoice {
+  id: string;
+  dishId: string;
+  /** supplément en centimes, 0 le plus souvent */
+  supplementCents: number;
+  position: number;
+  /** plat rattaché — présent côté public pour éviter un second aller-retour */
+  dish?: Dish;
 }
 
 // ─── Données de seed (en euros, lisibles) ──────────────────────
@@ -133,9 +163,9 @@ export const info = {
   name: "Ô 3 Saveurs",
   tag: "Chez Laila",
   sub: "Cuisine du monde",
-  baseline: "Afrique · Maghreb · Asie — préparé maison, livré chez vous.",
+  baseline: "Afrique · Maghreb · Méditerranée — préparé maison, livré chez vous.",
   phone: "01 72 84 52 44",
-  address: "6 bis rue du Village, 77185 Lognes",
+  address: "38 rue des Prés Saint-Martin, 77340 Pontault-Combault",
   hours: [
     { d: "Lun – Jeu", h: "11h30 – 14h30  ·  18h00 – 22h45" },
     { d: "Vendredi", h: "18h00 – 22h45  ·  (fermé le midi)" },
@@ -176,31 +206,35 @@ export const info = {
   ],
 };
 
-// Zones de livraison — les communes couvertes varient (colonne `villes`/`zips`),
-// mais le tarif est désormais unique : 4,00 € de frais, 15 € de commande minimum,
-// quelle que soit la zone. La livraison est offerte à partir de 40 € d'achat
-// (promotion automatique "free_delivery", gérée dans /admin/promotions).
+// Zones de livraison à paliers, centrées sur Pontault-Combault — minimum de
+// commande et frais croissent avec la distance (voir la maquette de
+// référence). Remplace l'ancien tarif unique à 15 €/4 €.
 export const zones: SeedZone[] = [
-  { min: 15, fee: 4, villes: ["Lognes", "Noisiel", "Croissy-Beaubourg", "Torcy", "Champs-sur-Marne", "Émerainville", "Collégien"], zips: ["77185", "77186", "77183", "77200", "77420", "77184", "77090"] },
-  { min: 15, fee: 4, villes: ["Bussy-Saint-Georges", "Noisy-le-Grand", "Vaires-sur-Marne", "Ferrières-en-Brie"], zips: ["77600", "93160", "77360", "77164"] },
-  { min: 15, fee: 4, villes: ["Pontault-Combault", "Lagny-sur-Marne", "Roissy-en-Brie"], zips: ["77340", "77400", "77680"] },
-  { min: 15, fee: 4, villes: ["Chessy", "Bailly-Romainvilliers", "Serris", "Montévrain", "Magny-le-Hongre"], zips: ["77700", "77144"] },
+  { min: 15, fee: 2.5, villes: ["Pontault-Combault", "Roissy-en-Brie", "Ozoir-la-Ferrière"], zips: ["77340", "77680", "77330"] },
+  { min: 20, fee: 3.5, villes: ["Émerainville", "Croissy-Beaubourg", "Pontcarré", "Lognes"], zips: ["77184", "77183", "77135", "77185"] },
+  { min: 25, fee: 4.5, villes: ["Noisiel", "Torcy", "Champs-sur-Marne", "Brou-sur-Chantereine"], zips: ["77186", "77200", "77420", "77177"] },
+  { min: 35, fee: 5.5, villes: ["Bussy-Saint-Georges", "Noisy-le-Grand", "Chelles", "Lagny-sur-Marne"], zips: ["77600", "93160", "77500", "77400"] },
 ];
 
 export const cats: Category[] = [
   { id: "entrees", label: "Entrées", script: "Entrées" },
   { id: "salades", label: "Salades & Bowls", script: "Salades & Bowls" },
   { id: "maghreb", label: "Saveur du Maghreb", script: "Saveur du Maghreb" },
-  { id: "asiatique", label: "Saveur d'Asie", script: "Saveur d'Asie" },
-  { id: "africaine", label: "Saveur Africaine", script: "Saveur Africaine" },
+  { id: "medit", label: "Saveur Méditerranéenne", script: "Saveur Méditerranéenne" },
+  { id: "africaine", label: "Saveur d'Afrique de l'Ouest", script: "Saveur d'Afrique de l'Ouest" },
   { id: "grillades", label: "Grillades", script: "Grillades" },
-  { id: "sandwichs", label: "Sandwichs Baguette", script: "Sandwichs Baguette" },
+  { id: "sandwichs", label: "Sandwichs", script: "Sandwichs" },
   { id: "accompagnements", label: "Accompagnements", script: "Accompagnements" },
-  { id: "boissons", label: "Boissons Maison", script: "Boissons Maison" },
+  { id: "boissons", label: "Boissons", script: "Boissons" },
   { id: "desserts", label: "Desserts", script: "Desserts" },
 ];
 
-export const sauces = ["Sauce Niamey", "Piment maison", "Sriracha"];
+/* Sauces proposées avec les sandwichs. La liste précédente — « Sauce Niamey »,
+ * « Piment maison », « Sriracha » — ne correspondait à rien de vendu : la carte
+ * officielle ne connaît que les deux sauces maison, reprises telles quelles ci-
+ * dessous. Un client se voyait donc imposer un choix entre trois sauces dont
+ * aucune n'existait au comptoir. */
+export const sauces = ["Sauce Ô3 Verte", "Sauce Ô3 Piquante", "Sans sauce"];
 const rizOpt: SeedDishOption = { name: "Riz", required: true, choices: [{ l: "Riz blanc" }, { l: "Riz rouge" }] };
 
 // helper de création
@@ -218,95 +252,235 @@ const D = (o: DishInput): SeedDish => ({
   ...o,
 });
 
+/*
+ * Transcription de la carte officielle remise par la cliente le 2026-08-06
+ * (`O3-Saveurs Carte-mise-a-jour.pdf`, 53 plats numérotés) — c'est elle qui
+ * fait foi, et non les maquettes HTML antérieures.
+ *
+ * Deux corrections par rapport à la transcription du 2026-08-05, qui s'appuyait
+ * sur ces maquettes :
+ *  · les plats sénégalais s'appellent **Tcheb**, pas « Thiéboudiène ». Le
+ *    renommage précédent contredisait la carte imprimée, et surtout il
+ *    désaccordait la clé de `FORMULA_SUPPLEMENTS` du nom réel du plat : le
+ *    supplément de 4 € du Tcheb Poisson n'était plus jamais appliqué, et la
+ *    formule partait à perte ;
+ *  · « Saveur Méditerranéenne » ne figure pas parmi les familles ouvertes au
+ *    créneau « plat » des formules (voir `PLAT_CATS`).
+ *
+ * Les plats de l'ancienne carte absents du PDF (Yassa Bœuf, Mafé Poulet,
+ * Athiéké Poisson, Bowl Quinoa, Banh Mì, Loc Lac Bœuf, Bo Bun, Nouilles
+ * Sautées, Degué, Panna Cotta) ne sont pas repris ici — voir
+ * `RECONCILIATION-CARTE.md` pour leur sort en base.
+ */
 export const items: SeedDish[] = [
   // ENTRÉES
-  D({ cat: "entrees", name: "Pastels Thon", desc: "4 pièces · feuilletés croustillants au thon relevé", price: 6, tags: ["4 pièces"], photo: null }),
-  D({ cat: "entrees", name: "Pastels Viande hachée", desc: "4 pièces · bœuf haché épicé, pâte dorée", price: 7, tags: ["4 pièces"], photo: null }),
-  D({ cat: "entrees", name: "Pastels Poulet", desc: "4 pièces · effiloché de poulet aux épices douces", price: 7, tags: ["4 pièces"], photo: null }),
-  D({ cat: "entrees", name: "Salade composée", desc: "Salade fraîche, tomates cerises, vinaigrette à l'huile d'olive", price: 4, photo: photo(21), tags: ["Végé"] }),
-  D({ cat: "entrees", name: "Patates fourrées", desc: "4 pièces · pommes de terre garnies, panées maison", price: 4, tags: ["4 pièces"], photo: null }),
+  D({ cat: "entrees", name: "Pastels Thon", desc: "Feuilletés croustillants au thon relevé — dorés et craquants.", price: 6, tags: ["6 pièces", "Croustillant"], photo: null }),
+  D({ cat: "entrees", name: "Pastels Viande hachée", desc: "Bœuf haché épicé en pâte dorée et croustillante.", price: 7, tags: ["6 pièces", "Épicé"], photo: null }),
+  D({ cat: "entrees", name: "Pastels Poulet", desc: "Effiloché de poulet aux épices douces, pâte dorée.", price: 7, tags: ["6 pièces", "Fait maison"], photo: null }),
+  D({ cat: "entrees", name: "Salade composée", desc: "Salade fraîche, tomates cerises, vinaigrette huile d'olive.", price: 4, photo: photo(21), tags: ["Végé", "Frais"] }),
+  D({ cat: "entrees", name: "Patates fourrées au fromage", desc: "Pommes de terre garnies au fromage fondant, panées maison.", price: 4, tags: ["6 pièces", "Fromage"], photo: null }),
 
-  // SALADES & BOWLS (gamme traiteur / healthy)
-  D({ cat: "salades", name: "Salade Saumon Fumé", desc: "Saumon fumé, mesclun, poivrons, oignon rouge, graines torréfiées", price: 10.5, photo: photo(34), badge: "Healthy", popular: true }),
-  D({ cat: "salades", name: "Bowl Quinoa Saumon Avocat", desc: "Quinoa, saumon fumé, avocat, pomme de terre, citron vert, sauce yaourt-herbes", price: 11.5, photo: photo(36), badge: "Healthy" }),
-  D({ cat: "salades", name: "Salade Pâtes & Poulet", desc: "Torsades, poulet grillé, mozzarella, olives, poivrons, herbes fraîches", price: 9.9, photo: photo(37) }),
-  D({ cat: "salades", name: "Salade Poulet Mozzarella", desc: "Poulet mariné, billes de mozzarella, crudités, graines de tournesol", price: 9.9, photo: photo(38) }),
-  D({ cat: "salades", name: "Salade César Avocat", desc: "Poulet grillé, avocat, parmesan, œuf, croûtons, sauce césar", price: 10.5, photo: photo(39), popular: true }),
-  D({ cat: "salades", name: "Salade Viande Séchée", desc: "Bresaola, copeaux de parmesan, avocat, glaçage balsamique", price: 11.5, photo: photo(41), badge: "Healthy" }),
+  // SALADES & BOWLS
+  D({ cat: "salades", name: "Salade Saumon Avocat", desc: "Saumon et avocat, mesclun et crudités, vinaigrette à l'huile d'olive.", price: 9, photo: photo(34), popular: true, tags: ["Frais", "Petit pain"] }),
+  D({ cat: "salades", name: "Salade Pâtes & Poulet", desc: "Pâtes fraîches, poulet grillé et tomates cerises.", price: 8.4, photo: photo(37), tags: ["Tomates cerises"] }),
+  D({ cat: "salades", name: "Salade Poulet Mozzarella", desc: "Poulet, mozzarella, tomates cerises et jeunes pousses.", price: 8.4, photo: photo(38), tags: ["Tomates cerises"] }),
+  D({ cat: "salades", name: "Salade César Avocat", desc: "Poulet grillé, avocat, parmesan, œuf et croûtons.", price: 9, photo: photo(39), popular: true }),
+  D({ cat: "salades", name: "Cecina de Bœuf", desc: "Cecina (bœuf séché), copeaux de parmesan, avocat et glaçage balsamique.", price: 10, photo: photo(41), tags: ["Généreux", "Petit pain"] }),
 
   // SAVEUR DU MAGHREB (tajines)
-  D({ cat: "maghreb", name: "Tajine Veau & Pruneaux", desc: "Veau fondant, œuf, pruneaux, amandes & sésame", price: 13, photo: photo(11), popular: true }),
-  D({ cat: "maghreb", name: "Tajine Poulet aux Légumes", desc: "Poulet, petits pois, pommes de terre, carottes, olives", price: 13.9, photo: photo(16) }),
-  D({ cat: "maghreb", name: "Tajine Boulettes de Bœuf", desc: "Boulettes de bœuf, sauce tomate, œuf & frites maison", price: 12, photo: photo(14) }),
+  D({ cat: "maghreb", name: "Tajine Veau & Pruneaux", desc: "Veau fondant, pruneaux moelleux, amandes, œuf et sésame — un sucré-salé signature.", price: 10.5, photo: photo(11), popular: true, tags: ["Sucré-salé"] }),
+  D({ cat: "maghreb", name: "Tajine Poulet aux Légumes", desc: "Poulet mijoté, petits pois, pommes de terre, carottes et olives.", price: 9, photo: photo(16), tags: ["Mijoté", "Généreux"] }),
+  D({ cat: "maghreb", name: "Tajine Boulettes de Bœuf", desc: "Boulettes de bœuf mijotées dans une sauce tomate parfumée — un grand classique.", price: 9.5, photo: photo(14), tags: ["Mijoté", "Sauce tomate"] }),
 
-  // SAVEUR D'ASIE
-  D({ cat: "asiatique", name: "Loc Lac Bœuf", desc: "Émincé de bœuf sauté, sauce loc lac, riz & œuf", price: 12, badge: "Nouveau", photo: null }),
-  D({ cat: "asiatique", name: "Bo Bun", desc: "Vermicelles, bœuf sauté, nem, crudités, herbes & cacahuètes", price: null, badge: "Bientôt", photo: null }),
-  D({ cat: "asiatique", name: "Nouilles Sautées", desc: "Nouilles wok, légumes croquants, viande au choix", price: null, badge: "Bientôt", photo: null }),
+  // SAVEUR MÉDITERRANÉENNE
+  D({
+    cat: "medit",
+    name: "Chakchouka",
+    desc: "Tomates, poivrons, oignons & épices — mijoté parfumé.",
+    price: 5,
+    photo: null,
+    tags: ["Mijoté", "Épicé"],
+    /* Le supplément œuf poché est imprimé sur la carte. Sans cette option il
+       était encaissé de la main à la main, hors commande en ligne. */
+    options: [
+      { name: "Œuf poché", required: false, choices: [{ l: "Sans" }, { l: "Avec un œuf poché", price: 1 }] },
+    ],
+  }),
+  D({ cat: "medit", name: "Salade d'Aubergines (Zaalouk)", desc: "Caviar d'aubergines à la marocaine, tomate, ail & cumin.", price: 5, photo: null, tags: ["Végé", "Marocaine"] }),
+  D({ cat: "medit", name: "Sardines Frites", desc: "Sardines fraîches, sel & citron — juste saisies, croustillantes.", price: 8, photo: null, tags: ["Poisson frais", "Citronné"] }),
 
-  // SAVEUR AFRICAINE
-  D({ cat: "africaine", name: "Tcheb Poulet", desc: "Riz au gras façon thiéboudienne, poulet mijoté", price: 11, photo: photo(4), options: [rizOpt], popular: true }),
-  D({ cat: "africaine", name: "Tcheb Bœuf", desc: "Riz au gras, bœuf fondant, légumes confits", price: 12, photo: photo(24), options: [rizOpt] }),
-  D({ cat: "africaine", name: "Tcheb Poisson", desc: "Riz au gras, poisson frit entier, légumes & sauce", price: 13, photo: photo(28), options: [rizOpt], popular: true }),
-  D({ cat: "africaine", name: "Yassa Poulet", desc: "Poulet braisé, sauce oignon-citron, olives, riz blanc", price: 11, photo: photo(30), popular: true }),
-  D({ cat: "africaine", name: "Yassa Bœuf", desc: "Bœuf, sauce oignon-citron confite, olives, riz blanc", price: 12, photo: photo(22) }),
-  D({ cat: "africaine", name: "Mafé Bœuf", desc: "Bœuf mijoté, sauce arachide onctueuse, riz blanc", price: 12, photo: photo(1), popular: true }),
-  D({ cat: "africaine", name: "Mafé Poulet", desc: "Poulet, sauce arachide, riz parfumé", price: 11, photo: photo(8) }),
-  D({ cat: "africaine", name: "Athiéké Poisson", desc: "Semoule de manioc, poisson grillé, sauce & crudités", price: 13, photo: photo(31) }),
+  // SAVEUR D'AFRIQUE DE L'OUEST
+  D({ cat: "africaine", name: "Tcheb Poulet", desc: "Riz au gras façon thiéboudiène, poulet mijoté et légumes confits.", price: 8.5, photo: photo(4), options: [rizOpt], popular: true, tags: ["Mijoté"] }),
+  D({ cat: "africaine", name: "Tcheb Bœuf", desc: "Riz au gras tomaté, bœuf fondant mijoté et légumes confits.", price: 9.5, photo: photo(24), options: [rizOpt], popular: true, tags: ["Mijoté"] }),
+  D({ cat: "africaine", name: "Tcheb Poisson", desc: "Riz au gras, poisson frit, légumes fondants et sauce maison.", price: 13, photo: photo(28), options: [rizOpt], popular: true, tags: ["Poisson frais"] }),
+  D({ cat: "africaine", name: "Yassa Poulet", desc: "Poulet braisé, sauce oignon-citron, olives et riz blanc parfumé.", price: 8.5, photo: photo(30), popular: true, tags: ["Citronné"] }),
+  D({ cat: "africaine", name: "Mafé Bœuf", desc: "Bœuf mijoté dans une sauce arachide onctueuse, servi sur riz blanc parfumé.", price: 9.5, photo: photo(1), popular: true, tags: ["Sauce arachide"] }),
 
   // GRILLADES
-  D({ cat: "grillades", name: "Brochette Poulet", desc: "2 pièces · poulet mariné grillé · 1 accompagnement au choix", price: 12, photo: photo(0), tags: ["2 pièces", "+ accompagnement"] }),
-  D({ cat: "grillades", name: "Brochette Bœuf", desc: "2 pièces · bœuf grillé aux épices · 1 accompagnement au choix", price: 13.5, photo: photo(12), tags: ["2 pièces", "+ accompagnement"] }),
-  D({ cat: "grillades", name: "Poisson Entier", desc: "Dorade entière grillée (selon arrivage) · 1 accompagnement", price: 18, photo: photo(29), tags: ["selon arrivage"] }),
-  D({ cat: "grillades", name: "Poulet Braisé", desc: "Demi-poulet braisé maison · 1 accompagnement au choix", price: 12, photo: photo(17), tags: ["+ accompagnement"] }),
+  D({ cat: "grillades", name: "Brochette Poulet", desc: "Brochettes de poulet mariné, grillées au feu de bois — accompagnement au choix.", price: 7, photo: photo(0), tags: ["Feu à la braise", "Mariné"] }),
+  D({ cat: "grillades", name: "Brochette Bœuf", desc: "Brochettes de bœuf mariné, grillées au feu de bois — accompagnement au choix.", price: 8, photo: photo(12), tags: ["Feu à la braise", "Mariné"] }),
+  D({ cat: "grillades", name: "Poulet Rôti", desc: "Poulet rôti maison au feu de bois, doré et juteux — 1 accompagnement au choix.", price: 8, photo: photo(17), tags: ["Feu à la braise", "Rôti maison"] }),
+  D({ cat: "grillades", name: "Cuisse de Poulet", desc: "Cuisse de poulet marinée & braisée au feu de bois — à l'unité.", price: 3, photo: null, tags: ["Feu à la braise", "Mariné"] }),
+  D({ cat: "grillades", name: "Pilon de Poulet", desc: "Pilons de poulet marinés & braisés au feu de bois — 3 pièces.", price: 5, photo: null, tags: ["Feu à la braise", "Mariné"] }),
+  D({ cat: "grillades", name: "Ailes de Poulet", desc: "Ailes de poulet épicées & croustillantes, braisées au feu de bois — 5 pièces.", price: 5, photo: null, tags: ["Feu à la braise", "Épicé"] }),
+  D({ cat: "grillades", name: "Poisson Entier Grillé", desc: "Dorade entière grillée au feu de bois, selon arrivage — 1 accompagnement.", price: 18, photo: photo(29), tags: ["Feu à la braise", "Poisson frais"] }),
 
-  // SANDWICHS BAGUETTE — 3 formules
-  D({ cat: "sandwichs", name: "Banh Mì", desc: "Baguette, bœuf ou poulet, carotte, concombre, coriandre", price: 6.5, tags: ["Seul"], photo: null, options: [{ name: "Viande", required: true, choices: [{ l: "Bœuf" }, { l: "Poulet" }] }] }),
-  D({ cat: "sandwichs", name: "Merguez", desc: "Baguette merguez grillées · sauce au choix", price: 6.5, formules: [["Seul", 6.5], ["+ Frites", 7.5], ["+ Frites + Boisson", 8.5]], photo: null }),
-  D({ cat: "sandwichs", name: "Brochette Poulet", desc: "Baguette, brochette de poulet grillé · sauce au choix", price: 7, formules: [["Seul", 7], ["+ Frites", 8], ["+ Frites + Boisson", 9]], photo: null }),
-  D({ cat: "sandwichs", name: "Kefta", desc: "Baguette kefta de bœuf épicée · sauce au choix", price: 7.5, formules: [["Seul", 7.5], ["+ Frites", 8.5], ["+ Frites + Boisson", 9.5]], photo: null }),
-  D({ cat: "sandwichs", name: "Brochette Bœuf", desc: "Baguette, brochette de bœuf grillé · sauce au choix", price: 8, formules: [["Seul", 8], ["+ Frites", 9], ["+ Frites + Boisson", 10]], photo: null }),
+  // SANDWICHS
+  D({ cat: "sandwichs", name: "Sandwich Merguez", desc: "Merguez grillées en baguette tradition, salade et sauce Ô3 au choix.", price: 6.5, photo: null, tags: ["Baguette tradition", "Grillé"] }),
+  D({ cat: "sandwichs", name: "Sandwich Brochette Poulet", desc: "Brochette de poulet mariné en baguette tradition, crudités et sauce au choix.", price: 7, photo: null, tags: ["Baguette tradition", "Mariné"] }),
+  D({ cat: "sandwichs", name: "Sandwich Kefta", desc: "Kefta de bœuf épicée en baguette tradition, salade et sauce au choix.", price: 7.5, photo: null, tags: ["Baguette tradition", "Épicé"] }),
+  D({ cat: "sandwichs", name: "Sandwich Brochette Bœuf", desc: "Brochette de bœuf grillé en baguette tradition, crudités et sauce au choix.", price: 8, photo: null, tags: ["Baguette tradition", "Grillé"] }),
 
   // ACCOMPAGNEMENTS
-  D({ cat: "accompagnements", name: "Riz blanc", desc: "Riz parfumé nature", price: 2.99, photo: photo(18) }),
-  D({ cat: "accompagnements", name: "Alloco", desc: "Bananes plantain frites, caramélisées", price: 3.99, photo: photo(9), popular: true }),
-  D({ cat: "accompagnements", name: "Riz rouge", desc: "Riz au gras tomaté", price: 3.99, photo: photo(15) }),
-  D({ cat: "accompagnements", name: "Tcheb blanc", desc: "Riz blanc façon tcheb", price: 3.99, photo: photo(18) }),
-  D({ cat: "accompagnements", name: "Frites maison", desc: "Frites de pomme de terre fraîches", price: 3.99, photo: photo(27) }),
-  D({ cat: "accompagnements", name: "Salade composée", desc: "Crudités, tomates, vinaigrette", price: 3.99, photo: photo(21) }),
-  D({ cat: "accompagnements", name: "Patate fourrée", desc: "Pomme de terre garnie panée", price: 3.99, photo: null }),
-  D({ cat: "accompagnements", name: "Piment frais", desc: "Piment frais haché", price: 0.5, photo: null }),
-  D({ cat: "accompagnements", name: "Sauce verte", desc: "Sauce herbes maison", price: 1, photo: null }),
-  D({ cat: "accompagnements", name: "Sauce Niamey", desc: "La sauce signature de la maison", price: 0.5, photo: null }),
+  D({ cat: "accompagnements", name: "Riz Blanc", desc: "Riz parfumé nature, cuit maison — l'accompagnement classique.", price: 2.5, photo: photo(18), tags: ["Nature", "Sans gluten"] }),
+  D({ cat: "accompagnements", name: "Alloco", desc: "Bananes plantain bien mûres, frites et caramélisées.", price: 4, photo: photo(9), popular: true, tags: ["Caramélisé"] }),
+  D({ cat: "accompagnements", name: "Riz Rouge", desc: "Riz au gras tomaté — parfumé, généreux et coloré.", price: 4, photo: photo(15), tags: ["Tomaté", "Fait maison"] }),
+  D({ cat: "accompagnements", name: "Tcheb blanc", desc: "Riz au gras blanc, parfumé — façon sénégalaise.", price: 4, photo: photo(18), tags: ["Au gras", "Parfumé"] }),
+  D({ cat: "accompagnements", name: "Frites Maison", desc: "Pommes de terre fraîches, coupées et frites maison — dorées et croustillantes.", price: 4, photo: photo(27), tags: ["Croustillant", "Fait maison"] }),
+  D({ cat: "accompagnements", name: "Salade Composée", desc: "Salade fraîche, tomates cerises, vinaigrette huile d'olive & balsamique.", price: 4, photo: photo(21), tags: ["Frais", "Végétarien"] }),
+  D({ cat: "accompagnements", name: "Patate fourrée au fromage", desc: "Pommes de terre garnies au fromage fondant, panées maison.", price: 4, photo: null, tags: ["6 pièces", "Fromage"] }),
+  D({ cat: "accompagnements", name: "Sauce Ô3 Verte", desc: "Sauce aux herbes maison, fraîche et relevée.", price: 1, photo: null, tags: ["Pot", "Maison"] }),
+  D({ cat: "accompagnements", name: "Sauce Ô3 Piquante", desc: "La signature maison — ça pique juste ce qu'il faut.", price: 1, photo: null, tags: ["Pot", "Piquant"] }),
+  D({ cat: "accompagnements", name: "Piment frais", desc: "Piment frais haché maison.", price: 0.5, photo: null, tags: ["Pot", "Piquant"] }),
 
-  // BOISSONS MAISON
-  D({ cat: "boissons", name: "Jus de Gingembre", desc: "Pressé maison · 50 cl", price: 3.5, photo: photo(2), tags: ["50 cl"], popular: true }),
-  D({ cat: "boissons", name: "Jus de Bissap", desc: "Infusion d'hibiscus · 50 cl", price: 3.5, photo: photo(26), tags: ["50 cl"] }),
-  D({ cat: "boissons", name: "Cocktail Maison", desc: "Selon saison · 25 cl", price: 3.5, photo: photo(20), tags: ["25 cl", "Selon saison"] }),
-  D({ cat: "boissons", name: "Jus d'Avocat", desc: "Préparé à la commande", price: 4, photo: null, tags: ["À la commande"] }),
-  D({ cat: "boissons", name: "Jus d'Orange", desc: "Pressé du jour", price: 3.5, photo: null }),
-  D({ cat: "boissons", name: "Canette 33 cl", desc: "Coca, Coca Zéro, Sprite, Fanta, Ice Tea, Tropico, Orangina, Eau", price: 2, photo: null }),
+  // BOISSONS
+  D({ cat: "boissons", name: "Jus de Gingembre", desc: "Gingembre frais pressé maison, vif et tonifiant.", price: 3.5, photo: photo(2), tags: ["Pressé maison", "50 cl"], popular: true }),
+  D({ cat: "boissons", name: "Jus de Bissap", desc: "Infusion d'hibiscus pressée maison, fraîche et légèrement acidulée.", price: 3.5, photo: photo(26), tags: ["Infusion maison", "50 cl"] }),
+  D({ cat: "boissons", name: "Cocktail Maison", desc: "Cocktail de fruits sans alcool, frais et de saison — selon arrivage.", price: 3.5, photo: photo(20), tags: ["Selon saison", "25 cl"] }),
+  D({ cat: "boissons", name: "Jus d'Avocat", desc: "Jus d'avocat onctueux, préparé à la commande.", price: 4, photo: null, tags: ["À la commande", "25 cl"] }),
+  D({ cat: "boissons", name: "Jus d'Orange", desc: "Oranges fraîchement pressées, pur jus du jour.", price: 3.5, photo: null, tags: ["Pressé du jour", "25 cl"] }),
+  D({ cat: "boissons", name: "Canette 33 cl", desc: "Coca, Sprite, Fanta, Ice Tea, Orangina, Tropico — et eau minérale.", price: 2, photo: null, tags: ["33 cl", "Bien frais"] }),
 
   // DESSERTS
-  D({ cat: "desserts", name: "Degué", desc: "Couscous de mil au lait fermenté, vanille · 1 portion", price: 3.5, photo: photo(6), popular: true }),
-  D({ cat: "desserts", name: "Ananas frais", desc: "Ananas découpé, feuille de menthe", price: 3.5, photo: photo(13) }),
-  D({ cat: "desserts", name: "Fondant Chocolat", desc: "Cœur coulant au chocolat noir", price: 4, photo: null }),
-  D({ cat: "desserts", name: "Panna Cotta", desc: "Coulis au choix : mangue · fruits rouges · passion", price: 4, photo: null }),
-  D({ cat: "desserts", name: "Mousse au Chocolat", desc: "Mousse maison onctueuse", price: 4, photo: null }),
+  D({ cat: "desserts", name: "Ananas frais", desc: "Ananas frais, coupé minute — léger et sucré.", price: 2.5, photo: photo(13), tags: ["Frais"] }),
+  D({ cat: "desserts", name: "Tiramisu", desc: "Tiramisu maison, café & mascarpone.", price: 2.5, photo: null, tags: ["Fait maison"] }),
+  D({ cat: "desserts", name: "Fondant Chocolat", desc: "Cœur coulant au chocolat noir, servi tiède.", price: 3, photo: null, tags: ["Fait maison"] }),
+  D({ cat: "desserts", name: "Mousse au Chocolat", desc: "Mousse au chocolat onctueuse, faite maison.", price: 3, photo: null, tags: ["Fait maison"] }),
+  D({ cat: "desserts", name: "Tarte du jour", desc: "Tarte pâtissière du jour — demandez la saveur du moment.", price: 3, photo: null, tags: ["Fait maison"] }),
 ];
 
-// attache la liste des sauces aux sandwichs
+/* Options communes aux sandwichs : la sauce au choix et le supplément cheddar,
+ * tous deux imprimés sur la carte (« Suppl. cheddar +1,00 € · frites maison ou
+ * salade composée »). Le cheddar manquait, il n'était donc facturable qu'en
+ * dehors de la commande en ligne. */
 items.forEach((it) => {
   if (it.cat === "sandwichs") {
     it.options = (it.options || []).concat([
       { name: "Sauce", required: true, choices: sauces.map((s) => ({ l: s })) },
+      { name: "Cheddar", required: false, choices: [{ l: "Sans" }, { l: "Avec cheddar", price: 1 }] },
     ]);
   }
 });
 
-export const formules: Formule[] = [
-  { id: "f1", name: "Entrée + Plat", priceCents: 1600, desc: "Pastel, patates fourrées ou salade composée + plat africain ou tajine poulet", extra: "+ 1 canette 33 cl incluse" },
-  { id: "f2", name: "Plat + Dessert", priceCents: 1600, desc: "Plat africain ou tajine poulet + un dessert de la carte", extra: "+ 1 canette 33 cl incluse" },
+// ─── Formules de départ ────────────────────────────────────────
+// Reprises par `prisma/seed.ts`, qui crée les créneaux et y rattache les plats
+// des catégories listées. Une fois en base, tout se pilote depuis
+// l'administration : prix, libellés, plats acceptés dans chaque créneau.
+
+export interface SeedFormulaSlot {
+  label: string;
+  /** un créneau facultatif peut être laissé vide par le client */
+  required?: boolean;
+  /** catégories dont les plats alimentent ce créneau */
+  cats: string[];
+  /** plats écartés de ce créneau, par nom */
+  exclude?: string[];
+}
+
+export interface SeedFormula {
+  code: string;
+  name: string;
+  desc: string;
+  extra: string;
+  /** prix en euros */
+  price: number;
+  slots: SeedFormulaSlot[];
+}
+
+/**
+ * Suppléments appliqués dans toutes les formules, par nom de plat (en euros).
+ * Ce sont les deux plats dont le coût matière dépasse largement le prix de
+ * formule — les servir sans supplément vendrait la formule à perte.
+ */
+export const FORMULA_SUPPLEMENTS: Record<string, number> = {
+  "Tcheb Poisson": 4,
+  "Poisson Entier Grillé": 9,
+};
+
+/**
+ * Familles proposées au créneau « plat » des formules — « salades & bowls,
+ * tajines, plats d'Afrique de l'Ouest & grillades » selon la carte officielle.
+ * La Méditerranée en est absente : ses trois plats sont des petites assiettes
+ * à 5–8 €, hors d'échelle pour un créneau de formule à 10,90 €.
+ */
+const PLAT_CATS = ["salades", "maghreb", "africaine", "grillades"];
+
+/** Boissons maison : la formule exclut les canettes revendues telles quelles. */
+const BOISSON_SLOT: SeedFormulaSlot = {
+  label: "Votre boisson",
+  cats: ["boissons"],
+  exclude: ["Canette 33 cl"],
+};
+
+export const seedFormulas: SeedFormula[] = [
+  {
+    code: "F1",
+    name: "Express",
+    desc: "Un plat au choix + une boisson",
+    extra: "Formule la plus rapide",
+    price: 10.9,
+    slots: [{ label: "Votre plat", cats: PLAT_CATS }, BOISSON_SLOT],
+  },
+  {
+    code: "F2",
+    name: "Midi",
+    desc: "Entrée + plat au choix + dessert",
+    extra: "Idéal pour la pause déjeuner",
+    price: 13.9,
+    slots: [
+      { label: "Votre entrée", cats: ["entrees"] },
+      { label: "Votre plat", cats: PLAT_CATS },
+      { label: "Votre dessert", cats: ["desserts"] },
+    ],
+  },
+  {
+    code: "F3",
+    name: "Gourmande",
+    desc: "Entrée + plat + dessert + boisson",
+    extra: "La formule complète",
+    price: 16.9,
+    slots: [
+      { label: "Votre entrée", cats: ["entrees"] },
+      { label: "Votre plat", cats: PLAT_CATS },
+      { label: "Votre dessert", cats: ["desserts"] },
+      BOISSON_SLOT,
+    ],
+  },
+  {
+    code: "F4",
+    name: "Sandwich",
+    desc: "Sandwich + frites maison + boisson",
+    extra: "Sur le pouce",
+    price: 11.9,
+    slots: [
+      { label: "Votre sandwich", cats: ["sandwichs"] },
+      { label: "Votre accompagnement", cats: ["accompagnements"] },
+      BOISSON_SLOT,
+    ],
+  },
+  {
+    code: "F5",
+    name: "Menu Enfant",
+    desc: "Petit plat + accompagnement + boisson + dessert",
+    extra: "Pensé pour les plus jeunes",
+    price: 8.9,
+    slots: [
+      { label: "Son plat", cats: ["africaine", "maghreb", "grillades", "sandwichs"] },
+      { label: "Son accompagnement", cats: ["accompagnements"] },
+      { label: "Sa boisson", cats: ["boissons"] },
+      { label: "Son dessert", cats: ["desserts"] },
+    ],
+  },
 ];
 
 /** Plats du jour de départ, repris par le seed. L'application lit la base. */

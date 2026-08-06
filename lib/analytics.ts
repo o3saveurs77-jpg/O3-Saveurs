@@ -387,10 +387,15 @@ export function topDishes(orders: Order[], limit = 6): DishStat[] {
   const map = new Map<string, DishStat>();
   for (const o of valid(orders)) {
     for (const l of o.lines) {
-      const e = map.get(l.dishId) ?? { dishId: l.dishId, name: l.name, qty: 0, orderedCents: 0 };
+      /* Une ligne formule n'a pas de `dishId` : elle est comptée sous son
+       * propre identifiant, sans quoi toutes les formules se cumuleraient sur
+       * une même clé vide. Savoir laquelle se vend est une information utile en
+       * soi — c'est le produit que la cliente met en avant. */
+      const key = l.formulaId ? `formule:${l.formulaId}` : l.dishId;
+      const e = map.get(key) ?? { dishId: key, name: l.name, qty: 0, orderedCents: 0 };
       e.qty += l.qty;
       e.orderedCents += l.lineTotalCents;
-      map.set(l.dishId, e);
+      map.set(key, e);
     }
   }
   return [...map.values()].sort((a, b) => b.qty - a.qty || b.orderedCents - a.orderedCents).slice(0, limit);
@@ -422,6 +427,29 @@ export function estimatedMargin(
   for (const o of valid(orders)) {
     for (const l of o.lines) {
       total += l.lineTotalCents;
+
+      /* Le coût d'une formule est celui des plats qui la composent. Il n'est
+       * retenu que si **tous** sont chiffrés : additionner deux plats sur
+       * quatre gonflerait artificiellement la marge de la formule. */
+      if (l.formulaId) {
+        const picks = l.picks ?? [];
+        if (picks.length === 0) continue;
+        let sum = 0;
+        let complete = true;
+        for (const p of picks) {
+          const unit = costByDish.get(p.dishId);
+          if (unit === null || unit === undefined) {
+            complete = false;
+            break;
+          }
+          sum += unit;
+        }
+        if (!complete) continue;
+        covered += l.lineTotalCents;
+        cost += sum * l.qty;
+        continue;
+      }
+
       const unitCost = costByDish.get(l.dishId);
       if (unitCost === null || unitCost === undefined) continue;
       covered += l.lineTotalCents;

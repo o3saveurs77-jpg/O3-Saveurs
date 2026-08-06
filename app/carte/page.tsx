@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { MenuClient } from "@/components/menu/MenuClient";
+import { CarteActions } from "@/components/menu/CarteActions";
 import { prisma } from "@/lib/prisma";
 import { rowToDish } from "@/lib/serialize";
 import { fmtPrice } from "@/lib/menu";
@@ -10,7 +11,7 @@ import { Icon } from "@/components/Icon";
 export const metadata: Metadata = {
   title: "La Carte · Ô 3 Saveurs — Chez Laila",
   description:
-    "Découvrez toute la carte : saveurs africaines, maghrébines et asiatiques, grillades, sandwichs, boissons maison et desserts.",
+    "Découvrez toute la carte : saveurs africaines, maghrébines et méditerranéennes, grillades, sandwichs, boissons maison et desserts.",
   alternates: { canonical: "/carte" },
 };
 
@@ -48,7 +49,7 @@ export default async function CartePage() {
           <p className="font-script text-3xl text-gold">Bienvenue à table</p>
           <h1 className="mt-1 text-4xl sm:text-5xl">La Carte</h1>
           <p className="mx-auto mt-3 max-w-xl text-white/90">
-            Afrique · Maghreb · Asie — tout est préparé maison. Composez votre commande, en
+            Afrique · Maghreb · Méditerranée — tout est préparé maison. Composez votre commande, en
             livraison ou à emporter.
           </p>
 
@@ -71,6 +72,11 @@ export default async function CartePage() {
               </p>
             </div>
           )}
+
+          {/* Emporter la carte : PDF officiel et QR code. Placé sous le plat du
+              jour — c'est un service annexe, il ne doit pas passer devant
+              l'annonce du jour ni devant le catalogue lui-même. */}
+          <CarteActions />
         </div>
       </header>
 

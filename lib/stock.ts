@@ -26,10 +26,37 @@ export interface StockShortage {
   available: number;
 }
 
+/** Ligne telle que le stock la voit : un plat, une quantité, un nom. */
+type StockLine = Pick<OrderLine, "dishId" | "qty"> &
+  Partial<Pick<OrderLine, "name" | "formulaId" | "picks">>;
+
+/**
+ * Éclate les lignes au niveau du plat.
+ *
+ * Une formule n'a pas de stock : ce sont les plats qu'elle contient qui
+ * sortent de la cuisine. Sans cet éclatement, deux « Formule Gourmande » au
+ * thiéboudiène ne décrémenteraient rien et la marmite serait vendue deux fois.
+ * L'éclatement vit ici, et non chez les appelants, pour qu'aucun chemin
+ * — commande, annulation, échec de paiement — ne puisse l'oublier.
+ */
+export function toDishLines(lines: StockLine[]): { dishId: string; qty: number; name: string }[] {
+  const out: { dishId: string; qty: number; name: string }[] = [];
+  for (const l of lines) {
+    if (l.formulaId) {
+      for (const pick of l.picks ?? []) {
+        out.push({ dishId: pick.dishId, qty: l.qty, name: pick.dishName });
+      }
+      continue;
+    }
+    if (l.dishId) out.push({ dishId: l.dishId, qty: l.qty, name: l.name ?? "?" });
+  }
+  return out;
+}
+
 /** Cumule les quantités par plat : deux lignes du même plat puisent au même stock. */
-export function neededByDish(lines: Pick<OrderLine, "dishId" | "qty">[]): Map<string, number> {
+export function neededByDish(lines: StockLine[]): Map<string, number> {
   const out = new Map<string, number>();
-  for (const l of lines) out.set(l.dishId, (out.get(l.dishId) ?? 0) + l.qty);
+  for (const l of toDishLines(lines)) out.set(l.dishId, (out.get(l.dishId) ?? 0) + l.qty);
   return out;
 }
 
@@ -39,11 +66,12 @@ export function neededByDish(lines: Pick<OrderLine, "dishId" | "qty">[]): Map<st
  * cas **aucun** décrément n'a été appliqué (tout se joue dans une transaction).
  */
 export async function reserveStock(
-  lines: Pick<OrderLine, "dishId" | "qty" | "name">[],
+  lines: StockLine[],
   { orderId, author }: { orderId?: string; author?: string | null } = {},
 ): Promise<{ ok: true } | { ok: false; shortages: StockShortage[] }> {
+  const dishLines = toDishLines(lines);
   const needed = neededByDish(lines);
-  const nameOf = new Map(lines.map((l) => [l.dishId, l.name]));
+  const nameOf = new Map(dishLines.map((l) => [l.dishId, l.name]));
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -97,7 +125,7 @@ class ShortageError extends Error {
  * Sans cela, un panier abandonné immobiliserait le stock indéfiniment.
  */
 export async function releaseStock(
-  lines: Pick<OrderLine, "dishId" | "qty">[],
+  lines: StockLine[],
   { orderId, reason = "correction" }: { orderId?: string; reason?: StockReason } = {},
 ): Promise<void> {
   const needed = neededByDish(lines);

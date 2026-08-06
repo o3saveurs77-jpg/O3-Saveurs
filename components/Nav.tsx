@@ -11,6 +11,8 @@ import { CartDrawer } from "./cart/CartDrawer";
 const LINKS = [
   { href: "/", label: "Accueil" },
   { href: "/carte", label: "La Carte" },
+  { href: "/formules", label: "Formules" },
+  { href: "/traiteur", label: "Traiteur" },
   { href: "/a-propos", label: "À propos" },
   { href: "/contact", label: "Contact" },
 ];
@@ -67,24 +69,31 @@ export function Nav() {
               Commander
             </Link>
 
-            {/* compte */}
+            {/* compte — icône seule sous sm, pilule icône + texte à partir de sm */}
             <Link
               href="/compte"
-              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2 sm:h-11 sm:w-11"
+              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2 sm:hidden"
               aria-label="Mon compte"
             >
               <Icon name="user" size={20} />
+            </Link>
+            <Link
+              href="/compte"
+              className="hidden items-center gap-2 rounded-full border border-line bg-panel px-4 py-2.5 text-[15px] font-semibold text-ink transition hover:bg-panel-2 sm:flex"
+            >
+              <Icon name="user" size={18} />
+              Compte
             </Link>
 
             {/* bouton panier */}
             <button
               onClick={() => setOpen(true)}
-              className="relative grid h-10 w-10 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2 sm:h-11 sm:w-11"
+              className="relative grid h-10 w-10 place-items-center rounded-full bg-primary text-white transition hover:brightness-105 sm:h-11 sm:w-11"
               aria-label="Ouvrir le panier"
             >
               <Icon name="bag" size={20} />
               {count > 0 && (
-                <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-brick px-1 text-[11px] font-bold text-white">
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-brick px-1 text-[11px] font-bold text-white ring-2 ring-panel">
                   {count}
                 </span>
               )}

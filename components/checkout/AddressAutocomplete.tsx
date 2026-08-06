@@ -39,7 +39,7 @@ function newToken(): string {
 
 /**
  * Extrait code postal et commune d'un libellé Google.
- * Format habituel : « 12 rue X, 77185 Lognes, France ».
+ * Format habituel : « 12 rue X, 77340 Pontault-Combault, France ».
  */
 export function parseFrenchAddress(label: string): { zip?: string; city?: string } {
   const m = label.match(/\b(\d{5})\s+([^,]+)/);

@@ -21,6 +21,7 @@ import type {
   SupportTicket as TicketRow,
   TicketMessage as TicketMessageRow,
   ContactMessage as ContactMessageRow,
+  CateringInquiry as CateringInquiryRow,
 } from "@prisma/client";
 
 import type { Dish, DishOption, Zone } from "./menu";
@@ -41,6 +42,8 @@ import type {
   TicketMessageView,
   TicketStatus,
   ContactMessageView,
+  CateringInquiryView,
+  CateringStatus,
 } from "./types";
 import { ALLERGENS } from "./types";
 
@@ -305,5 +308,23 @@ export function rowToContactMessage(r: ContactMessageRow): ContactMessageView {
     message: r.message,
     handled: r.handled,
     createdAt: r.createdAt.getTime(),
+  };
+}
+
+export function rowToCateringInquiry(r: CateringInquiryRow): CateringInquiryView {
+  return {
+    id: r.id,
+    eventType: r.eventType,
+    eventDate: r.eventDate ? r.eventDate.getTime() : null,
+    guestCount: r.guestCount,
+    location: r.location,
+    customerName: r.customerName,
+    customerPhone: r.customerPhone,
+    customerEmail: r.customerEmail,
+    message: r.message,
+    status: r.status as CateringStatus,
+    note: r.note,
+    createdAt: r.createdAt.getTime(),
+    updatedAt: r.updatedAt.getTime(),
   };
 }

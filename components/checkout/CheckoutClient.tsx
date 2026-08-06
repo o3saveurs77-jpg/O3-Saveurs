@@ -14,8 +14,16 @@ import type { DeliveryQuote } from "@/app/api/delivery-quote/route";
 import type { OrderMode } from "@/lib/types";
 
 /** Doit rester aligné sur `PAYMENT_METHODS` de `app/api/checkout/route.ts`. */
-const PAYMENTS = ["Carte bancaire", "Apple Pay", "Google Pay", "Espèces sur place"] as const;
+const PAYMENTS = ["Carte bancaire", "Apple Pay", "Google Pay", "PayPal", "Espèces sur place"] as const;
 type Payment = (typeof PAYMENTS)[number];
+
+const PAYMENT_INFO: Record<Payment, string> = {
+  "Carte bancaire": "Débit immédiat, sécurisé par Stripe",
+  "Apple Pay": "Paiement en un geste depuis votre iPhone",
+  "Google Pay": "Paiement en un geste depuis Android",
+  PayPal: "Redirection vers votre compte PayPal",
+  "Espèces sur place": "Réglez en liquide à la livraison ou au retrait",
+};
 
 /**
  * Clé de la commande en attente de retour de paiement — sert à vider le panier
@@ -150,27 +158,38 @@ export function CheckoutClient() {
     };
   }, []);
 
-  // Créneaux réels : plus de liste codée en dur proposant le midi les jours de fermeture.
+  /* Créneaux réels : plus de liste codée en dur proposant le midi les jours de
+   * fermeture. Rafraîchi toutes les minutes : sans ça, un onglet ouvert avant
+   * l'heure d'ouverture du service reste bloqué sur « Nous sommes fermés »
+   * même après l'heure d'ouverture réelle, tant que le client ne recharge pas
+   * la page à la main. */
   useEffect(() => {
     let alive = true;
-    setSlotsError(false);
-    fetch("/api/slots", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("slots"))))
-      .then((data: SlotsResponse) => {
-        if (!alive) return;
-        setSlots(data);
-        if (!data.open) setSlot(data.slots[0] ?? "");
-      })
-      // `slots` reste `null` : une réponse « fermé, aucun créneau » fabriquée
-      // ici annoncerait au client que le restaurant est fermé alors que c'est
-      // le serveur qui n'a pas répondu.
-      .catch(() => {
-        if (!alive) return;
-        setSlots(null);
-        setSlotsError(true);
-      });
+
+    const load = () => {
+      fetch("/api/slots", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error("slots"))))
+        .then((data: SlotsResponse) => {
+          if (!alive) return;
+          setSlots(data);
+          setSlotsError(false);
+          if (!data.open) setSlot(data.slots[0] ?? "");
+        })
+        // `slots` reste `null` : une réponse « fermé, aucun créneau » fabriquée
+        // ici annoncerait au client que le restaurant est fermé alors que c'est
+        // le serveur qui n'a pas répondu.
+        .catch(() => {
+          if (!alive) return;
+          setSlots(null);
+          setSlotsError(true);
+        });
+    };
+
+    load();
+    const timer = setInterval(load, 60_000);
     return () => {
       alive = false;
+      clearInterval(timer);
     };
   }, [reloadKey]);
 
@@ -294,13 +313,28 @@ export function CheckoutClient() {
      * la faille qui permettait d'encaisser un panier de 80 € à 1 centime.
      * La zone n'est pas envoyée non plus : elle est déduite du code postal. */
     const payload = {
-      lines: lines.map((l) => ({
-        dishId: l.dishId,
-        qty: l.qty,
-        opts: l.opts,
-        formule: l.formule,
-        note: l.note,
-      })),
+      lines: lines.map((l) =>
+        l.formulaId
+          ? {
+              // Ligne formule : la formule et le plat retenu par créneau. Les
+              // suppléments et le prix sont recalculés en base.
+              formulaId: l.formulaId,
+              picks: (l.picks ?? []).map((p) => ({
+                slotId: p.slotId,
+                dishId: p.dishId,
+                opts: p.opts,
+              })),
+              qty: l.qty,
+              note: l.note,
+            }
+          : {
+              dishId: l.dishId,
+              qty: l.qty,
+              opts: l.opts,
+              formule: l.formule,
+              note: l.note,
+            },
+      ),
       mode,
       slot,
       customer: {
@@ -682,7 +716,7 @@ export function CheckoutClient() {
                     className={inputCls}
                     value={form.city}
                     onChange={set("city")}
-                    placeholder="Lognes"
+                    placeholder="Pontault-Combault"
                     required
                   />
                 </div>
@@ -718,20 +752,29 @@ export function CheckoutClient() {
             Paiement par carte sécurisé par Stripe — nous ne voyons ni ne conservons vos données
             bancaires.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-2">
             {PAYMENTS.map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => setPayment(p)}
                 aria-pressed={payment === p}
-                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                  payment === p
-                    ? "border-primary bg-primary text-white"
-                    : "border-line hover:border-primary/40"
+                className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                  payment === p ? "border-primary bg-primary-soft" : "border-line hover:border-primary/30"
                 }`}
               >
-                {p}
+                <span
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${
+                    payment === p ? "border-primary" : "border-line"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {payment === p && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold text-ink">{p}</span>
+                  <span className="block text-xs text-ink-2">{PAYMENT_INFO[p]}</span>
+                </span>
               </button>
             ))}
           </div>

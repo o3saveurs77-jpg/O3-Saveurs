@@ -4,6 +4,7 @@ import { rowToDish, rowToZone } from "@/lib/serialize";
 import { optionalUser, readJson, badRequest } from "@/lib/guard";
 import { priceLines, promotionDiscount, promotionEligible, subtotalOf } from "@/lib/pricing";
 import type { RawLine } from "@/lib/pricing";
+import { rowToFormula } from "@/lib/formulas";
 import { resolveZone } from "@/lib/zones";
 import { normalizePromoCode, validatePromoCode } from "@/lib/promotionValidation";
 import type { Zone } from "@/lib/menu";
@@ -65,10 +66,32 @@ export async function POST(req: Request) {
   for (const item of body.lines as unknown[]) {
     if (!item || typeof item !== "object") return badRequest("Ligne de panier invalide");
     const line = item as Record<string, unknown>;
+    const qty = typeof line.qty === "number" ? line.qty : Number(line.qty);
+
+    // ── Ligne formule : la formule et un plat par créneau, aucun montant ──
+    if (typeof line.formulaId === "string" && line.formulaId) {
+      const picks = Array.isArray(line.picks) ? (line.picks as Record<string, unknown>[]) : [];
+      raw.push({
+        formulaId: line.formulaId,
+        qty,
+        picks: picks
+          .filter((p) => typeof p?.slotId === "string" && typeof p?.dishId === "string")
+          .map((p) => ({
+            slotId: p.slotId as string,
+            dishId: p.dishId as string,
+            opts:
+              p.opts && typeof p.opts === "object"
+                ? (p.opts as Record<string, string>)
+                : undefined,
+          })),
+      });
+      continue;
+    }
+
     if (typeof line.dishId !== "string" || !line.dishId) return badRequest("Plat inconnu");
     raw.push({
       dishId: line.dishId,
-      qty: typeof line.qty === "number" ? line.qty : Number(line.qty),
+      qty,
       opts:
         line.opts && typeof line.opts === "object"
           ? (line.opts as Record<string, string>)
@@ -79,11 +102,29 @@ export async function POST(req: Request) {
 
   const mode: OrderMode = body.mode === "livraison" ? "livraison" : "emporter";
 
-  const dishRows = await prisma.dish.findMany({
-    where: { id: { in: [...new Set(raw.map((l) => l.dishId))] } },
-  });
+  /* Les plats à relire couvrent les deux formes de ligne : commandés à la
+   * carte, ou retenus dans un créneau de formule. */
+  const dishIds = [
+    ...new Set([
+      ...raw.map((l) => l.dishId).filter((id): id is string => Boolean(id)),
+      ...raw.flatMap((l) => (l.picks ?? []).map((p) => p.dishId)),
+    ]),
+  ];
+  const formulaIds = [
+    ...new Set(raw.map((l) => l.formulaId).filter((id): id is string => Boolean(id))),
+  ];
 
-  const priced = priceLines(dishRows.map(rowToDish), raw);
+  const [dishRows, formulaRows] = await Promise.all([
+    prisma.dish.findMany({ where: { id: { in: dishIds } } }),
+    formulaIds.length
+      ? prisma.formula.findMany({
+          where: { id: { in: formulaIds } },
+          include: { slots: { include: { choices: true } } },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const priced = priceLines(dishRows.map(rowToDish), raw, formulaRows.map(rowToFormula));
   if (!priced.ok) return NextResponse.json({ ok: false, error: priced.error });
   const subtotalCents = subtotalOf(priced.value);
 

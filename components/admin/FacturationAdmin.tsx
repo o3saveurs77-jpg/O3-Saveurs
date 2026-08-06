@@ -1,18 +1,47 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useOrders } from "@/components/providers/OrdersContext";
 import { fmtPrice } from "@/lib/menu";
 import { vatBreakdown, formatInvoiceNumber } from "@/lib/money";
-import { valid } from "@/lib/analytics";
+import { valid, fetchAllOrders, MAX_FETCHED_ORDERS } from "@/lib/analytics";
 import { Icon } from "@/components/Icon";
+import type { Order } from "@/lib/types";
 
+/*
+ * L'écran s'appuyait sur `useOrders()` (OrdersContext), qui ne charge que les
+ * 50 commandes les plus récentes — une pagination pensée pour l'aperçu du
+ * back-office, pas pour la facturation. Dès que le restaurant dépassait
+ * 50 commandes, les factures plus anciennes disparaissaient silencieusement de
+ * la liste ET du CSV, alors que l'écran annonce plus bas un « export CSV
+ * complet ». `fetchAllOrders` (lib/analytics.ts) a été écrit précisément pour
+ * cet écran — voir son commentaire — mais n'était jamais appelé ici.
+ */
 export function FacturationAdmin() {
-  const { orders, ready } = useOrders();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [truncated, setTruncated] = useState(false);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const { orders: rows, truncated: t } = await fetchAllOrders({ paid: true });
+      setOrders(rows);
+      setTruncated(t);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Les factures n'ont pas pu être chargées.");
+    } finally {
+      setReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const invoices = useMemo(
-    () => valid(orders).filter((o) => o.paid).sort((a, b) => b.createdAt - a.createdAt),
+    () => valid(orders).sort((a, b) => b.createdAt - a.createdAt),
     [orders]
   );
 
@@ -81,6 +110,29 @@ export function FacturationAdmin() {
           <Icon name="arrow" size={16} /> Exporter (CSV)
         </button>
       </div>
+
+      {error && (
+        <p
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brick/30 bg-primary-soft p-4 text-sm text-brick"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={load}
+            className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+          >
+            Réessayer
+          </button>
+        </p>
+      )}
+
+      {truncated && (
+        <p className="rounded-xl border border-line bg-panel-2 p-3 text-xs text-ink-2">
+          Plus de {MAX_FETCHED_ORDERS} factures payées existent : seules les {MAX_FETCHED_ORDERS}{" "}
+          les plus récentes sont chargées ici.
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-soft)]">
         <table className="w-full min-w-[640px] text-sm">

@@ -74,9 +74,66 @@ model Dish {
 
   movements StockMovement[]
   specials  DailySpecial[]
+  formulaChoices FormulaChoice[]
 
   @@index([cat, position])
   @@index([available])
+}
+
+// ─── Formules ─────────────────────────────────────────────────
+// Une formule n'est pas un plat : c'est un prix fixe et une composition
+// (« entrée + plat + dessert »). Chaque créneau porte la liste des plats que
+// la cliente accepte à cet endroit-là, ce qui rend la formule pilotable depuis
+// le back-office sans toucher au code. Le prix facturé reste calculé par le
+// serveur : prix de la formule + suppléments des plats choisis.
+
+model Formula {
+  id String @id @default(cuid())
+  /// pastille courte affichée sur la carte : F1, F2…
+  code String @unique
+  name String
+  desc String @default("")
+  /// argument secondaire, affiché sous le prix (« Sur le pouce »)
+  extra      String  @default("")
+  priceCents Int
+  active     Boolean @default(true)
+  position   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  slots FormulaSlot[]
+
+  @@index([active, position])
+}
+
+model FormulaSlot {
+  id        String  @id @default(cuid())
+  formulaId String
+  formula   Formula @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  /// « Votre entrée », « Votre plat »…
+  label String
+  /// un créneau facultatif peut rester vide (supplément offert, boisson…)
+  required Boolean @default(true)
+  position Int     @default(0)
+
+  choices FormulaChoice[]
+
+  @@index([formulaId, position])
+}
+
+model FormulaChoice {
+  id     String      @id @default(cuid())
+  slotId String
+  slot   FormulaSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  dishId String
+  dish   Dish        @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  /// supplément en centimes (Thiéboudiène Poisson +4 €, poisson entier +9 €)
+  supplementCents Int @default(0)
+  position        Int @default(0)
+
+  @@unique([slotId, dishId])
+  @@index([slotId, position])
 }
 
 model StockMovement {
@@ -460,6 +517,70 @@ model ContactMessage {
   createdAt DateTime @default(now())
 
   @@index([handled, createdAt])
+}
+
+// ─── Traiteur (réunions & réceptions) ──────────────────────────
+
+/// Demande de devis traiteur, déposée depuis la page publique `/traiteur`.
+model CateringInquiry {
+  id String @id @default(cuid())
+
+  /// bureau | mariage | autre — correspond aux offres présentées en page Traiteur
+  eventType     String
+  eventDate     DateTime?
+  guestCount    Int?
+  location      String
+
+  customerName  String
+  customerPhone String
+  customerEmail String
+  message       String @default("")
+
+  /// nouveau | contacte | devis_envoye | confirme | decline
+  status String @default("nouveau")
+  /// note interne, jamais montrée au client
+  note   String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+// ─── Contenu éditorial des pages vitrine ──────────────────────
+
+/// Une section de page vitrine (accueil, à propos), ordonnable et modifiable
+/// depuis le back-office.
+///
+/// Les textes, titres, photos et prix de ces pages étaient écrits en dur dans
+/// les composants : la cliente ne pouvait ni corriger une faute, ni ajouter un
+/// encart, ni masquer une section sans passer par un développeur. Chaque bloc
+/// est désormais une ligne de cette table.
+///
+/// `kind` détermine la mise en page (le style maison reste garanti) et
+/// `contentJson` porte ce qui est libre : titres, textes, photos, éléments.
+/// Voir `lib/pageSections.ts` pour le catalogue des blocs et leur validation.
+model PageSection {
+  id String @id @default(cuid())
+
+  /// accueil | a-propos — voir PAGES dans lib/pageSections.ts
+  page String
+  /// type de bloc — voir SECTION_KINDS dans lib/pageSections.ts
+  kind String
+  /// nom interne, affiché dans la liste du back-office uniquement
+  label String @default("")
+
+  position Int     @default(0)
+  /// masquée = conservée en base mais absente du site public
+  visible  Boolean @default(true)
+
+  /// JSON: SectionContent (titres, textes, photos, éléments, prix…)
+  contentJson String @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([page, position])
 }
 
 // ─── Achats & budget ──────────────────────────────────────────

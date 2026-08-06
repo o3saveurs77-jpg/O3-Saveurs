@@ -8,7 +8,7 @@
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_HOURS, type DayHours } from "@/lib/hours";
 import type { DeliveryTier } from "@/lib/delivery";
-import { geocode, type LatLng } from "@/lib/geo";
+import type { LatLng } from "@/lib/geo";
 
 export const SETTING_DEFAULTS = {
   // Identité
@@ -16,9 +16,9 @@ export const SETTING_DEFAULTS = {
   "restaurant.tagline": "Chez Laila",
   "restaurant.phone": "01 72 84 52 44",
   "restaurant.email": "contact@o3saveurs.fr",
-  "restaurant.address": "6 bis rue du Village",
-  "restaurant.zip": "77185",
-  "restaurant.city": "Lognes",
+  "restaurant.address": "38 rue des Prés Saint-Martin",
+  "restaurant.zip": "77340",
+  "restaurant.city": "Pontault-Combault",
 
   // Informations légales — à renseigner par la cliente avant mise en ligne
   "legal.company": "",
@@ -182,6 +182,13 @@ export async function deliveryOrigin(): Promise<LatLng | null> {
     return { lat, lng };
   }
 
+  /* Import différé : `lib/geo` porte `server-only`, qui lève dès qu'il est
+   * chargé hors du serveur Next — y compris par `prisma/seed.ts`, exécuté sous
+   * tsx. Le seed n'a besoin que de `SETTING_DEFAULTS`, mais l'import statique
+   * de géocodage suffisait à faire échouer `npm run db:seed`. Ne charger le
+   * module qu'au moment où l'on géocode réellement supprime cette arête sans
+   * rien changer au comportement en production. */
+  const { geocode } = await import("@/lib/geo");
   const found = await geocode(address);
   if (!found) return null;
 

@@ -3,10 +3,29 @@
  * Tous les montants sont des **centimes entiers** (`…Cents`). Voir `lib/money.ts`.
  */
 
+/**
+ * Plat retenu dans un créneau de formule.
+ * `supplementCents` est le supplément **déjà inclus** dans le prix unitaire de
+ * la ligne : il n'est là que pour l'expliquer au client et à la cuisine.
+ */
+export interface FormulaPick {
+  slotId: string;
+  slotLabel: string;
+  dishId: string;
+  dishName: string;
+  supplementCents: number;
+  opts: Record<string, string>;
+}
+
 /** Ligne de panier, côté navigateur. */
 export interface CartLine {
   key: string;
+  /** vide sur une ligne formule, qui porte `formulaId` à la place */
   dishId: string;
+  /** renseigné sur une ligne formule */
+  formulaId?: string | null;
+  /** plats retenus dans chaque créneau, pour une ligne formule */
+  picks?: FormulaPick[] | null;
   name: string;
   photo: string | null;
   /**
@@ -23,7 +42,16 @@ export interface CartLine {
 
 /** Ligne de commande figée par le serveur, telle qu'archivée dans `Order.lines`. */
 export interface OrderLine {
+  /** vide sur une ligne formule */
   dishId: string;
+  /** renseigné sur une ligne formule */
+  formulaId?: string | null;
+  /**
+   * Composition retenue, pour une ligne formule. C'est elle qui permet à la
+   * cuisine de savoir quoi préparer et au stock de savoir quoi décrémenter —
+   * `opts` n'en est que la version lisible.
+   */
+  picks?: FormulaPick[] | null;
   name: string;
   photo: string | null;
   /** prix unitaire recalculé côté serveur (plat + options + formule) */
@@ -35,6 +63,10 @@ export interface OrderLine {
   formule: string | null;
   note: string;
 }
+
+/** Vrai si la ligne est une formule composée et non un plat à la carte. */
+export const isFormulaLine = <T extends { formulaId?: string | null }>(l: T): boolean =>
+  Boolean(l.formulaId);
 
 export type OrderMode = "livraison" | "emporter";
 
@@ -366,4 +398,50 @@ export interface ContactMessageView {
   message: string;
   handled: boolean;
   createdAt: number;
+}
+
+// ─── Traiteur ────────────────────────────────────────────────
+
+export type CateringEventType = "bureau" | "mariage" | "autre";
+
+export const CATERING_EVENT_TYPES: readonly CateringEventType[] = ["bureau", "mariage", "autre"];
+
+export const CATERING_EVENT_TYPE_LABEL: Record<CateringEventType, string> = {
+  bureau: "Réunion / séminaire de bureau",
+  mariage: "Mariage & réception",
+  autre: "Anniversaire, baptême ou autre réception",
+};
+
+export type CateringStatus = "nouveau" | "contacte" | "devis_envoye" | "confirme" | "decline";
+
+export const CATERING_STATUSES: readonly CateringStatus[] = [
+  "nouveau",
+  "contacte",
+  "devis_envoye",
+  "confirme",
+  "decline",
+];
+
+export const CATERING_STATUS_LABEL: Record<CateringStatus, string> = {
+  nouveau: "Nouvelle demande",
+  contacte: "Client recontacté",
+  devis_envoye: "Devis envoyé",
+  confirme: "Confirmé",
+  decline: "Déclinée",
+};
+
+export interface CateringInquiryView {
+  id: string;
+  eventType: string;
+  eventDate: number | null;
+  guestCount: number | null;
+  location: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  message: string;
+  status: CateringStatus;
+  note: string;
+  createdAt: number;
+  updatedAt: number;
 }

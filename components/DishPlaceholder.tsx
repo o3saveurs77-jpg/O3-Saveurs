@@ -38,8 +38,8 @@ const ART: Record<string, Art> = {
       "M32 10v-3",
     ],
   },
-  asiatique: {
-    label: "Asie",
+  medit: {
+    label: "Méditerranée",
     d: [
       "M13 30h38a19 19 0 0 1-38 0Z",
       "M20 24c4-3 8 1 12-2s8 1 12-2",

@@ -166,8 +166,12 @@ export function PromotionsAdmin() {
             : 0,
       code: form.code.trim() ? form.code.trim().toUpperCase() : null,
       minSubtotalCents: toCents(Number(form.minSubtotal) || 0) ?? 0,
-      startsAt: form.startsAt ? new Date(form.startsAt).getTime() : null,
-      endsAt: form.endsAt ? new Date(form.endsAt).getTime() : null,
+      // L'API attend une date ISO (`isoDate()` dans lib/validate.ts fait
+      // `new Date(String(v))`, qui échoue sur un timestamp numérique) : envoyer
+      // les millisecondes ici faisait échouer l'enregistrement de toute
+      // promotion à laquelle on donnait un début ou une fin.
+      startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
+      endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
       maxUses: form.maxUses.trim() ? Number(form.maxUses) : null,
       weekday: form.weekday === "" ? null : Number(form.weekday),
       oncePerCustomer: form.oncePerCustomer,

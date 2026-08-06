@@ -15,7 +15,14 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import { items, zones, platsDuJour, cats } from "../lib/menu";
+import {
+  items,
+  zones,
+  platsDuJour,
+  cats,
+  seedFormulas as seedFormulaList,
+  FORMULA_SUPPLEMENTS,
+} from "../lib/menu";
 import { DEFAULT_HOURS } from "../lib/hours";
 import { DEFAULT_TIERS } from "../lib/delivery";
 import { SETTING_DEFAULTS } from "../lib/settings";
@@ -162,6 +169,61 @@ async function seedDailySpecials() {
 }
 
 /**
+ * Formules et composition de leurs créneaux.
+ *
+ * Les libellés et le prix sont réalignés à chaque passage, mais **les créneaux
+ * ne sont créés que s'il n'y en a aucun** : une fois que la cliente a retiré ou
+ * ajouté des plats depuis l'administration, une relance du seed ne doit pas
+ * défaire son travail.
+ */
+async function seedFormulas() {
+  console.log(`🍱 ${seedFormulaList.length} formules…`);
+  const dishes = await prisma.dish.findMany({ select: { id: true, name: true, cat: true } });
+
+  for (const [i, f] of seedFormulaList.entries()) {
+    const data = {
+      name: f.name,
+      desc: f.desc,
+      extra: f.extra,
+      priceCents: cents(f.price) ?? 0,
+      position: i,
+    };
+
+    const formula = await prisma.formula.upsert({
+      where: { code: f.code },
+      // `active` reste à la base : une formule peut avoir été retirée de la carte.
+      create: { code: f.code, ...data },
+      update: data,
+      include: { _count: { select: { slots: true } } },
+    });
+
+    if (formula._count.slots > 0) continue;
+
+    for (const [j, slot] of f.slots.entries()) {
+      const eligibles = dishes.filter(
+        (d) => slot.cats.includes(d.cat) && !(slot.exclude ?? []).includes(d.name),
+      );
+
+      await prisma.formulaSlot.create({
+        data: {
+          formulaId: formula.id,
+          label: slot.label,
+          required: slot.required ?? true,
+          position: j,
+          choices: {
+            create: eligibles.map((d, k) => ({
+              dishId: d.id,
+              supplementCents: cents(FORMULA_SUPPLEMENTS[d.name] ?? 0) ?? 0,
+              position: k,
+            })),
+          },
+        },
+      });
+    }
+  }
+}
+
+/**
  * Crée le profil applicatif de l'administratrice (nom, commandes…). N'accorde
  * plus le rôle ADMIN : depuis le passage aux rôles Auth0, seule l'assignation
  * du rôle "ADMIN" à ce compte dans le dashboard Auth0 fait autorité (le champ
@@ -186,6 +248,7 @@ async function main() {
   await seedHours();
   await seedSettings();
   await seedDailySpecials();
+  await seedFormulas();
   await seedAdmin();
   console.log("\n✅ Seed terminé. Aucune donnée existante n'a été supprimée.");
 }
