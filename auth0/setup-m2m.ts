@@ -23,9 +23,15 @@
  *
  * Usage : npm run auth0:setup
  *
- * Après coup, supprimer ou désactiver l'application M2M dans Auth0 : elle n'a
- * plus d'usage une fois le rôle assigné et l'Action déployée.
+ * ⚠ Ne pas supprimer l'application M2M après coup, contrairement à ce que cette
+ * note conseillait : `lib/auth0Roles.ts` s'en sert **en production** pour relire
+ * le rôle en cours de session (scope `read:roles`). Sans elle, un rôle retiré
+ * dans Auth0 resterait actif jusqu'à la reconnexion de la personne. Les deux
+ * variables `AUTH0_M2M_*` doivent donc être présentes dans l'environnement de
+ * déploiement, au même titre que `AUTH0_CLIENT_*`.
  */
+
+import { readFileSync } from "node:fs";
 
 try {
   process.loadEnvFile(); // charge .env — ce script tourne hors Next.js/Prisma
@@ -33,20 +39,27 @@ try {
   /* pas de .env local (ex. CI) : les variables viennent déjà de l'environnement */
 }
 
-const ROLE_CLAIM = "https://o3saveurs.fr/role";
 const ACTION_NAME = "Add role claim";
-const ACTION_CODE = `
-const ROLE_CLAIM = "${ROLE_CLAIM}";
-const KNOWN_ROLES = ["ADMIN", "CLIENT"];
 
-exports.onExecutePostLogin = async (event, api) => {
-  const assigned = event.authorization?.roles ?? [];
-  const role = KNOWN_ROLES.find((r) => assigned.includes(r)) ?? "CLIENT";
-
-  api.idToken.setCustomClaim(ROLE_CLAIM, role);
-  api.accessToken.setCustomClaim(ROLE_CLAIM, role);
-};
-`.trim();
+/**
+ * Code déployé, lu depuis `auth0/actions/add-role-claim.js`.
+ *
+ * Ce script en portait auparavant sa **propre copie**, dans un littéral de
+ * gabarit. Les deux exemplaires avaient déjà divergé : relancer
+ * `npm run auth0:setup` réécrasait le trigger déployé avec la version périmée
+ * du script, silencieusement. Un contrôle d'accès n'a qu'une source.
+ */
+function actionCode(): string {
+  const file = new URL("./actions/add-role-claim.js", import.meta.url);
+  const code = readFileSync(file, "utf8").trim();
+  if (!code.includes("onExecutePostLogin")) {
+    throw new Error(
+      "auth0/actions/add-role-claim.js ne définit pas onExecutePostLogin — " +
+        "déploiement interrompu pour ne pas casser la connexion au site.",
+    );
+  }
+  return code;
+}
 
 function env(key: string): string {
   const v = process.env[key]?.trim();
@@ -136,6 +149,7 @@ interface ActionResource {
 }
 
 async function ensureAction(token: string): Promise<ActionResource> {
+  const code = actionCode();
   const existing = await api<{ actions: ActionResource[] }>(
     token,
     "/api/v2/actions/actions?triggerId=post-login&per_page=100",
@@ -145,7 +159,7 @@ async function ensureAction(token: string): Promise<ActionResource> {
   if (found) {
     await api(token, `/api/v2/actions/actions/${found.id}`, {
       method: "PATCH",
-      body: JSON.stringify({ code: ACTION_CODE }),
+      body: JSON.stringify({ code }),
     });
     console.log(`  · action "${ACTION_NAME}" mise à jour (${found.id})`);
     return found;
@@ -156,7 +170,7 @@ async function ensureAction(token: string): Promise<ActionResource> {
     body: JSON.stringify({
       name: ACTION_NAME,
       supported_triggers: [{ id: "post-login", version: "v3" }],
-      code: ACTION_CODE,
+      code,
       runtime: "node18",
     }),
   });
