@@ -173,7 +173,14 @@ export function CheckoutClient() {
           if (!alive) return;
           setSlots(data);
           setSlotsError(false);
-          if (!data.open) setSlot(data.slots[0] ?? "");
+          /* Le créneau n'est **pas** réécrit ici. Cette fonction est rejouée
+           * toutes les minutes : un `setSlot(data.slots[0])` inconditionnel
+           * ramenait le choix du client au premier créneau de la liste à chaque
+           * passage. Quelqu'un qui demandait 20:00 pendant qu'on est fermé
+           * repassait silencieusement à 18:00 soixante secondes plus tard, et
+           * découvrait l'horaire réel sur son email de confirmation.
+           * L'effet ci-dessous s'en charge, mais seulement quand le créneau
+           * retenu a réellement cessé d'être proposable. */
         })
         // `slots` reste `null` : une réponse « fermé, aucun créneau » fabriquée
         // ici annoncerait au client que le restaurant est fermé alors que c'est
@@ -287,21 +294,71 @@ export function CheckoutClient() {
     else if (slotOptions.length === 0 && canPreOrderNext && slot !== "next") setSlot("next");
   }, [slots, slotOptions, slot, canPreOrderNext]);
 
-  const valid = useMemo(() => {
-    if (lines.length === 0 || belowMin || outOfZone) return false;
-    if (!cgv) return false;
-    const slotOk = slotOptions.length > 0 ? slotOptions.includes(slot) : canPreOrderNext && slot === "next";
-    if (!slotOk) return false;
-    if (form.name.trim().length < 2) return false;
-    if (!EMAIL_RE.test(form.email.trim())) return false;
-    if (form.phone.replace(/\D/g, "").length < 9) return false;
-    if (mode === "livraison") {
-      if (form.address.trim().length < 5) return false;
-      if (form.city.trim().length < 2) return false;
-      if (!/^\d{5}$/.test(form.zip.trim())) return false;
+  /**
+   * Ce qui empêche encore de valider, énoncé en clair.
+   *
+   * Le bouton se contentait d'être grisé : le client remplissait tout son
+   * formulaire, ne pouvait pas payer, et rien à l'écran ne lui disait pourquoi.
+   * Une case CGV non cochée, un créneau jamais choisi ou un chiffre manquant au
+   * téléphone bloquaient la commande en silence — et donnaient l'impression
+   * d'un site cassé plutôt que d'un champ à compléter.
+   *
+   * La liste sert aussi de définition unique de la validité : `valid` en
+   * découle, il ne peut donc pas exister de blocage sans message correspondant.
+   */
+  const blockers = useMemo(() => {
+    const out: string[] = [];
+
+    const slotOk =
+      slotOptions.length > 0 ? slotOptions.includes(slot) : canPreOrderNext && slot === "next";
+    if (!slotOk) {
+      out.push(
+        !slots
+          ? "Chargement des créneaux en cours…"
+          : slotOptions.length === 0 && !canPreOrderNext
+            ? "Aucun créneau n'est disponible pour le moment."
+            : "Choisissez un créneau à l'étape 2.",
+      );
     }
-    return true;
-  }, [lines.length, belowMin, outOfZone, cgv, slot, slotOptions, canPreOrderNext, form, mode]);
+
+    if (form.name.trim().length < 2) out.push("Indiquez votre nom complet (étape 3).");
+    if (!EMAIL_RE.test(form.email.trim())) out.push("Indiquez une adresse email valide (étape 3).");
+    if (form.phone.replace(/\D/g, "").length < 9) {
+      out.push("Indiquez un numéro de téléphone valide (étape 3).");
+    }
+
+    if (mode === "livraison") {
+      if (form.address.trim().length < 5) out.push("Indiquez votre adresse de livraison (étape 3).");
+      if (form.city.trim().length < 2) out.push("Indiquez votre ville (étape 3).");
+      if (!/^\d{5}$/.test(form.zip.trim())) out.push("Indiquez un code postal à 5 chiffres (étape 3).");
+      if (outOfZone) {
+        out.push("Cette adresse est hors de notre zone de livraison — choisissez « à emporter ».");
+      }
+      if (belowMin) {
+        out.push(
+          `Il manque ${fmtPrice(minimumCents - subtotalCents)} pour atteindre le minimum de commande.`,
+        );
+      }
+    }
+
+    if (!cgv) out.push("Cochez l'acceptation des conditions générales de vente.");
+
+    return out;
+  }, [
+    slots,
+    slot,
+    slotOptions,
+    canPreOrderNext,
+    form,
+    mode,
+    outOfZone,
+    belowMin,
+    minimumCents,
+    subtotalCents,
+    cgv,
+  ]);
+
+  const valid = lines.length > 0 && blockers.length === 0;
 
   const placeOrder = useCallback(async () => {
     if (!valid || placing) return; // garde de double soumission
@@ -813,11 +870,31 @@ export function CheckoutClient() {
                   <span className="font-semibold">
                     {l.qty}× {l.name}
                   </span>
-                  {l.formule && <span className="block text-xs text-ink-2">{l.formule}</span>}
-                  {Object.values(l.opts).length > 0 && (
-                    <span className="block text-xs text-ink-2">
-                      {Object.values(l.opts).join(" · ")}
-                    </span>
+                  {/* Même règle que le tiroir du panier : une formule dit qu'elle
+                      en est une et détaille sa composition. C'est l'écran où le
+                      client vérifie avant de payer — il doit pouvoir compter ce
+                      qu'il commande sans se demander si un plat est facturé deux
+                      fois. */}
+                  {l.formulaId ? (
+                    <>
+                      <span className="mt-0.5 block text-xs font-bold uppercase tracking-wide text-teal">
+                        Formule {l.formule} · tout compris
+                      </span>
+                      {Object.entries(l.opts).map(([slotLabel, choix]) => (
+                        <span key={slotLabel} className="block text-xs text-ink-2">
+                          › <span className="font-semibold">{slotLabel}</span> : {choix}
+                        </span>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      {l.formule && <span className="block text-xs text-ink-2">{l.formule}</span>}
+                      {Object.values(l.opts).length > 0 && (
+                        <span className="block text-xs text-ink-2">
+                          {Object.values(l.opts).join(" · ")}
+                        </span>
+                      )}
+                    </>
                   )}
                 </span>
                 <span className="font-semibold">{fmtPrice(l.unitPriceCents * l.qty)}</span>
@@ -904,6 +981,7 @@ export function CheckoutClient() {
             type="button"
             onClick={placeOrder}
             disabled={!valid || placing}
+            aria-describedby={blockers.length > 0 ? "co-blocages" : undefined}
             className={`mt-4 flex w-full items-center justify-center gap-2 rounded-full px-6 py-4 font-bold transition ${
               valid && !placing
                 ? "bg-primary text-white hover:brightness-105"
@@ -918,6 +996,27 @@ export function CheckoutClient() {
               <>Payer {fmtPrice(totalCents)}</>
             )}
           </button>
+
+          {/* Pourquoi le bouton ne répond pas. Sans cette liste, le client ne
+              pouvait que constater un bouton mort et quitter le site. */}
+          {!placing && blockers.length > 0 && (
+            <div
+              id="co-blocages"
+              className="mt-3 rounded-xl border border-line bg-panel-2 p-3 text-sm"
+            >
+              <p className="flex items-center gap-2 font-semibold text-ink">
+                <Icon name="warning" size={16} className="shrink-0 text-primary" />
+                {blockers.length === 1
+                  ? "Il reste une chose à compléter :"
+                  : `Il reste ${blockers.length} choses à compléter :`}
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-8 text-ink-2">
+                {blockers.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Récapitulatif légal — remplace les mentions « Démonstration » et
               « Paiement simulé — aucune carte débitée », qui étaient fausses : le

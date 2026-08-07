@@ -151,11 +151,40 @@ function Drawer() {
                         <Icon name="x" size={16} />
                       </button>
                     </div>
-                    {l.formule && <p className="text-xs text-ink-2">{l.formule}</p>}
-                    {Object.entries(l.opts).length > 0 && (
-                      <p className="truncate text-xs text-ink-2">
-                        {Object.values(l.opts).join(" · ")}
-                      </p>
+                    {/* Une formule composée était affichée comme un plat de plus :
+                        même cadre, et sa composition écrasée dans un `truncate`
+                        sur une seule ligne (« Salade · Brochette · Ananas ·… »).
+                        Posée à côté de plats pris à l'unité, elle donnait
+                        l'impression d'avoir été éclatée en morceaux facturés
+                        séparément. Elle s'annonce maintenant comme une formule,
+                        et sa composition est lisible en entier. */}
+                    {l.formulaId ? (
+                      <>
+                        <span className="mt-0.5 inline-flex w-fit items-center gap-1 rounded-full bg-teal/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-teal">
+                          <Icon name="check" size={11} /> Formule {l.formule} · tout compris
+                        </span>
+                        <ul className="mt-1.5 space-y-0.5 text-xs text-ink-2">
+                          {Object.entries(l.opts).map(([slotLabel, choix]) => (
+                            <li key={slotLabel} className="flex gap-1.5">
+                              <span className="shrink-0 text-primary" aria-hidden="true">
+                                ›
+                              </span>
+                              <span>
+                                <span className="font-semibold">{slotLabel}</span> : {choix}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : (
+                      <>
+                        {l.formule && <p className="text-xs text-ink-2">{l.formule}</p>}
+                        {Object.entries(l.opts).length > 0 && (
+                          <p className="truncate text-xs text-ink-2">
+                            {Object.values(l.opts).join(" · ")}
+                          </p>
+                        )}
+                      </>
                     )}
 
                     <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
