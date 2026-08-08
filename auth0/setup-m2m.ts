@@ -183,22 +183,43 @@ async function deployAction(token: string, actionId: string) {
   console.log(`  · action déployée`);
 }
 
+/**
+ * L'API n'est pas symétrique : la **lecture** décrit chaque étape par un objet
+ * `action` ({ id, name }), tandis que l'**écriture** attend un `ref`
+ * ({ type, value }). Le code lisait `b.ref.value` sur la réponse de lecture et
+ * plantait donc systématiquement — « Cannot read properties of undefined » —
+ * juste après avoir déployé l'action, en laissant croire à un échec global
+ * alors que le déploiement, lui, avait réussi.
+ */
 interface Bindings {
-  bindings: { id?: string; ref: { type: string; value: string }; display_name: string }[];
+  bindings: {
+    id?: string;
+    display_name: string;
+    action?: { id: string; name: string };
+  }[];
 }
 
 async function ensureBinding(token: string, actionId: string) {
   const current = await api<Bindings>(token, "/api/v2/actions/triggers/post-login/bindings");
-  const already = current.bindings.some((b) => b.ref.value === actionId);
-  if (already) {
+  if (current.bindings.some((b) => b.action?.id === actionId)) {
     console.log(`  · déjà présente dans le flow Login`);
     return;
   }
+
+  /* Les étapes existantes sont réécrites telles quelles : un PATCH remplace la
+   * liste entière, en omettre une la retirerait du flow. */
+  const conservees = current.bindings
+    .filter((b) => b.action?.id)
+    .map((b) => ({
+      ref: { type: "action_id", value: b.action!.id },
+      display_name: b.display_name,
+    }));
+
   await api(token, "/api/v2/actions/triggers/post-login/bindings", {
     method: "PATCH",
     body: JSON.stringify({
       bindings: [
-        ...current.bindings.map((b) => ({ ref: b.ref, display_name: b.display_name })),
+        ...conservees,
         { ref: { type: "action_id", value: actionId }, display_name: ACTION_NAME },
       ],
     }),

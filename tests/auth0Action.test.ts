@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 
 /**
  * Trigger Auth0 « Post Login » (`auth0/actions/add-role-claim.js`).
@@ -24,6 +25,26 @@ const { onExecutePostLogin } = require_(actionPath) as {
 
 const ROLE_CLAIM = "https://o3saveurs.fr/role";
 const ROLES_CLAIM = "https://o3saveurs.fr/roles";
+
+describe("code déployable chez Auth0", () => {
+  it("ne contient aucun caractère non-ASCII", () => {
+    /* Une version documentée en français accentué a été rejetée à l'exécution
+     * par Auth0 — « ACTION_MALFORMED: Invalid action code » — et plus personne
+     * n'a pu se connecter au site pendant huit heures. Le déploiement, lui,
+     * avait été accepté sans broncher : rien n'avertit avant la panne. Ce test
+     * est le garde-fou, puisque Auth0 n'en offre aucun. */
+    const source = readFileSync(actionPath, "utf8");
+    const fautifs = [...source].filter((c) => c.charCodeAt(0) > 127);
+    expect(
+      fautifs,
+      `caractères non-ASCII interdits : ${[...new Set(fautifs)].join(" ")}`,
+    ).toHaveLength(0);
+  });
+
+  it("exporte bien le point d'entrée attendu par le trigger", () => {
+    expect(readFileSync(actionPath, "utf8")).toContain("exports.onExecutePostLogin");
+  });
+});
 
 /** Faux `api` Auth0 : mémorise les claims posés sur chacun des deux tokens. */
 function fakeApi() {
@@ -127,13 +148,15 @@ describe("RBAC indisponible", () => {
     const api = fakeApi();
     await onExecutePostLogin({ user: { user_id: "auth0|abc" } }, api);
     expect(api.claims[ROLE_CLAIM]).toBe("CLIENT");
-    expect(logs.join("\n")).toContain("Aucune source de rôles");
+    // Le message est en ASCII : le code déployé chez Auth0 ne doit contenir
+    // aucun caractère accentué (voir l'en-tête du trigger).
+    expect(logs.join("\n")).toContain("Aucune source de roles");
   });
 
   it("ne confond pas « aucun rôle » avec « aucune information »", async () => {
     const api = fakeApi();
     await onExecutePostLogin(userEvent({ authorization: { roles: [] } }), api);
-    expect(logs.join("\n")).not.toContain("Aucune source de rôles");
+    expect(logs.join("\n")).not.toContain("Aucune source de roles");
   });
 });
 
