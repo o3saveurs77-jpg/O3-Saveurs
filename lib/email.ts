@@ -19,11 +19,12 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { rowToOrder } from "@/lib/serialize";
 import { fmtCents, vatBreakdown, fmtVatRate, formatInvoiceNumber } from "@/lib/money";
+import { formatCreditNoteNumber } from "@/lib/refunds";
 import { escapeHtml } from "@/lib/validate";
 import { STATUS_LABEL } from "@/lib/types";
 import { getSettings } from "@/lib/settings";
 import { sellerFromSettings } from "@/lib/invoice";
-import { renderInvoicePdf } from "@/lib/pdf/renderInvoicePdf";
+import { renderInvoicePdf, renderCreditNotePdf } from "@/lib/pdf/renderInvoicePdf";
 import type { Order as OrderRow, CateringInquiry } from "@prisma/client";
 
 const isConfigured = () =>
@@ -38,6 +39,7 @@ export type EmailKind =
   | "paiement"
   | "statut"
   | "facture"
+  | "avoir"
   | "relance"
   | "newsletter"
   | "sav"
@@ -307,6 +309,73 @@ export async function sendInvoice(row: OrderRow, invoiceUrl: string): Promise<vo
     kind: "facture",
     orderId: order.id,
     dedupeKey: `facture:${order.id}`,
+    attachments: [{ filename: `${number === "—" ? order.ref : number}.pdf`, content: pdf }],
+  });
+}
+
+/**
+ * Avoir, envoyé au moment où l'argent repart vers le client.
+ *
+ * Pièce distincte de la facture, qui reste valable : c'est ce que le client
+ * doit comprendre en le lisant, et ce qu'un contrôle comptable attend. Le PDF
+ * est joint, comme pour la facture.
+ *
+ * La clé de déduplication porte le cumul remboursé, et non l'identifiant seul :
+ * deux remboursements partiels successifs sont deux avoirs à envoyer, pas un
+ * doublon à taire.
+ */
+export async function sendCreditNote(
+  row: OrderRow,
+  amountCents: number,
+  invoiceUrl: string,
+): Promise<void> {
+  const order = rowToOrder(row);
+  const at = row.refundedAt ?? new Date();
+  const number = formatCreditNoteNumber(order.creditNoteNumber, at);
+  const facture = formatInvoiceNumber(order.invoiceNumber, new Date(order.createdAt));
+  const restant = Math.max(0, order.totalCents - order.refundedCents);
+
+  const html = layout(
+    `Avoir ${number}`,
+    `<p style="margin:0 0 14px">Nous avons remboursé votre commande
+       <strong>${escapeHtml(order.ref)}</strong>.</p>
+     <table style="width:100%;font-size:13px;margin:0 0 14px">
+       <tr><td>Montant remboursé</td><td style="text-align:right;font-weight:bold">${fmtCents(amountCents)}</td></tr>
+       <tr><td>Total de la commande</td><td style="text-align:right">${fmtCents(order.totalCents)}</td></tr>
+       ${
+         restant > 0
+           ? `<tr><td>Reste acquis</td><td style="text-align:right">${fmtCents(restant)}</td></tr>`
+           : ""
+       }
+     </table>
+     ${
+       order.refundReason
+         ? `<p style="margin:0 0 14px">Motif : ${escapeHtml(order.refundReason)}</p>`
+         : ""
+     }
+     <p style="margin:0 0 14px">Selon votre banque, le montant peut mettre quelques jours
+       à réapparaître sur votre relevé.</p>
+     <p style="margin:0">Votre avoir ${escapeHtml(number)} est joint à cet email. Il se rapporte à
+       la facture ${escapeHtml(facture)}, qui reste valable —
+       <a href="${escapeHtml(invoiceUrl)}" style="color:#e8732a;font-weight:bold">la consulter en ligne</a>.</p>`,
+  );
+
+  const settings = await getSettings();
+  const pdf = await renderCreditNotePdf(order, sellerFromSettings(settings), {
+    number,
+    amountCents,
+    totalRefundedCents: order.refundedCents,
+    reason: order.refundReason,
+    at,
+  });
+
+  await send({
+    to: order.customer.email,
+    subject: `Votre avoir ${number} — Ô 3 Saveurs`,
+    html,
+    kind: "avoir",
+    orderId: order.id,
+    dedupeKey: `avoir:${order.id}:${order.refundedCents}`,
     attachments: [{ filename: `${number === "—" ? order.ref : number}.pdf`, content: pdf }],
   });
 }

@@ -4,7 +4,7 @@ import { rowToOrderWithDriver } from "@/lib/serialize";
 import { requireAdmin, optionalUser, readJson, badRequest, notFound } from "@/lib/guard";
 import { releaseStock } from "@/lib/stock";
 import { nextInvoiceNumber } from "@/lib/ref";
-import { sendStatusUpdate } from "@/lib/email";
+import { sendStatusUpdate, sendInvoice } from "@/lib/email";
 import { STATUS_NEXT, type OrderStatus } from "@/lib/types";
 import type { OrderLine } from "@/lib/types";
 
@@ -134,6 +134,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (data.status) {
     await sendStatusUpdate(updated).catch((error) =>
       console.error(`[orders] email de statut pour ${id} échoué:`, error),
+    );
+  }
+
+  /* Encaissement en espèces : la facture part par email, comme pour un
+   * paiement par carte.
+   *
+   * Le numéro de facture était bien attribué ci-dessus, mais `sendInvoice`
+   * n'était appelé que par le webhook Stripe : une commande réglée en liquide
+   * obtenait donc une facture consultable en ligne que le client ne recevait
+   * jamais. `sendInvoice` porte une clé de déduplication, un double
+   * encaissement ne renvoie donc pas deux fois le même document. */
+  if (data.paid === true && !current.paid) {
+    const origin = process.env.NEXTAUTH_URL ?? "";
+    await sendInvoice(updated, `${origin}/facture/${updated.id}`).catch((error) =>
+      console.error(`[orders] envoi de la facture de ${id} échoué:`, error),
     );
   }
 

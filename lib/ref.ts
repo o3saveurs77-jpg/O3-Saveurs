@@ -68,6 +68,23 @@ export async function nextInvoiceNumber(): Promise<number> {
 }
 
 /**
+ * Numéro d'avoir suivant, incrémenté atomiquement.
+ *
+ * Compteur **distinct** de celui des factures : mêler les deux suites rendrait
+ * impossible de dire, devant un contrôle, combien de factures ont été émises
+ * sur l'exercice. Comme pour les factures, à n'appeler qu'une fois par pièce —
+ * la séquence ne doit comporter aucun trou.
+ */
+export async function nextCreditNoteNumber(): Promise<number> {
+  const counter = await prisma.counter.upsert({
+    where: { key: "creditNote" },
+    create: { key: "creditNote", value: 1 },
+    update: { value: { increment: 1 } },
+  });
+  return counter.value;
+}
+
+/**
  * Le *formatage* d'un numéro de facture vit dans `lib/money.ts`, qui est pur :
  * ce module-ci importe Prisma et `node:crypto`, donc un composant client ne peut
  * pas l'importer sans tirer la base dans le bundle du navigateur.

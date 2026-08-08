@@ -381,9 +381,30 @@ model Order {
   promoCode   String?
 
   paid Boolean @default(false)
-  /// en_attente | paye | echec | rembourse | expire
+  /// en_attente | paye | echec | rembourse_partiel | rembourse | expire
   paymentStatus String @default("en_attente")
   paymentMethod String @default("Carte")
+
+  /// Total déjà remboursé, en centimes. Cumulatif : plusieurs remboursements
+  /// partiels s'additionnent, et la somme ne peut jamais dépasser `totalCents`.
+  refundedCents Int @default(0)
+  /// Numéro d'avoir séquentiel, figé à l'émission.
+  ///
+  /// Une facture émise ne se modifie ni ne s'efface (art. 242 nonies A CGI) :
+  /// rembourser produit une **pièce distincte**, l'avoir, avec sa propre suite
+  /// de numéros. Marquer la facture « remboursée » sans avoir ne justifierait
+  /// aucune sortie d'argent devant un contrôle.
+  creditNoteNumber Int? @unique
+  refundedAt       DateTime?
+  /// Motif du remboursement, repris sur l'avoir.
+  refundReason     String    @default("")
+
+  /// Annulation demandée par le client alors que la commande était déjà
+  /// engagée en cuisine : elle attend une décision humaine, elle n'annule rien
+  /// par elle-même.
+  cancelRequestedAt DateTime?
+  /// Ce que le client a écrit en demandant l'annulation.
+  cancelReason      String    @default("")
 
   stripeSessionId       String?
   stripePaymentIntentId String?

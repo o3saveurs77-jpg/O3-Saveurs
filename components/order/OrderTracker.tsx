@@ -8,6 +8,7 @@ import { fmtPrice } from "@/lib/menu";
 import { STATUS_FLOW, STATUS_LABEL } from "@/lib/types";
 import type { Order, OrderLine, OrderStatus } from "@/lib/types";
 import { Icon, type IconName } from "@/components/Icon";
+import { CancelOrder } from "./CancelOrder";
 
 /** Doit rester aligné sur la clé écrite par `CheckoutClient` avant la redirection. */
 const PENDING_ORDER_KEY = "ots_pending_order";
@@ -317,6 +318,10 @@ export function OrderTracker({ id }: { id: string }) {
           </p>
         </div>
       )}
+
+      {/* Annulation — le composant décide seul s'il a lieu d'être, selon
+          l'avancement de la commande. */}
+      <CancelOrder order={order} onChanged={() => void load()} />
 
       {/* livreur assigné, en route */}
       {order.driverName && order.status === "route" && (

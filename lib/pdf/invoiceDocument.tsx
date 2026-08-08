@@ -117,14 +117,41 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 7.5, color: COLOR.ink2, marginBottom: 3, lineHeight: 1.4 },
 });
 
-export function InvoiceDocument({ order, seller }: { order: Order; seller: InvoiceSeller }) {
+/**
+ * Avoir à émettre sur cette commande, quand le document en est un.
+ *
+ * Un avoir n'est pas une facture corrigée : la facture reste telle qu'émise
+ * (art. 242 nonies A CGI), et l'avoir constate la somme rendue. Les deux
+ * partagent le même gabarit — même identité vendeur, même détail des lignes —
+ * pour que le client reconnaisse la pièce qu'on lui rembourse.
+ */
+export interface CreditNote {
+  /** Numéro déjà formaté (« AV-2026-000042 »). */
+  number: string;
+  /** Montant rendu par cette opération, en centimes. */
+  amountCents: number;
+  /** Total rendu sur la commande, cumul compris. */
+  totalRefundedCents: number;
+  reason: string;
+  at: Date;
+}
+
+export function InvoiceDocument({
+  order,
+  seller,
+  creditNote,
+}: {
+  order: Order;
+  seller: InvoiceSeller;
+  creditNote?: CreditNote;
+}) {
   const createdAt = new Date(order.createdAt);
   const vat = vatBreakdown(order.totalCents, order.vatRateBp);
   const number = formatInvoiceNumber(order.invoiceNumber, createdAt);
   const paidAt = order.timeline.confirmedAt ?? order.createdAt;
 
   return (
-    <Document title={`Facture ${number}`}>
+    <Document title={creditNote ? `Avoir ${creditNote.number}` : `Facture ${number}`}>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.sellerBlock}>
@@ -155,9 +182,14 @@ export function InvoiceDocument({ order, seller }: { order: Order; seller: Invoi
             </View>
           </View>
           <View style={styles.titleBlock}>
-            <Text style={styles.title}>FACTURE</Text>
-            <Text style={styles.titleMeta}>{number}</Text>
-            <Text style={styles.titleMeta}>Émise le {dateFmt.format(createdAt)}</Text>
+            <Text style={styles.title}>{creditNote ? "AVOIR" : "FACTURE"}</Text>
+            <Text style={styles.titleMeta}>{creditNote ? creditNote.number : number}</Text>
+            <Text style={styles.titleMeta}>
+              Émis{creditNote ? "" : "e"} le {dateFmt.format(creditNote ? creditNote.at : createdAt)}
+            </Text>
+            {/* Un avoir doit renvoyer à la facture qu'il corrige, sans quoi rien
+                ne relie la sortie d'argent à la vente d'origine. */}
+            {creditNote && <Text style={styles.titleMeta}>Facture {number}</Text>}
             <Text style={styles.titleMeta}>Commande {order.ref}</Text>
           </View>
         </View>
@@ -254,6 +286,31 @@ export function InvoiceDocument({ order, seller }: { order: Order; seller: Invoi
             <Text style={styles.grandLabel}>Total TTC</Text>
             <Text style={styles.grandValue}>{fmtCents(order.totalCents)}</Text>
           </View>
+
+          {/* Le montant rendu, en négatif : c'est l'objet même de la pièce, il
+              ne doit pas se confondre avec le total de la vente. */}
+          {creditNote && (
+            <>
+              <View style={styles.grandRow}>
+                <Text style={styles.grandLabel}>Montant remboursé</Text>
+                <Text style={styles.grandValue}>− {fmtCents(creditNote.amountCents)}</Text>
+              </View>
+              {creditNote.totalRefundedCents !== creditNote.amountCents && (
+                <View style={styles.totalRow}>
+                  <Text style={styles.totalLabel}>Total remboursé à ce jour</Text>
+                  <Text style={styles.totalValue}>
+                    {fmtCents(creditNote.totalRefundedCents)}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Reste acquis</Text>
+                <Text style={styles.totalValue}>
+                  {fmtCents(Math.max(0, order.totalCents - creditNote.totalRefundedCents))}
+                </Text>
+              </View>
+            </>
+          )}
         </View>
 
         <View style={styles.footer}>
@@ -262,9 +319,13 @@ export function InvoiceDocument({ order, seller }: { order: Order; seller: Invoi
             produits alimentaires à emporter ou livrés (art. 279 m du CGI).
           </Text>
           <Text style={styles.footerText}>
-            {order.paid
-              ? "Facture acquittée — aucun règlement complémentaire n'est dû."
-              : "Facture non acquittée à ce jour. Règlement à la remise de la commande."}
+            {creditNote
+              ? `Avoir émis en remboursement de la facture ${number}${
+                  creditNote.reason ? ` — motif : ${creditNote.reason}` : ""
+                }. La facture d'origine reste valable et n'est ni annulée ni modifiée.`
+              : order.paid
+                ? "Facture acquittée — aucun règlement complémentaire n'est dû."
+                : "Facture non acquittée à ce jour. Règlement à la remise de la commande."}
           </Text>
           <Text style={styles.footerText}>
             Les denrées alimentaires périssables ne sont pas soumises au droit de rétractation (art.

@@ -121,12 +121,20 @@ export const STATUS_NEXT: Record<OrderStatus, OrderStatus[]> = {
   annulee: [],
 };
 
-export type PaymentStatus = "en_attente" | "paye" | "echec" | "rembourse" | "expire";
+export type PaymentStatus =
+  | "en_attente"
+  | "paye"
+  | "echec"
+  /** Une partie du montant a été rendue, le reste est bien encaissé. */
+  | "rembourse_partiel"
+  | "rembourse"
+  | "expire";
 
 export const PAYMENT_STATUSES: readonly PaymentStatus[] = [
   "en_attente",
   "paye",
   "echec",
+  "rembourse_partiel",
   "rembourse",
   "expire",
 ];
@@ -135,6 +143,7 @@ export const PAYMENT_STATUS_LABEL: Record<PaymentStatus, string> = {
   en_attente: "En attente",
   paye: "Payé",
   echec: "Échec",
+  rembourse_partiel: "Remboursé en partie",
   rembourse: "Remboursé",
   expire: "Expiré",
 };
@@ -168,6 +177,14 @@ export interface Order {
   paid: boolean;
   paymentStatus: PaymentStatus;
   paymentMethod: string;
+  /** Total déjà rendu au client, en centimes (cumul des remboursements). */
+  refundedCents: number;
+  /** Numéro d'avoir séquentiel, une fois le premier remboursement émis. */
+  creditNoteNumber: number | null;
+  refundReason: string;
+  /** Annulation demandée par le client sur une commande déjà engagée. */
+  cancelRequestedAt: number | null;
+  cancelReason: string;
   createdAt: number; // timestamp ms
   driverId: string | null;
   driverName: string | null;

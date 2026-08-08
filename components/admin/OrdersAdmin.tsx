@@ -7,6 +7,7 @@ import type { Order, OrderLine, OrderStatus } from "@/lib/types";
 import { fmtPrice } from "@/lib/menu";
 import { Icon } from "@/components/Icon";
 import { StatusPill } from "./StatusPill";
+import { RefundOrder } from "./RefundOrder";
 
 const FILTERS: { k: OrderStatus | "all" | "actives" | "impayees"; label: string }[] = [
   { k: "actives", label: "En cours" },
@@ -49,6 +50,9 @@ export function OrdersAdmin() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* Un remboursement réussi mérite mieux qu'un rafraîchissement silencieux :
+     rien à l'écran ne dirait si l'argent est bien parti. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (filter === "all") return orders;
@@ -100,10 +104,15 @@ export function OrdersAdmin() {
         </p>
       </div>
 
-      <div aria-live="polite" className="min-h-6">
+      <div aria-live="polite" className="min-h-6 space-y-2">
         {error && (
           <p className="rounded-xl bg-brick/10 px-4 py-2.5 text-sm font-semibold text-brick">
             {error}
+          </p>
+        )}
+        {notice && (
+          <p className="rounded-xl bg-teal/10 px-4 py-2.5 text-sm font-semibold text-teal">
+            {notice}
           </p>
         )}
       </div>
@@ -135,6 +144,12 @@ export function OrdersAdmin() {
             onToggle={() => setOpenId((id) => (id === o.id ? null : o.id))}
             onStatus={(status) => patch(o.id, { status })}
             onCollect={() => patch(o.id, { paid: true })}
+            /* Le remboursement passe par sa propre route : on recharge la liste
+               pour que le montant restant affiché soit celui de la base. */
+            onRefunded={(message) => {
+              setNotice(message);
+              void refresh();
+            }}
           />
         ))}
         {filtered.length === 0 && (
@@ -154,6 +169,7 @@ function OrderRow({
   onToggle,
   onStatus,
   onCollect,
+  onRefunded,
 }: {
   order: Order;
   open: boolean;
@@ -161,6 +177,7 @@ function OrderRow({
   onToggle: () => void;
   onStatus: (s: OrderStatus) => void;
   onCollect: () => void;
+  onRefunded: (message: string) => void;
 }) {
   // Seules les transitions déclarées sont proposées, et la première est mise en
   // avant comme action principale.
@@ -195,6 +212,18 @@ function OrderRow({
             {!order.paid && order.status !== "annulee" && (
               <span className="rounded-full bg-brick/10 px-2.5 py-0.5 text-xs font-bold text-brick">
                 {PAYMENT_STATUS_LABEL[order.paymentStatus]} · non payée
+              </span>
+            )}
+            {order.refundedCents > 0 && (
+              <span className="rounded-full bg-teal/10 px-2.5 py-0.5 text-xs font-bold text-teal">
+                {PAYMENT_STATUS_LABEL[order.paymentStatus]} · {fmtPrice(order.refundedCents)}
+              </span>
+            )}
+            {/* Une demande d'annulation attend une réponse humaine : elle doit
+                se voir sans avoir à déplier la commande. */}
+            {order.cancelRequestedAt !== null && order.status !== "annulee" && (
+              <span className="rounded-full bg-gold/25 px-2.5 py-0.5 text-xs font-bold text-[#7a5f00]">
+                Annulation demandée
               </span>
             )}
           </div>
@@ -321,6 +350,25 @@ function OrderRow({
                 <Icon name="x" size={16} /> Annuler
               </button>
             )}
+          </div>
+
+          {/* Ce que le client a écrit en demandant l'annulation : la décision
+              revient au restaurant, encore faut-il lui donner le motif. */}
+          {order.cancelRequestedAt !== null && order.status !== "annulee" && (
+            <p className="mt-3 rounded-xl bg-gold/15 p-3 text-sm print:hidden">
+              <strong>Annulation demandée par le client.</strong>{" "}
+              {order.cancelReason || "Aucun motif précisé."}{" "}
+              <span className="text-ink-2">
+                Acceptez en passant la commande à « Annulée », puis remboursez si elle a été
+                réglée.
+              </span>
+            </p>
+          )}
+
+          {/* Remboursement — le panneau se retire de lui-même sur une commande
+              jamais encaissée. */}
+          <div className="print:hidden">
+            <RefundOrder order={order} onDone={onRefunded} />
           </div>
 
           {/*
