@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Logo } from "./Brand";
 import { Icon } from "./Icon";
 import { useCart } from "./cart/CartContext";
 import { CartDrawer } from "./cart/CartDrawer";
+import { useAuth } from "./providers/AuthContext";
 
 const LINKS = [
   { href: "/", label: "Accueil" },
@@ -20,7 +21,55 @@ const LINKS = [
 export function Nav() {
   const pathname = usePathname();
   const { count, setOpen } = useCart();
+  const { user, logout } = useAuth();
   const [mobile, setMobile] = useState(false);
+
+  /* Se déconnecter n'existait que sur `/compte` : il fallait deviner qu'il
+   * fallait aller là pour en sortir. Le menu du bouton « Compte » l'expose
+   * depuis n'importe quelle page. */
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      if (!accountRef.current?.contains(e.target as Node)) setAccountOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAccountOpen(false);
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [accountOpen]);
+
+  // Le menu ne doit pas rester ouvert par-dessus la page suivante.
+  useEffect(() => {
+    setAccountOpen(false);
+    setMobile(false);
+  }, [pathname]);
+
+  /**
+   * Déconnexion puis retour à l'accueil, en rechargement complet.
+   *
+   * `signOut` efface le cookie mais les pages déjà rendues côté serveur
+   * gardent la session dans leur HTML : sans ce rechargement, on restait sur
+   * un écran qui affiche encore son nom et ses commandes, et on pouvait
+   * croire la déconnexion sans effet.
+   */
+  const handleLogout = async () => {
+    setAccountOpen(false);
+    setMobile(false);
+    await logout();
+    window.location.assign("/");
+  };
 
   return (
     <>
@@ -69,7 +118,9 @@ export function Nav() {
               Commander
             </Link>
 
-            {/* compte — icône seule sous sm, pilule icône + texte à partir de sm */}
+            {/* compte — icône seule sous sm, pilule icône + texte à partir de sm.
+                Connecté, la pilule ouvre un menu ; le petit bouton mobile reste
+                un simple lien, le menu de déconnexion vivant dans le burger. */}
             <Link
               href="/compte"
               className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2 sm:hidden"
@@ -77,13 +128,75 @@ export function Nav() {
             >
               <Icon name="user" size={20} />
             </Link>
-            <Link
-              href="/compte"
-              className="hidden items-center gap-2 rounded-full border border-line bg-panel px-4 py-2.5 text-[15px] font-semibold text-ink transition hover:bg-panel-2 sm:flex"
-            >
-              <Icon name="user" size={18} />
-              Compte
-            </Link>
+
+            {user ? (
+              <div ref={accountRef} className="relative hidden sm:block">
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen((v) => !v)}
+                  aria-expanded={accountOpen}
+                  aria-haspopup="menu"
+                  className="flex items-center gap-2 rounded-full border border-line bg-panel px-4 py-2.5 text-[15px] font-semibold text-ink transition hover:bg-panel-2"
+                >
+                  <Icon name="user" size={18} />
+                  Compte
+                  <Icon
+                    name="chevDown"
+                    size={15}
+                    className={`transition ${accountOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {accountOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-[calc(100%+8px)] w-64 overflow-hidden rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-lg)]"
+                  >
+                    <p className="truncate border-b border-line px-4 py-3 text-sm text-ink-2">
+                      Connecté en tant que
+                      <span className="block truncate font-bold text-ink">{user.email}</span>
+                    </p>
+
+                    <Link
+                      href="/compte"
+                      role="menuitem"
+                      onClick={() => setAccountOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-3 text-sm font-semibold hover:bg-panel-2"
+                    >
+                      <Icon name="user" size={17} className="text-primary" /> Mon compte
+                    </Link>
+
+                    {user.role === "ADMIN" && (
+                      <Link
+                        href="/admin"
+                        role="menuitem"
+                        onClick={() => setAccountOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-3 text-sm font-semibold hover:bg-panel-2"
+                      >
+                        <Icon name="settings" size={17} className="text-primary" /> Back-office
+                      </Link>
+                    )}
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2.5 border-t border-line px-4 py-3 text-left text-sm font-semibold text-brick hover:bg-brick/10"
+                    >
+                      <Icon name="lock" size={17} /> Se déconnecter
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                href="/compte"
+                className="hidden items-center gap-2 rounded-full border border-line bg-panel px-4 py-2.5 text-[15px] font-semibold text-ink transition hover:bg-panel-2 sm:flex"
+              >
+                <Icon name="user" size={18} />
+                Compte
+              </Link>
+            )}
 
             {/* bouton panier */}
             <button
@@ -139,6 +252,38 @@ export function Nav() {
             >
               Commander
             </Link>
+
+            {/* Le menu compte de la barre n'existe qu'à partir de 640 px : sans
+                ce relais, se déconnecter depuis un téléphone obligeait à passer
+                par la page « Mon compte ». */}
+            {user && (
+              <div className="mt-3 border-t border-line pt-3">
+                <p className="truncate px-3 pb-1 text-xs text-ink-2">{user.email}</p>
+                <Link
+                  href="/compte"
+                  onClick={() => setMobile(false)}
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-3 font-semibold hover:bg-panel-2"
+                >
+                  <Icon name="user" size={17} className="text-primary" /> Mon compte
+                </Link>
+                {user.role === "ADMIN" && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMobile(false)}
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-3 font-semibold hover:bg-panel-2"
+                  >
+                    <Icon name="settings" size={17} className="text-primary" /> Back-office
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-3 text-left font-semibold text-brick hover:bg-brick/10"
+                >
+                  <Icon name="lock" size={17} /> Se déconnecter
+                </button>
+              </div>
+            )}
           </nav>
         )}
       </header>
