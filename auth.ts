@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Auth0 from "next-auth/providers/auth0";
 import { prisma } from "@/lib/prisma";
 import { fetchAuth0Role } from "@/lib/auth0Roles";
+import { roleFromIdToken } from "@/lib/idTokenRole";
 import { authConfig } from "./auth.config";
 
 /**
@@ -9,6 +10,9 @@ import { authConfig } from "./auth.config";
  * (trigger Post-Login) qui pose ce claim — voir auth0/actions/add-role-claim.js.
  */
 const ROLE_CLAIM = "https://o3saveurs.fr/role";
+
+/** Doit rester aligné sur `KNOWN_ROLES` du trigger et de `lib/auth0Roles.ts`. */
+const KNOWN_ROLES: readonly string[] = ["ADMIN", "CLIENT"];
 
 /**
  * Durée de validité du rôle mémorisé dans le jeton de session.
@@ -63,10 +67,33 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
      * une panne réseau ne doit pas fermer le back-office à la gérante en plein
      * service. On réessaie simplement plus tôt.
      */
-    async jwt({ token, profile }) {
-      if (profile) {
-        token.role = (profile[ROLE_CLAIM] as string | undefined) ?? "CLIENT";
+    async jwt({ token, profile, account }) {
+      if (account || profile) {
+        /* Le claim est lu **dans l'ID token** en priorité : c'est là que
+         * l'Action Post-Login l'écrit (`api.idToken.setCustomClaim`). `profile`
+         * vient de l'endpoint `/userinfo`, qui ne renvoie pas nécessairement
+         * les claims personnalisés — s'y fier seul rendait tout le monde
+         * CLIENT en silence, trigger correct et rôle bien assigné compris. */
+        const fromIdToken = roleFromIdToken(account?.id_token, ROLE_CLAIM, KNOWN_ROLES);
+        const raw = profile?.[ROLE_CLAIM];
+        const fromProfile = typeof raw === "string" ? raw.trim().toUpperCase() : null;
+
+        token.role =
+          fromIdToken ??
+          (fromProfile && KNOWN_ROLES.includes(fromProfile) ? fromProfile : null) ??
+          "CLIENT";
         token.roleCheckedAt = Date.now();
+
+        if (token.role === "CLIENT" && !fromIdToken && !fromProfile) {
+          /* Ni l'ID token ni /userinfo ne portent le claim : l'Action n'est pas
+           * branchée au flow Login, ou son namespace diffère de `ROLE_CLAIM`.
+           * `npm run auth0:check` répond en dix lignes. */
+          console.warn(
+            `[auth] aucun claim « ${ROLE_CLAIM} » à la connexion de ${token.sub} — ` +
+              "rôle CLIENT par défaut. Vérifier l'Action Post-Login (npm run auth0:check).",
+          );
+        }
+
         return token;
       }
 
