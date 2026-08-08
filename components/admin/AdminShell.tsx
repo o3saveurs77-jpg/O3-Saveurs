@@ -58,6 +58,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/livreurs", label: "Livreurs", icon: "scooter" },
       { href: "/admin/livraison", label: "Barème livraison", icon: "truck" },
       { href: "/admin/zones", label: "Zones (repli)", icon: "pin" },
+      { href: "/admin/roles", label: "Accès & rôles", icon: "lock" },
       { href: "/admin/reglages", label: "Réglages", icon: "settings" },
     ],
   },

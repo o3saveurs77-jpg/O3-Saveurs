@@ -46,10 +46,45 @@ async function get<T>(t: string, path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** Scopes dont dépendent la relecture des rôles et l'écran « Accès & rôles ». */
+const SCOPES_REQUIS = [
+  "read:users",
+  "read:roles",
+  "read:role_members",
+  "create:role_members",
+  "delete:role_members",
+];
+
+/** Les scopes accordés sont inscrits dans le jeton lui-même. */
+function checkScopes(t: string) {
+  let accordes: string[] = [];
+  try {
+    const payload = JSON.parse(Buffer.from(t.split(".")[1], "base64").toString("utf8")) as {
+      scope?: string;
+    };
+    accordes = (payload.scope ?? "").split(" ").filter(Boolean);
+  } catch {
+    console.log("\nSCOPES : jeton illisible.");
+    return;
+  }
+
+  const manquants = SCOPES_REQUIS.filter((s) => !accordes.includes(s));
+  console.log(`\nSCOPES M2M : ${manquants.length === 0 ? "complets ✅" : "INCOMPLETS ⚠"}`);
+  for (const s of SCOPES_REQUIS) {
+    console.log(`  ${accordes.includes(s) ? "·" : "⚠"} ${s}${accordes.includes(s) ? "" : "  ABSENT"}`);
+  }
+  if (manquants.length) {
+    console.log(
+      "  → Dashboard → Applications → [app M2M] → APIs → Auth0 Management API → cocher ces scopes.",
+    );
+  }
+}
+
 async function main() {
   console.log(`Tenant : ${issuer}`);
   console.log(`ADMIN_EMAIL : ${adminEmail}\n`);
   const t = await token();
+  checkScopes(t);
 
   const roles = await get<{ id: string; name: string }[]>(t, "/api/v2/roles?per_page=100");
   console.log(`RÔLES (${roles.length}) :`);
