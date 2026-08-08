@@ -214,6 +214,25 @@ export function CheckoutClient() {
 
   const addressFilled = form.zip.length === 5 || form.city.trim().length > 1;
 
+  /**
+   * Adresse suffisamment renseignée pour qu'un refus ait un sens.
+   *
+   * `addressFilled` déclenche l'estimation dès qu'une ville est tapée — c'est
+   * voulu, le retour arrive plus tôt. Mais s'en servir aussi pour **refuser**
+   * annonçait « nous ne livrons pas à cette adresse » à quelqu'un qui n'avait
+   * saisi qu'un début de ville, voire rien du tout quand un profil enregistré
+   * pré-remplissait la ville sans le code postal. C'est le code postal qui
+   * détermine la zone facturée : sans lui, on ne conclut pas.
+   */
+  const addressJudgeable = /^\d{5}$/.test(form.zip.trim());
+
+  /** Emmène au champ adresse — il vit à l'étape 3, loin de ce message. */
+  const focusAddress = () => {
+    const field = document.getElementById("co-address");
+    field?.scrollIntoView({ behavior: "smooth", block: "center" });
+    field?.focus({ preventScroll: true });
+  };
+
   /* Estimation des frais auprès du serveur : c'est lui qui mesure la distance
    * (le navigateur n'a ni la clé Google ni le barème). Même logique et mêmes
    * données que `computeOrder()`, donc l'aperçu ne peut pas diverger du montant
@@ -258,7 +277,7 @@ export function CheckoutClient() {
    * correspond. */
   const outOfZone =
     mode === "livraison" &&
-    addressFilled &&
+    addressJudgeable &&
     (quote ? !quote.deliverable : !!zones && !zone && !quoting);
 
   const minimumCents =
@@ -603,10 +622,23 @@ export function CheckoutClient() {
                 // distance réelle et le rayon, l'interface non.
                 <>
                   {quote?.message ??
-                    "Nous ne livrons pas encore à cette adresse. Vérifiez le code postal, ou choisissez « à emporter »."}
+                    "Nous ne livrons pas encore à cette adresse. Vérifiez le code postal, ou choisissez « à emporter »."}{" "}
+                  <button type="button" onClick={focusAddress} className="font-semibold text-primary underline">
+                    Corriger l&apos;adresse
+                  </button>
                 </>
               ) : (
-                <>Renseignez votre adresse ci-dessous pour vérifier qu&apos;elle est livrable.</>
+                /* Ce bloc annonçait « renseignez votre adresse ci-dessous »
+                   alors que le champ se trouve deux sections plus bas, sans
+                   rien pour y mener : on pouvait chercher un formulaire
+                   d'adresse à l'étape 1 et conclure qu'il manquait. Le lien y
+                   emmène et y place le curseur. */
+                <>
+                  <button type="button" onClick={focusAddress} className="font-semibold text-primary underline">
+                    Renseignez votre adresse
+                  </button>{" "}
+                  (étape 3, plus bas) pour vérifier qu&apos;elle est livrable.
+                </>
               )}
             </p>
           )}
