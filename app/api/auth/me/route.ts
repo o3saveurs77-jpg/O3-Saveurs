@@ -11,13 +11,26 @@ export const dynamic = "force-dynamic";
 const MAX_ADDRESSES = 10;
 const MAX_FAVORITES = 200;
 
-/** GET /api/auth/me — profil de l'utilisateur courant, ou `null`. */
+/**
+ * GET /api/auth/me — profil de l'utilisateur courant, ou `null`.
+ *
+ * Le rôle renvoyé est celui de la **session**, donc celui qu'Auth0 a posé dans
+ * le token — et non `User.role` de la base applicative.
+ *
+ * C'est la correction d'une divergence qui a coûté cher : la colonne en base
+ * vaut `CLIENT` par défaut et personne ne la met à jour depuis que les rôles
+ * vivent chez Auth0. Le navigateur voyait donc toujours `CLIENT`, quand bien
+ * même la session portait `ADMIN` : ni l'entrée « Back-office » du menu ni le
+ * bouton de la page compte n'apparaissaient, alors que `/admin` était bel et
+ * bien accessible en tapant l'adresse. Deux sources sur un même droit, et
+ * c'est la mauvaise qui pilotait l'interface.
+ */
 export async function GET() {
   const guard = await requireUser();
   if (!guard.ok) return NextResponse.json(null);
 
   const row = await prisma.user.findUnique({ where: { email: guard.user.email } });
-  return NextResponse.json(row ? { ...rowToUser(row), role: row.role } : null);
+  return NextResponse.json(row ? { ...rowToUser(row), role: guard.user.role } : null);
 }
 
 interface PatchBody {

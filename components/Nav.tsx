@@ -64,6 +64,11 @@ export function Nav() {
    * un écran qui affiche encore son nom et ses commandes, et on pouvait
    * croire la déconnexion sans effet.
    */
+  /* `/compte` renvoie une administratrice vers le back-office : sans ce
+   * paramètre, « Mon compte » la ferait rebondir sur `/admin` et son espace
+   * client deviendrait inatteignable. */
+  const accountHref = user?.role === "ADMIN" ? "/compte?client=1" : "/compte";
+
   const handleLogout = async () => {
     setAccountOpen(false);
     setMobile(false);
@@ -158,7 +163,7 @@ export function Nav() {
                     </p>
 
                     <Link
-                      href="/compte"
+                      href={accountHref}
                       role="menuitem"
                       onClick={() => setAccountOpen(false)}
                       className="flex items-center gap-2.5 px-4 py-3 text-sm font-semibold hover:bg-panel-2"
@@ -260,7 +265,7 @@ export function Nav() {
               <div className="mt-3 border-t border-line pt-3">
                 <p className="truncate px-3 pb-1 text-xs text-ink-2">{user.email}</p>
                 <Link
-                  href="/compte"
+                  href={accountHref}
                   onClick={() => setMobile(false)}
                   className="flex items-center gap-2.5 rounded-lg px-3 py-3 font-semibold hover:bg-panel-2"
                 >
