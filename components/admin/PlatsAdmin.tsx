@@ -32,6 +32,9 @@ import { Icon } from "@/components/Icon";
 const BADGES: Badge[] = [null, "Healthy", "Nouveau", "Bientôt"];
 const SPICE_LABEL = ["Aucun", "Doux", "Relevé", "Très piquant"];
 
+/** Pseudo-catégorie des plats dont la catégorie n'existe plus en base. */
+const ORPHAN_SLUG = "__orphelins";
+
 interface CatOption {
   slug: string;
   label: string;
@@ -164,19 +167,43 @@ export function PlatsAdmin() {
   const categories = useCategories();
 
   const [editing, setEditing] = useState<Dish | "new" | null>(null);
-  const [catFilter, setCatFilter] = useState("all");
   const [notice, setNotice] = useState<Notice>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  /**
+   * Catégorie pré-choisie à la création. Le « + » d'un en-tête la renseigne pour
+   * qu'on ne se trompe plus de catégorie ; le bouton global la remet à `null` et
+   * laisse l'éditeur choisir son défaut habituel.
+   */
+  const [newDishCat, setNewDishCat] = useState<string | null>(null);
+
+  /**
+   * Onglet ouvert. La chaîne vide signifie « la gérante n'a encore rien choisi » :
+   * on ne peut pas figer un défaut au montage, les catégories arrivent de l'API
+   * après le premier rendu.
+   */
+  const [catFilter, setCatFilter] = useState("");
 
   const labelOf = useCallback(
     (slug: string) => categories.find((c) => c.slug === slug)?.label ?? slug,
     [categories],
   );
 
+  /**
+   * La carte compte une soixantaine de plats : les empiler tous imposait un
+   * défilement interminable pour atteindre la dernière catégorie. L'écran s'ouvre
+   * donc sur une seule catégorie — la première qui contient des plats, sinon un
+   * écran vide accueillerait la gérante — et « Toutes » reste là pour tout revoir.
+   */
+  const activeCat = useMemo(
+    () => catFilter || categories.find((c) => dishes.some((d) => d.cat === c.slug))?.slug || "all",
+    [catFilter, categories, dishes],
+  );
+
   /** Plats regroupés par catégorie et triés par position : c'est l'ordre de la carte. */
   const groups = useMemo(() => {
-    const wanted = catFilter === "all" ? categories : categories.filter((c) => c.slug === catFilter);
+    const wanted = activeCat === "all" ? categories : categories.filter((c) => c.slug === activeCat);
     const out = wanted.map((c) => ({
       cat: c,
       items: dishes.filter((d) => d.cat === c.slug).sort(byPosition),
@@ -186,11 +213,18 @@ export function PlatsAdmin() {
     // masquer les rendrait impossibles à corriger depuis l'écran.
     const known = new Set(categories.map((c) => c.slug));
     const orphans = dishes.filter((d) => !known.has(d.cat));
-    if (orphans.length && catFilter === "all") {
-      out.push({ cat: { slug: "__orphelins", label: "Catégorie inconnue" }, items: orphans.sort(byPosition) });
+    if (orphans.length && activeCat === "all") {
+      out.push({ cat: { slug: ORPHAN_SLUG, label: "Catégorie inconnue" }, items: orphans.sort(byPosition) });
     }
     return out.filter((g) => g.items.length > 0);
-  }, [dishes, categories, catFilter]);
+  }, [dishes, categories, activeCat]);
+
+  /** Ouvre le formulaire de création, sur une catégorie donnée le cas échéant. */
+  const openNew = (cat: string | null) => {
+    setNotice(null);
+    setNewDishCat(cat);
+    setEditing("new");
+  };
 
   /**
    * Réordonnancement : renumérote toute la catégorie de 0 à n-1 après échange.
@@ -292,10 +326,7 @@ export function PlatsAdmin() {
             <Icon name="refresh" size={16} /> Recharger
           </button>
           <button
-            onClick={() => {
-              setNotice(null);
-              setEditing("new");
-            }}
+            onClick={() => openNew(null)}
             className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white hover:brightness-105"
           >
             <Icon name="plus" size={16} /> Ajouter un plat
@@ -320,13 +351,15 @@ export function PlatsAdmin() {
         )}
       </div>
 
-      {/* filtre catégorie */}
+      {/* Marque-pages de catégories : ils choisissent la catégorie affichée.
+          Le défilement horizontal évite qu'une dizaine d'onglets ne mange
+          l'écran d'un téléphone en revenant à la ligne. */}
       <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
-        <Chip on={catFilter === "all"} onClick={() => setCatFilter("all")}>
+        <Chip on={activeCat === "all"} onClick={() => setCatFilter("all")}>
           Toutes
         </Chip>
         {categories.map((c) => (
-          <Chip key={c.slug} on={catFilter === c.slug} onClick={() => setCatFilter(c.slug)}>
+          <Chip key={c.slug} on={activeCat === c.slug} onClick={() => setCatFilter(c.slug)}>
             {c.label}
           </Chip>
         ))}
@@ -335,9 +368,19 @@ export function PlatsAdmin() {
       {!ready ? (
         <p className="py-20 text-center text-ink-2">Chargement…</p>
       ) : groups.length === 0 ? (
-        <p className="rounded-[var(--radius-card)] border border-line bg-panel px-4 py-10 text-center text-ink-2">
-          Aucun plat dans cette catégorie.
-        </p>
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel px-4 py-10 text-center">
+          <p className="text-ink-2">Aucun plat dans cette catégorie.</p>
+          {/* Une catégorie vide n'a pas d'en-tête, donc pas de « + » : sans ce
+              bouton, elle serait la seule où l'on ne peut rien ajouter d'ici. */}
+          {activeCat !== "all" && (
+            <button
+              onClick={() => openNew(activeCat)}
+              className="mt-4 inline-flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold hover:bg-panel-2"
+            >
+              <Icon name="plus" size={16} /> Ajouter un plat dans {labelOf(activeCat)}
+            </button>
+          )}
+        </div>
       ) : (
         <div className="space-y-6">
           {groups.map(({ cat, items }) => (
@@ -345,9 +388,24 @@ export function PlatsAdmin() {
               key={cat.slug}
               className="overflow-hidden rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-soft)]"
             >
-              <h2 className="border-b border-line bg-panel-2 px-4 py-3 text-lg">
-                {cat.label} <span className="text-sm font-normal text-ink-2">· {items.length}</span>
-              </h2>
+              {/* `min-h` : le titre seul est moins haut que le bouton, sans lui
+                  les en-têtes n'auraient pas tous la même hauteur. */}
+              <div className="flex min-h-13 items-center justify-between gap-3 border-b border-line bg-panel-2 py-1.5 pl-4 pr-2">
+                <h2 className="text-lg">
+                  {cat.label} <span className="text-sm font-normal text-ink-2">· {items.length}</span>
+                </h2>
+                {/* Pas de « + » sur les orphelins : leur catégorie n'existe plus,
+                    on ne peut pas y ranger un nouveau plat. */}
+                {cat.slug !== ORPHAN_SLUG && (
+                  <button
+                    onClick={() => openNew(cat.slug)}
+                    aria-label={`Ajouter un plat dans ${cat.label}`}
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-line hover:bg-panel"
+                  >
+                    <Icon name="plus" size={18} />
+                  </button>
+                )}
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[820px] text-sm">
                   <caption className="sr-only">
@@ -482,6 +540,7 @@ export function PlatsAdmin() {
       {editing && (
         <DishEditor
           dish={editing === "new" ? null : editing}
+          defaultCat={newDishCat}
           categories={categories}
           catLabel={labelOf}
           onClose={() => setEditing(null)}
@@ -696,12 +755,15 @@ function optionalInt(raw: string): number | null | undefined {
 
 function DishEditor({
   dish,
+  defaultCat,
   categories,
   catLabel,
   onClose,
   onSave,
 }: {
   dish: Dish | null;
+  /** Catégorie pré-choisie à la création (« + » d'un en-tête), sinon `null`. */
+  defaultCat: string | null;
   categories: CatOption[];
   catLabel: (slug: string) => string;
   onClose: () => void;
@@ -711,7 +773,7 @@ function DishEditor({
   const fid = (name: string) => `${uid}-${name}`;
 
   const [f, setF] = useState<DishForm>(() =>
-    toForm(dish, dish?.cat ?? categories[0]?.slug ?? "entrees"),
+    toForm(dish, dish?.cat ?? defaultCat ?? categories[0]?.slug ?? "entrees"),
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
