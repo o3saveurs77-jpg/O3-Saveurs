@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { ModelesCampagne } from "./ModelesCampagne";
 
 /**
  * Newsletter : abonnés et campagnes.
@@ -234,6 +235,15 @@ export function NewsletterAdmin() {
           <p className="mt-1 text-sm text-ink-2">
             Créée en brouillon : rien n&apos;est envoyé tant que vous ne la programmez pas.
           </p>
+
+          {/* Le modèle remplit l'objet et le contenu, puis s'efface : tout
+              reste modifiable à la main ensuite. */}
+          <div className="mt-4">
+            <ModelesCampagne
+              onAppliquer={(subject, html) => setForm((f) => (f ? { ...f, subject, html } : f))}
+            />
+          </div>
+
           <div className="mt-4 grid gap-4">
             <div>
               <label
