@@ -984,7 +984,13 @@ export function ContenuAdmin() {
                       <Icon name={meta.icon} size={18} />
                     </span>
 
-                    <div className="min-w-0 flex-1">
+                    {/* Une largeur de base plutôt que `flex-1` : la barre des
+                        cinq boutons est `shrink-0`, donc le nom de la section
+                        était le seul à céder et il disparaissait complètement
+                        sous 400 px — on déplaçait et on supprimait des sections
+                        à l'aveugle. En partant de 12 rem, ce sont les boutons
+                        qui passent à la ligne. */}
+                    <div className="min-w-0 grow basis-48">
                       <p className="flex flex-wrap items-center gap-2 font-semibold">
                         {section.label || meta.label}
                         {!section.visible && (

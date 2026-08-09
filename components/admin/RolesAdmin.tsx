@@ -155,7 +155,13 @@ export function RolesAdmin() {
                       {(a.email || a.name).charAt(0).toUpperCase()}
                     </span>
 
-                    <div className="min-w-0 flex-1">
+                    {/* Une largeur de base plutôt que `flex-1` : les boutons
+                        d'action sont `shrink-0`, donc l'identité était la seule
+                        à céder de la place. Sur téléphone il lui restait une
+                        trentaine de pixels — on confirmait « Retirer l'accès »
+                        sans plus voir de quel compte il s'agissait. En partant
+                        de 12 rem, c'est le bloc d'action qui passe à la ligne. */}
+                    <div className="min-w-0 grow basis-48">
                       <p className="flex flex-wrap items-center gap-2 font-semibold">
                         <span className="truncate">{a.email || a.name}</span>
                         {admin && (

@@ -231,6 +231,13 @@ export function TourneeClient({
                         >
                           Code donné par le client
                         </label>
+                        {/* `text-3xl!` : la règle anti-zoom iOS de `globals.css`
+                            impose 16 px à tout champ sous 640 px, et comme elle
+                            est écrite hors couche elle l'emportait sur
+                            l'utilitaire Tailwind. Le code de remise — le seul
+                            repère que le livreur relit à bout de bras, dehors —
+                            s'affichait donc en corps de texte sur le seul type
+                            d'appareil qui ouvre cet écran. */}
                         <input
                           id={`code-${s.id}`}
                           inputMode="numeric"
@@ -238,12 +245,17 @@ export function TourneeClient({
                           value={code}
                           onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                           placeholder="0000"
-                          className="w-full rounded-xl border border-line bg-page px-4 py-4 text-center font-display text-3xl tracking-[0.4em] outline-none focus:border-primary"
+                          className="w-full rounded-xl border border-line bg-page px-4 py-4 text-center font-display text-3xl! tracking-[0.4em] outline-none focus:border-primary"
                         />
                       </div>
 
                       <details>
-                        <summary className="cursor-pointer text-sm font-semibold text-ink-2">
+                        {/* Le libellé seul ne faisait que 20 px de haut : c'est
+                            la ligne qu'on manque d'un pouce, en marchant, et le
+                            livreur se retrouvait bloqué devant un client sans
+                            code. Le rembourrage porte la zone touchable à
+                            44 px. */}
+                        <summary className="cursor-pointer py-3 text-sm font-semibold text-ink-2">
                           Le client n&apos;a pas son code ?
                         </summary>
                         <input
@@ -289,7 +301,7 @@ export function TourneeClient({
                           type="button"
                           onClick={() => act(s.id, "encaisse")}
                           disabled={busy === s.id}
-                          className="rounded-full border border-line py-3 text-sm font-bold disabled:opacity-50"
+                          className="flex items-center justify-center gap-2 rounded-full border border-line py-3 text-sm font-bold disabled:opacity-50"
                         >
                           <Icon name="euro" size={15} /> Encaissé {fmtPrice(s.totalCents)}
                         </button>
