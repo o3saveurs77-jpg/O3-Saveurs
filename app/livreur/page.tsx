@@ -19,5 +19,5 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default function LivreurPage() {
-  return <TourneeClient endpoint="/api/livreur/tournee" />;
+  return <TourneeClient endpoint="/api/livreur/tournee" selfService />;
 }

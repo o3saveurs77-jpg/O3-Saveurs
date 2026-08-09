@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtPrice } from "@/lib/menu";
+import { CoursesLibres } from "./CoursesLibres";
 
 /**
  * Tournée du livreur, sur son téléphone.
@@ -42,7 +43,16 @@ interface Run {
 
 type Notice = { tone: "ok" | "erreur"; text: string } | null;
 
-export function TourneeClient({ endpoint }: { endpoint: string }) {
+export function TourneeClient({
+  endpoint,
+  /** Le libre-service n’est offert qu’au livreur connecté : prendre une course
+   *  engage une personne identifiée, ce qu’un lien transmis par SMS ne garantit
+   *  pas. */
+  selfService = false,
+}: {
+  endpoint: string;
+  selfService?: boolean;
+}) {
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -146,6 +156,8 @@ export function TourneeClient({ endpoint }: { endpoint: string }) {
           </p>
         )}
       </div>
+
+      {selfService && <CoursesLibres onTaken={() => void load()} />}
 
       <ul className="space-y-3">
         {[...restants, ...faits].map((s, i) => {
