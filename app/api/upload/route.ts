@@ -57,9 +57,35 @@ const EXTENSION: Record<string, string> = {
  * POST /api/upload (multipart, champ « file ») — réservé à l'administration.
  * Renvoie `{ url }`, l'URL publique Vercel Blob à stocker dans `Dish.photo`.
  */
+/**
+ * Le stockage est-il réellement configuré ?
+ *
+ * Sans ce contrôle, un jeton absent ou resté sur sa valeur d'exemple laissait
+ * téléverser l'image entière — plusieurs mégaoctets sur une connexion mobile —
+ * avant d'échouer sur un « Envoi impossible » qui ne désignait rien de
+ * concret. On refuse d'emblée, en disant quoi faire.
+ */
+const isBlobConfigured = () => {
+  const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
+  return !!token && !token.includes("placeholder");
+};
+
 export async function POST(req: Request) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response; // 401 sans session, 403 sans le rôle
+
+  if (!isBlobConfigured()) {
+    console.error("[upload] BLOB_READ_WRITE_TOKEN absente ou d'exemple — stockage non configuré.");
+    return NextResponse.json(
+      {
+        error:
+          "L'espace de stockage des photos n'est pas encore configuré. " +
+          "Dans Vercel : Storage → Create Database → Blob, puis connecter le projet. " +
+          "En attendant, vous pouvez saisir une adresse d'image du site, par exemple /photos/p04.jpg.",
+      },
+      { status: 503 },
+    );
+  }
 
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
@@ -74,8 +100,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Image trop lourde (5 Mo maximum)." }, { status: 413 });
   }
   if (!(ALLOWED as readonly string[]).includes(file.type)) {
+    /* Le cas courant est la photo prise à l'iPhone, enregistrée en HEIC : le
+     * format est refusé par les navigateurs autant que par nous, et le dire
+     * évite de croire à une panne du site. */
+    const heic = /hei[cf]/i.test(file.type);
     return NextResponse.json(
-      { error: "Format non supporté (JPEG, PNG, WebP ou AVIF)." },
+      {
+        error: heic
+          ? "Les photos iPhone au format HEIC ne sont pas acceptées. Sur l'iPhone : Réglages → Appareil photo → Formats → « Le plus compatible », ou envoyez la photo par email pour la convertir en JPEG."
+          : "Format non supporté (JPEG, PNG, WebP ou AVIF).",
+      },
       { status: 415 },
     );
   }
