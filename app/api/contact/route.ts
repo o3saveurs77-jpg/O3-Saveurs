@@ -13,7 +13,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readJson, badRequest, serverError, requireAdmin } from "@/lib/guard";
 import { collect, str, email as emailField, phone as phoneField, escapeHtml } from "@/lib/validate";
-import { send } from "@/lib/email";
+import { send, sendContactReceived } from "@/lib/email";
 import { rowToContactMessage } from "@/lib/serialize";
 
 export const dynamic = "force-dynamic";
@@ -109,6 +109,16 @@ export async function POST(req: Request) {
       dedupeKey: `contact:${created.id}`,
     }).catch(() => {});
   }
+
+  /* Accusé de réception à l'expéditeur : sans lui, il ne savait pas si son
+   * message était parti, et beaucoup réécrivaient ou appelaient dans le doute. */
+  await sendContactReceived({
+    id: created.id,
+    name,
+    email,
+    subject,
+    message,
+  }).catch(() => {});
 
   return NextResponse.json(
     {

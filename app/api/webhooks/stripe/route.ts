@@ -4,7 +4,7 @@ import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import { releaseStock } from "@/lib/stock";
 import { nextInvoiceNumber } from "@/lib/ref";
-import { sendPaymentReceived, sendInvoice } from "@/lib/email";
+import { sendPaymentReceived, sendInvoice, sendPaymentFailed } from "@/lib/email";
 import type { OrderLine } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -169,6 +169,17 @@ async function onFailed(
   // Le stock réservé à la création est rendu, sinon un panier abandonné
   // immobiliserait des plats indéfiniment.
   await releaseStock(parseLines(order.lines), { orderId: order.id, reason: "correction" });
+
+  /* Le client doit l'apprendre. Sans cet email, sa commande disparaissait en
+   * silence : il attendait une livraison qui ne viendrait pas, ou recommandait
+   * sans comprendre ce qui s'était passé. */
+  const origin = process.env.NEXTAUTH_URL ?? "";
+  const fresh = await prisma.order.findUnique({ where: { id: order.id } });
+  if (fresh) {
+    await sendPaymentFailed(fresh, paymentStatus === "expire", `${origin}/carte`).catch((error) =>
+      console.error(`[stripe] email d'échec de paiement pour ${order.id} échoué:`, error),
+    );
+  }
 }
 
 // ─── Remboursement ─────────────────────────────────────────────

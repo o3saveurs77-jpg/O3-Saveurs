@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readJson, badRequest } from "@/lib/guard";
-import { sendStatusUpdate } from "@/lib/email";
+import { sendStatusUpdate, sendDriverIncident } from "@/lib/email";
 import { cashToCollect, checkDelivery, checkRunAccess } from "@/lib/deliveryAccess";
 import type { OrderLine } from "@/lib/types";
 
@@ -186,10 +186,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     case "incident": {
       if (reason.trim().length < 3) return badRequest("Décrivez brièvement le problème.");
 
-      await prisma.order.update({
+      const updated = await prisma.order.update({
         where: { id: order.id },
         data: { driverNote: reason, incidentAt: new Date() },
       });
+
+      /* Le signalement doit sortir de la base : pendant un service, personne
+       * ne va lire une colonne de commande pour découvrir qu'un client est
+       * absent devant sa porte. */
+      await sendDriverIncident(updated, reason).catch((error) =>
+        console.error(`[tournee] alerte d'incident pour ${order.id} échouée:`, error),
+      );
 
       return NextResponse.json({ ok: true });
     }

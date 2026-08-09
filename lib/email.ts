@@ -19,8 +19,10 @@
  * Commande, côté client :
  *   commande enregistrée ......... sendOrderConfirmation   (checkout)
  *   paiement encaissé ............ sendPaymentReceived     (webhook Stripe)
+ *   paiement refusé / expiré ..... sendPaymentFailed       (webhook Stripe)
  *   en cuisine / en route /
  *     livrée / annulée ........... sendStatusUpdate        (chaque changement)
+ *     — « en route » porte le code de remise à donner au livreur
  *   facture ...................... sendInvoice             (encaissement, carte ou espèces)
  *   avoir ........................ sendCreditNote          (remboursement)
  *   annulation refusée ........... sendCancelDeclined      (décision du restaurant)
@@ -30,9 +32,11 @@
  *   nouvelle commande ............ sendOrderConfirmation
  *   paiement encaissé ............ sendPaymentReceived
  *   annulation demandée .......... sendCancelRequest
+ *   incident de livraison ........ sendDriverIncident      (signalé depuis la rue)
  *
  * Hors commande :
  *   newsletter ................... sendNewsletterConfirmation, sendCampaign
+ *   message de contact ........... sendContactReceived (expéditeur) + notification
  *   réclamation .................. sendTicketOpened (client + restaurant), sendTicketReply
  *   devis traiteur ............... sendCateringInquiryReceived, sendCateringInquiryNotify
  *
@@ -490,6 +494,105 @@ export async function sendCreditNote(
     orderId: order.id,
     dedupeKey: `avoir:${order.id}:${order.refundedCents}`,
     attachments: [{ filename: `${number === "—" ? order.ref : number}.pdf`, content: pdf }],
+  });
+}
+
+/**
+ * Paiement refusé ou session expirée.
+ *
+ * La commande est annulée et le stock rendu — mais le client, lui, n'en savait
+ * rien : sa commande disparaissait en silence. Il attendait une livraison qui
+ * ne viendrait jamais, ou refaisait sa commande sans comprendre. Le message
+ * dit ce qui s'est passé et renvoie à la carte.
+ */
+export async function sendPaymentFailed(
+  row: OrderRow,
+  expired: boolean,
+  menuUrl: string,
+): Promise<void> {
+  const order = rowToOrder(row);
+
+  await send({
+    to: order.customer.email,
+    subject: `${order.ref} — paiement non abouti — Ô 3 Saveurs`,
+    html: layout(
+      expired ? "Votre paiement n'a pas été finalisé" : "Votre paiement a été refusé",
+      `<p style="margin:0 0 12px">${
+        expired
+          ? "La page de paiement a expiré avant validation : votre commande n'a pas été enregistrée."
+          : "Votre banque a refusé le paiement : votre commande n'a pas été enregistrée."
+      }</p>
+       <p style="margin:0 0 14px;padding:10px;background:#fce4cf;border-radius:8px;font-size:13px">
+         <strong>Aucun montant n'a été débité.</strong> Les plats réservés ont été remis en vente.
+       </p>
+       ${orderSummary(order)}
+       <p style="margin:0"><a href="${escapeHtml(menuUrl)}" style="color:#e8732a;font-weight:bold">Repasser commande</a>
+       — ou appelez-nous, nous la prenons par téléphone.</p>`,
+    ),
+    kind: "paiement",
+    orderId: order.id,
+    dedupeKey: `paiement-echec:${order.id}`,
+  });
+}
+
+/**
+ * Accusé de réception d'un message envoyé depuis la page Contact.
+ *
+ * Le restaurant était prévenu, l'expéditeur non : il ne savait pas si son
+ * message était parti, et beaucoup réécrivent ou appellent dans le doute.
+ */
+export async function sendContactReceived(msg: {
+  id: string;
+  name: string;
+  email: string;
+  subject: string;
+  message: string;
+}): Promise<void> {
+  await send({
+    to: msg.email,
+    subject: "Nous avons bien reçu votre message — Ô 3 Saveurs",
+    html: layout(
+      `Merci ${msg.name}, votre message est arrivé`,
+      `<p style="margin:0 0 12px">Nous vous répondons dès que possible, en général sous 24 heures
+         ouvrées.</p>
+       ${msg.subject ? `<p style="margin:0 0 6px"><strong>Objet :</strong> ${escapeHtml(msg.subject)}</p>` : ""}
+       <p style="margin:0 0 14px;padding:12px;background:#f7e9d2;border-radius:8px;white-space:pre-wrap;font-size:13px">${escapeHtml(msg.message)}</p>
+       <p style="margin:0;font-size:13px">Besoin d'une réponse immédiate ? Appelez-nous.</p>`,
+    ),
+    kind: "sav",
+    dedupeKey: `contact-accuse:${msg.id}`,
+  });
+}
+
+/**
+ * Incident signalé par le livreur depuis la rue.
+ *
+ * Va **au restaurant** : client absent, adresse introuvable, commande refusée.
+ * Sans cet email, le signalement dormait dans une colonne de la base que
+ * personne ne regarde pendant un service.
+ */
+export async function sendDriverIncident(row: OrderRow, note: string): Promise<void> {
+  if (!NOTIFY) return;
+
+  const order = rowToOrder(row);
+
+  await send({
+    to: NOTIFY,
+    subject: `⚠ Problème de livraison — ${order.ref} (${order.customer.name})`,
+    html: layout(
+      `Le livreur signale un problème sur ${order.ref}`,
+      `<p style="margin:0 0 12px;padding:12px;background:#fce4cf;border-radius:8px;white-space:pre-wrap">${escapeHtml(note)}</p>
+       <p style="margin:0 0 12px;font-size:13px">
+         ${escapeHtml(order.customer.name)} — ${escapeHtml(order.customer.phone)}<br>
+         ${escapeHtml(order.customer.address ?? "")} ${escapeHtml(order.customer.zip ?? "")} ${escapeHtml(order.customer.city ?? "")}
+       </p>
+       ${orderSummary(order)}`,
+    ),
+    kind: "statut",
+    orderId: order.id,
+    /* La clé porte l'horodatage du signalement : un second incident sur la
+     * même commande est une nouvelle information, pas un doublon. */
+    dedupeKey: `incident:${order.id}:${row.incidentAt?.getTime() ?? 0}`,
   });
 }
 

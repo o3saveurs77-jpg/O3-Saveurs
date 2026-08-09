@@ -11,6 +11,7 @@ import {
 import type { AnnouncementTone, BannerPlacement } from "@/lib/promotionValidation";
 import { WEEKDAY_LABEL } from "@/lib/hours";
 import { Icon } from "@/components/Icon";
+import { PlatDuJourCalendrier } from "./PlatDuJourCalendrier";
 
 /**
  * Mise en avant : annonces, bandeaux et plats du jour.
@@ -501,6 +502,15 @@ export function MiseEnAvantAdmin() {
       ) : (
         /* ── Plats du jour ────────────────────────────── */
         <section className="flex flex-col gap-4">
+          {/* Le calendrier avant la liste : ce qu'on veut savoir, c'est
+              d'abord quels jours n'ont rien de prévu. */}
+          <PlatDuJourCalendrier
+            entries={specials}
+            onPickDate={(isoDate) =>
+              setFormS({ id: null, name: "", prix: "", date: isoDate, weekday: "", active: true })
+            }
+          />
+
           <div className="flex justify-end">
             <button
               type="button"
