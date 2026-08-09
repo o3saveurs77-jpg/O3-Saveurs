@@ -15,7 +15,7 @@ import "server-only";
 import { managementFetch } from "@/lib/auth0Management";
 
 /** Rôles que l'écran sait manipuler. Ceux d'Auth0 hors de cette liste sont montrés, pas touchés. */
-export const MANAGED_ROLES = ["ADMIN", "CLIENT"] as const;
+export const MANAGED_ROLES = ["ADMIN", "LIVREUR", "CLIENT"] as const;
 export type ManagedRole = (typeof MANAGED_ROLES)[number];
 
 export function isManagedRole(v: unknown): v is ManagedRole {

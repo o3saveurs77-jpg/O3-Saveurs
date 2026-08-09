@@ -22,5 +22,5 @@ export const { auth: middleware } = NextAuth(authConfig);
  * atteintes depuis un email sans session.
  */
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/livreur/:path*"],
 };

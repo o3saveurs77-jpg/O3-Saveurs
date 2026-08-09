@@ -21,6 +21,7 @@ interface DriverView {
   name: string;
   phone: string | null;
   vehicle: string | null;
+  email: string | null;
   active: boolean;
   createdAt: number;
   runsTotal: number;
@@ -39,10 +40,11 @@ interface Form {
   name: string;
   phone: string;
   vehicle: string;
+  email: string;
   active: boolean;
 }
 
-const VIDE: Form = { name: "", phone: "", vehicle: "", active: true };
+const VIDE: Form = { name: "", phone: "", vehicle: "", email: "", active: true };
 
 export function LivreursAdmin() {
   const [drivers, setDrivers] = useState<DriverView[]>([]);
@@ -83,6 +85,7 @@ export function LivreursAdmin() {
           name: form.name.trim(),
           phone: form.phone.trim() || null,
           vehicle: form.vehicle.trim() || null,
+          email: form.email.trim() || null,
           active: form.active,
         }),
       });
@@ -227,6 +230,31 @@ export function LivreursAdmin() {
                 className={inputCls}
               />
             </div>
+            <div className="sm:col-span-2">
+              <label
+                htmlFor={`${baseId}-mail`}
+                className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-2"
+              >
+                Email du compte livreur (facultatif)
+              </label>
+              <input
+                id={`${baseId}-mail`}
+                type="email"
+                value={form.email}
+                onChange={(e) => set({ email: e.target.value })}
+                placeholder="livreur@exemple.fr"
+                className={inputCls}
+                aria-describedby={`${baseId}-mail-aide`}
+              />
+              {/* Le rattachement se fait par email : sans lui, le livreur ne
+                  peut pas ouvrir sa tournée en se connectant, et il faudra lui
+                  envoyer le lien privé à chaque service. */}
+              <p id={`${baseId}-mail-aide`} className="mt-1 text-xs text-ink-2">
+                Avec cette adresse et le rôle LIVREUR (Accès &amp; rôles), il retrouve sa tournée
+                sur <strong>/livreur</strong> en se connectant. Sans elle, envoyez-lui le lien
+                privé depuis Livraisons.
+              </p>
+            </div>
             <div>
               <label
                 htmlFor={`${baseId}-veh`}
@@ -366,6 +394,7 @@ export function LivreursAdmin() {
                       name: d.name,
                       phone: d.phone ?? "",
                       vehicle: d.vehicle ?? "",
+                      email: d.email ?? "",
                       active: d.active,
                     });
                     setEditId(d.id);

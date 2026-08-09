@@ -234,6 +234,11 @@ async function main() {
 
   console.log("Rôles :");
   const adminRole = await ensureRole(token, "ADMIN");
+  /* LIVREUR existe pour être assignable et reconnu par l'application. Il
+   * n'ouvre aucune page pour l'instant : la tournée s'atteint par un lien
+   * privé, sans compte. Le rôle prépare le jour où un livreur permanent
+   * voudra se connecter plutôt que de recevoir un SMS. */
+  await ensureRole(token, "LIVREUR");
   await ensureRole(token, "CLIENT");
 
   console.log("\nAssignation :");

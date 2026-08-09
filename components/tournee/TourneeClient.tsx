@@ -42,7 +42,7 @@ interface Run {
 
 type Notice = { tone: "ok" | "erreur"; text: string } | null;
 
-export function TourneeClient({ token }: { token: string }) {
+export function TourneeClient({ endpoint }: { endpoint: string }) {
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -54,7 +54,7 @@ export function TourneeClient({ token }: { token: string }) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/tournee/${token}`, { cache: "no-store" });
+      const res = await fetch(endpoint, { cache: "no-store" });
       const data = (await res.json()) as Run | { error?: string };
       if (!res.ok) throw new Error(("error" in data && data.error) || "Tournée illisible");
       setRun(data as Run);
@@ -64,7 +64,7 @@ export function TourneeClient({ token }: { token: string }) {
     } finally {
       setReady(true);
     }
-  }, [token]);
+  }, [endpoint]);
 
   useEffect(() => {
     void load();
@@ -74,7 +74,7 @@ export function TourneeClient({ token }: { token: string }) {
     setBusy(orderId);
     setNotice(null);
     try {
-      const res = await fetch(`/api/tournee/${token}`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId, action, ...payload }),

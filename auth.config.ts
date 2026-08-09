@@ -43,6 +43,13 @@ export const authConfig = {
       // connexion (`pages.signIn`). La protéger créerait une boucle de
       // redirection. Elle affiche elle-même le formulaire ou le profil selon
       // la session.
+      /* Tournée du livreur connecté. Un ADMIN y accède aussi, pour vérifier ce
+       * que ses livreurs voient sans avoir à créer un compte de test. */
+      if (pathname.startsWith("/livreur")) {
+        const role = auth?.user?.role;
+        return role === "LIVREUR" || role === "ADMIN";
+      }
+
       if (!pathname.startsWith("/admin")) return true;
 
       if (auth?.user?.role === "ADMIN") return true;

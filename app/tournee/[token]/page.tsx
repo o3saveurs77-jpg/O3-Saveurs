@@ -21,5 +21,5 @@ export default async function TourneePage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  return <TourneeClient token={token} />;
+  return <TourneeClient endpoint={`/api/tournee/${token}`} />;
 }

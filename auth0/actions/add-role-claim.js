@@ -20,7 +20,7 @@
 
 const ROLE_CLAIM = "https://o3saveurs.fr/role";
 const ROLES_CLAIM = "https://o3saveurs.fr/roles";
-const KNOWN_ROLES = ["ADMIN", "CLIENT"];
+const KNOWN_ROLES = ["ADMIN", "LIVREUR", "CLIENT"];
 const DEFAULT_ROLE = "CLIENT";
 
 // Roles portes par le compte. RBAC d'abord ; app_metadata en repli, car

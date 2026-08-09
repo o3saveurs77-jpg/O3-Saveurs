@@ -12,7 +12,7 @@ import { authConfig } from "./auth.config";
 const ROLE_CLAIM = "https://o3saveurs.fr/role";
 
 /** Doit rester aligné sur `KNOWN_ROLES` du trigger et de `lib/auth0Roles.ts`. */
-const KNOWN_ROLES: readonly string[] = ["ADMIN", "CLIENT"];
+const KNOWN_ROLES: readonly string[] = ["ADMIN", "LIVREUR", "CLIENT"];
 
 /**
  * Durée de validité du rôle mémorisé dans le jeton de session.

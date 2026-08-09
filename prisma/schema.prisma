@@ -207,6 +207,13 @@ model Driver {
   vehicle String?
   active  Boolean @default(true)
 
+  /// Email du compte Auth0 du livreur, s'il en a un.
+  ///
+  /// C'est le seul lien entre une session et une fiche livreur : un compte
+  /// portant le rôle LIVREUR retrouve ses tournées par cette adresse. Reste
+  /// facultatif — un extra livre très bien avec le lien privé, sans compte.
+  email String? @unique
+
   createdAt DateTime @default(now())
   runs      DeliveryRun[]
   orders    Order[]

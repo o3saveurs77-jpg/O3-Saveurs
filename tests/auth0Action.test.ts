@@ -107,12 +107,32 @@ describe("rôle depuis RBAC", () => {
   });
 
   it("expose les rôles inconnus sans les promouvoir", async () => {
-    // Ajouter « LIVREUR » dans Auth0 ne doit ni casser la connexion, ni
-    // accorder quoi que ce soit tant que l'application ne le reconnaît pas.
+    // Créer un rôle dans Auth0 ne doit ni casser la connexion, ni accorder
+    // quoi que ce soit tant que l'application ne le reconnaît pas.
+    const api = fakeApi();
+    await onExecutePostLogin(userEvent({ authorization: { roles: ["COMPTABLE"] } }), api);
+    expect(api.claims[ROLE_CLAIM]).toBe("CLIENT");
+    expect(api.claims[ROLES_CLAIM]).toEqual(["COMPTABLE"]);
+  });
+
+  it("reconnaît LIVREUR", async () => {
     const api = fakeApi();
     await onExecutePostLogin(userEvent({ authorization: { roles: ["LIVREUR"] } }), api);
-    expect(api.claims[ROLE_CLAIM]).toBe("CLIENT");
-    expect(api.claims[ROLES_CLAIM]).toEqual(["LIVREUR"]);
+    expect(api.claims[ROLE_CLAIM]).toBe("LIVREUR");
+  });
+
+  it("fait primer ADMIN sur LIVREUR", async () => {
+    /* Quelqu'un qui livre *et* administre doit garder son back-office : le
+     * rôle retenu est le plus privilégié, pas le premier venu. */
+    const api = fakeApi();
+    await onExecutePostLogin(userEvent({ authorization: { roles: ["LIVREUR", "ADMIN"] } }), api);
+    expect(api.claims[ROLE_CLAIM]).toBe("ADMIN");
+  });
+
+  it("fait primer LIVREUR sur CLIENT", async () => {
+    const api = fakeApi();
+    await onExecutePostLogin(userEvent({ authorization: { roles: ["CLIENT", "LIVREUR"] } }), api);
+    expect(api.claims[ROLE_CLAIM]).toBe("LIVREUR");
   });
 
   it("normalise la casse et les espaces", async () => {

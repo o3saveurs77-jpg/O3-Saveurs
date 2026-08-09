@@ -23,7 +23,7 @@ import "server-only";
 import { managementFetch } from "@/lib/auth0Management";
 
 /** Rôles reconnus par l'application, dans l'ordre de priorité. */
-const KNOWN_ROLES = ["ADMIN", "CLIENT"] as const;
+const KNOWN_ROLES = ["ADMIN", "LIVREUR", "CLIENT"] as const;
 
 /** Regroupe les appels simultanés d'un même compte en une seule requête. */
 const COALESCE_MS = 30_000;

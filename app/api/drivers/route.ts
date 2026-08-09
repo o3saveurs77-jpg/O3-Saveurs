@@ -68,6 +68,7 @@ export async function GET(req: Request) {
         name: d.name,
         phone: d.phone,
         vehicle: d.vehicle,
+        email: d.email,
         active: d.active,
         createdAt: d.createdAt.getTime(),
         /** historique complet : sert à décider suppression ou désactivation */
@@ -89,10 +90,28 @@ export async function GET(req: Request) {
   );
 }
 
+
+/**
+ * Email facultatif du livreur. `email()` de `lib/validate` exige une valeur ;
+ * ici l’absence est le cas normal — un extra livre sans compte.
+ */
+function optionalEmail(v: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (v === undefined || v === null || v === "") return { ok: true, value: null };
+  if (typeof v !== "string") return { ok: false, error: "L’email n’est pas valide" };
+  const value = v.trim().toLowerCase();
+  if (!value) return { ok: true, value: null };
+  if (value.length > 254 || !/^[^s@]+@[^s@]+.[a-z]{2,}$/i.test(value)) {
+    return { ok: false, error: "L’email du livreur n’est pas valide" };
+  }
+  return { ok: true, value };
+}
+
 interface PostBody {
   name?: unknown;
   phone?: unknown;
   vehicle?: unknown;
+  /** Email du compte Auth0 : seul lien entre une session et cette fiche. */
+  email?: unknown;
   active?: unknown;
 }
 
@@ -111,6 +130,9 @@ export async function POST(req: Request) {
   });
   if (!fields.ok) return badRequest(fields.error);
 
+  const mail = optionalEmail(body.email);
+  if (!mail.ok) return badRequest(mail.error);
+
   const twin = await prisma.driver.findFirst({
     where: { name: fields.value.name },
     select: { id: true },
@@ -122,6 +144,7 @@ export async function POST(req: Request) {
       name: fields.value.name,
       phone: fields.value.phone,
       vehicle: fields.value.vehicle || null,
+      email: mail.value,
       active: bool(body.active, true),
     },
   });
