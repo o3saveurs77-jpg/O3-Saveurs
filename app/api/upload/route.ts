@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { isStorageConfigured, putPublicObject } from "@/lib/storage";
 import { requireAdmin } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
@@ -55,33 +55,24 @@ const EXTENSION: Record<string, string> = {
 
 /**
  * POST /api/upload (multipart, champ « file ») — réservé à l'administration.
- * Renvoie `{ url }`, l'URL publique Vercel Blob à stocker dans `Dish.photo`.
+ * Renvoie `{ url }`, l'adresse publique à stocker dans `Dish.photo`.
  */
-/**
- * Le stockage est-il réellement configuré ?
- *
- * Sans ce contrôle, un jeton absent ou resté sur sa valeur d'exemple laissait
- * téléverser l'image entière — plusieurs mégaoctets sur une connexion mobile —
- * avant d'échouer sur un « Envoi impossible » qui ne désignait rien de
- * concret. On refuse d'emblée, en disant quoi faire.
- */
-const isBlobConfigured = () => {
-  const token = process.env.BLOB_READ_WRITE_TOKEN?.trim();
-  return !!token && !token.includes("placeholder");
-};
-
 export async function POST(req: Request) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response; // 401 sans session, 403 sans le rôle
 
-  if (!isBlobConfigured()) {
-    console.error("[upload] BLOB_READ_WRITE_TOKEN absente ou d'exemple — stockage non configuré.");
+  /* Contrôlé avant de lire le fichier : sans cela on faisait monter plusieurs
+   * mégaoctets depuis un téléphone pour échouer à l'arrivée, sur un message
+   * qui ne parlait qu'à un développeur. */
+  if (!isStorageConfigured()) {
+    console.error("[upload] stockage objet non configuré (variables CELLAR_*).");
     return NextResponse.json(
       {
         error:
           "L'espace de stockage des photos n'est pas encore configuré. " +
-          "Dans Vercel : Storage → Create Database → Blob, puis connecter le projet. " +
-          "En attendant, vous pouvez saisir une adresse d'image du site, par exemple /photos/p04.jpg.",
+          "Sur Clever Cloud : ajouter l'addon Cellar à l'application, puis créer un bucket " +
+          "et renseigner CELLAR_BUCKET. En attendant, vous pouvez saisir une adresse d'image " +
+          "du site, par exemple /photos/p04.jpg.",
       },
       { status: 503 },
     );
@@ -132,18 +123,19 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Nom recalculé : `addRandomSuffix` empêche déjà l'écrasement, mais on ne
-    // reprend pas le nom fourni par le client, qui peut contenir n'importe quoi.
-    const blob = await put(`dishes/plat.${EXTENSION[detected]}`, file, {
-      access: "public",
-      addRandomSuffix: true,
-      contentType: detected,
-    });
-    return NextResponse.json({ url: blob.url }, { status: 201 });
+    // La clé est calculée côté serveur : un nom de fichier venu du navigateur
+    // peut contenir n'importe quoi, y compris de quoi sortir du dossier prévu.
+    const url = await putPublicObject(
+      "dishes",
+      EXTENSION[detected],
+      Buffer.from(await file.arrayBuffer()),
+      detected,
+    );
+    return NextResponse.json({ url }, { status: 201 });
   } catch (error) {
-    console.error("[upload] Vercel Blob échoué:", error);
+    console.error("[upload] dépôt sur le stockage objet échoué:", error);
     return NextResponse.json(
-      { error: "Envoi impossible (vérifier BLOB_READ_WRITE_TOKEN)." },
+      { error: "Envoi impossible. Vérifiez la configuration du stockage (addon Cellar)." },
       { status: 500 },
     );
   }

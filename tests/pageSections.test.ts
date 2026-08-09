@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
   DEFAULT_SECTIONS,
   KIND_META,
@@ -41,20 +41,41 @@ describe("liens autorisés", () => {
 });
 
 describe("photos autorisées", () => {
-  it("accepte les visuels locaux et ceux téléversés", () => {
+  const HOTE = "cellar-c2.services.clever-cloud.com";
+  const initial = process.env.NEXT_PUBLIC_STORAGE_HOST;
+
+  afterEach(() => {
+    if (initial === undefined) delete process.env.NEXT_PUBLIC_STORAGE_HOST;
+    else process.env.NEXT_PUBLIC_STORAGE_HOST = initial;
+  });
+
+  it("accepte les visuels livrés avec le site", () => {
     expect(isAllowedPhoto("/photos/p03.jpg")).toBe(true);
     expect(isAllowedPhoto("/photos/plat.webp")).toBe(true);
-    expect(
-      isAllowedPhoto("https://abc123.public.blob.vercel-storage.com/plat-x1y2.jpg"),
-    ).toBe(true);
+  });
+
+  it("accepte une photo déposée sur le stockage configuré", () => {
+    process.env.NEXT_PUBLIC_STORAGE_HOST = HOTE;
+    expect(isAllowedPhoto(`https://o3-photos.${HOTE}/dishes/abc.jpg`)).toBe(true);
   });
 
   it("rejette les hôtes que la politique de sécurité bloquerait", () => {
     // `img-src` (next.config.mjs) ne charge pas ces sources : accepter l'URL
     // afficherait un cadre vide chez le visiteur, sans le moindre message.
+    process.env.NEXT_PUBLIC_STORAGE_HOST = HOTE;
     expect(isAllowedPhoto("https://exemple.fr/photo.jpg")).toBe(false);
     expect(isAllowedPhoto("javascript:alert(1)")).toBe(false);
     expect(isAllowedPhoto("/photos/../../etc/passwd")).toBe(false);
+    // Hôte voisin qui *contient* le nôtre sans en être un sous-domaine.
+    expect(isAllowedPhoto(`https://faux-${HOTE}/x.jpg`)).toBe(false);
+  });
+
+  it("n'accepte aucune adresse distante tant qu'aucun stockage n'est configuré", () => {
+    /* C'est l'état d'un poste de développement : mieux vaut refuser que
+     * d'enregistrer une adresse qui n'affichera rien en production. */
+    delete process.env.NEXT_PUBLIC_STORAGE_HOST;
+    expect(isAllowedPhoto(`https://o3-photos.${HOTE}/dishes/abc.jpg`)).toBe(false);
+    expect(isAllowedPhoto("/photos/p03.jpg")).toBe(true);
   });
 });
 

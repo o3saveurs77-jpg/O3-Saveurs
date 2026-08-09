@@ -25,6 +25,7 @@ import { useDishes } from "@/components/providers/DishesContext";
 import { cats as seedCats, fmtPrice } from "@/lib/menu";
 import type { Badge, Dish, DishOption } from "@/lib/menu";
 import { toCents, toEuros } from "@/lib/money";
+import { isStorageUrl } from "@/lib/storageHost";
 import { ALLERGENS, ALLERGEN_LABEL } from "@/lib/types";
 import type { Allergen } from "@/lib/types";
 import { Icon } from "@/components/Icon";
@@ -57,8 +58,7 @@ const byPosition = (a: Dish, b: Dish) =>
  * donc passer en `unoptimized`, sinon l'optimiseur répond 400 et l'admin voit
  * une vignette cassée.
  */
-const isOptimizable = (src: string) =>
-  src.startsWith("/") || /^https:\/\/[^/]+\.public\.blob\.vercel-storage\.com\//.test(src);
+const isOptimizable = (src: string) => src.startsWith("/") || isStorageUrl(src);
 
 /** Catégories depuis la base, avec les données de seed en repli hors-ligne. */
 function useCategories(): CatOption[] {

@@ -19,6 +19,7 @@
 
 import type { IconName } from "@/components/Icon";
 import { photo } from "@/lib/menu";
+import { isLocalPhoto, isStorageUrl } from "@/lib/storageHost";
 
 // ─── Pages ────────────────────────────────────────────────────
 
@@ -372,16 +373,13 @@ const MAX_SHORT = 200;
 const MAX_LONG = 4000;
 
 /**
- * Sources d'images autorisées. La politique de sécurité du site
- * (`next.config.mjs`, directive `img-src`) ne charge que les photos locales et
- * celles téléversées sur Vercel Blob : accepter une URL quelconque afficherait
- * un cadre vide chez le visiteur, sans le moindre message d'erreur.
+ * Sources d'images autorisées : photos livrées dans `public/`, ou déposées sur
+ * notre stockage objet. La politique de sécurité du site (`next.config.mjs`,
+ * directive `img-src`) ne charge que celles-là — accepter une URL quelconque
+ * afficherait un cadre vide chez le visiteur, sans le moindre message.
  */
 export function isAllowedPhoto(src: string): boolean {
-  return (
-    /^\/[\w./-]+\.(jpe?g|png|webp|avif)$/i.test(src) ||
-    /^https:\/\/[\w-]+\.public\.blob\.vercel-storage\.com\/[\w./%-]+$/i.test(src)
-  );
+  return isLocalPhoto(src) || isStorageUrl(src);
 }
 
 /**
