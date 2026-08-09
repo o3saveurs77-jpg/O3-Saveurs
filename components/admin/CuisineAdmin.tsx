@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useOrders } from "@/components/providers/OrdersContext";
-import type { Order, OrderStatus } from "@/lib/types";
+import { STATUS_NEXT, type Order, type OrderStatus } from "@/lib/types";
 import { Icon } from "@/components/Icon";
 
 /**
@@ -42,11 +42,31 @@ function attente(o: Order): number {
   return Math.max(0, Math.round((Date.now() - t) / 60_000));
 }
 
+/**
+ * Durée d'attente lisible.
+ *
+ * « 11312 min » ne dit rien à personne : passé quelques heures, le chiffre
+ * cesse d'être une information et devient du bruit. Une commande d'avant-hier
+ * restée en plan doit se lire d'un coup d'œil comme telle.
+ */
+function attenteLisible(min: number): string {
+  if (min < 90) return `${min} min`;
+  if (min < 60 * 24) return `${Math.round(min / 60)} h`;
+  const jours = Math.round(min / (60 * 24));
+  return `${jours} j`;
+}
+
 export function CuisineAdmin() {
   const { orders, ready, refresh } = useOrders();
   const [busy, setBusy] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+
+  /* Carte en cours de déplacement. On garde le statut d'origine et pas
+   * seulement l'identifiant : c'est lui qui dit quelles colonnes peuvent
+   * l'accueillir, et on veut le savoir *pendant* le survol, pas au lâcher. */
+  const [drag, setDrag] = useState<{ id: string; from: OrderStatus } | null>(null);
+  const [survol, setSurvol] = useState<OrderStatus | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -91,6 +111,26 @@ export function CuisineAdmin() {
     }
   };
 
+  /**
+   * Une carte peut-elle atterrir dans cette colonne ?
+   *
+   * On rejoue `STATUS_NEXT`, la même table que le serveur : une commande « à
+   * lancer » ne saute pas directement en « prête », et on ne revient pas en
+   * arrière. Laisser le lâcher se produire pour le voir refusé par l'API
+   * donnerait une carte qui bouge puis revient en place, sans explication.
+   */
+  const accepte = (from: OrderStatus, to: OrderStatus): boolean =>
+    from !== to && (STATUS_NEXT[from] ?? []).includes(to);
+
+  const deposer = (col: OrderStatus) => {
+    if (!drag) return;
+    setSurvol(null);
+    const o = orders.find((x) => x.id === drag.id);
+    setDrag(null);
+    if (!o || !accepte(drag.from, col)) return;
+    void avancer(o, col);
+  };
+
   /* Total des plats à produire, toutes commandes non parties confondues :
    * c'est le chiffre qui dit si la cuisine tient la cadence. */
   const aProduire = useMemo(() => {
@@ -111,6 +151,11 @@ export function CuisineAdmin() {
           <p className="mt-1 text-sm text-ink-2">
             {parStatut.confirmee.length} à lancer · {parStatut.cuisine.length} en préparation ·{" "}
             {parStatut.route.length} prêtes · actualisation toutes les 30 s
+          </p>
+          {/* Le glisser-déposer ne se devine pas : sans cette ligne, on
+              continue d'utiliser les boutons sans savoir qu'il existe. */}
+          <p className="mt-1 hidden text-xs text-ink-2 lg:block">
+            Faites glisser une commande d&apos;une colonne à l&apos;autre, ou utilisez son bouton.
           </p>
         </div>
         <button
@@ -156,8 +201,36 @@ export function CuisineAdmin() {
         <div className="grid gap-4 lg:grid-cols-3">
           {COLONNES.map((col) => {
             const liste = parStatut[col.statut] ?? [];
+            /* Colonne accueillante, refusée, ou neutre pendant un déplacement.
+               Sans ce retour visuel, on tire une carte au hasard et on découvre
+               au lâcher si le geste comptait. */
+            const cible = drag ? accepte(drag.from, col.statut) : false;
+            const refusee = drag ? !cible && drag.from !== col.statut : false;
+
             return (
-              <section key={col.statut} className="flex flex-col gap-3">
+              <section
+                key={col.statut}
+                onDragOver={(e) => {
+                  // Sans `preventDefault`, le navigateur refuse tout lâcher.
+                  if (!cible) return;
+                  e.preventDefault();
+                  setSurvol(col.statut);
+                }}
+                onDragLeave={() => setSurvol((s) => (s === col.statut ? null : s))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  deposer(col.statut);
+                }}
+                className={`flex flex-col gap-3 rounded-[var(--radius-card)] p-2 transition ${
+                  survol === col.statut && cible
+                    ? "bg-teal/10 ring-2 ring-teal"
+                    : cible
+                      ? "bg-teal/5 ring-1 ring-teal/40"
+                      : refusee
+                        ? "opacity-45"
+                        : ""
+                }`}
+              >
                 <h2 className="flex items-center justify-between rounded-[var(--radius-soft)] bg-panel-2 px-3 py-2 text-sm">
                   <span className="font-display">{col.titre}</span>
                   <span className="grid h-6 min-w-6 place-items-center rounded-full bg-brick px-1.5 text-xs text-white">
@@ -177,7 +250,20 @@ export function CuisineAdmin() {
                     return (
                       <article
                         key={o.id}
+                        /* Le glisser-déposer ne fonctionne qu'à la souris : il
+                           n'existe pas sur écran tactile sans bibliothèque
+                           dédiée. Les boutons restent donc la voie principale —
+                           c'est aussi la seule utilisable avec des mains
+                           grasses devant un piano. */
+                        draggable={!!col.suivant}
+                        onDragStart={() => setDrag({ id: o.id, from: col.statut })}
+                        onDragEnd={() => {
+                          setDrag(null);
+                          setSurvol(null);
+                        }}
                         className={`rounded-[var(--radius-card)] border bg-panel p-4 shadow-[var(--shadow-soft)] ${
+                          col.suivant ? "cursor-grab active:cursor-grabbing" : ""
+                        } ${drag?.id === o.id ? "opacity-40" : ""} ${
                           tarde ? "border-brick" : "border-line"
                         }`}
                       >
@@ -193,7 +279,7 @@ export function CuisineAdmin() {
                               tarde ? "bg-primary-soft text-brick" : "bg-panel-2 text-ink-2"
                             }`}
                           >
-                            {min} min
+                            {attenteLisible(min)}
                           </span>
                         </div>
 
