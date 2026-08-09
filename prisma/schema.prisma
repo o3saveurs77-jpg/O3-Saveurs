@@ -228,6 +228,15 @@ model DeliveryRun {
   endedAt   DateTime?
   createdAt DateTime  @default(now())
 
+  /// Jeton du lien privé remis au livreur (`/tournee/<jeton>`).
+  ///
+  /// Le livreur n'a pas de compte : il reçoit un lien par SMS et l'ouvre sur
+  /// son téléphone, ce qui permet de faire rouler un extra embauché le matin
+  /// même. Ce lien donne accès aux adresses et téléphones de la tournée : il
+  /// expire donc (`accessExpiresAt`) et peut être révoqué en le régénérant.
+  accessToken     String?   @unique
+  accessExpiresAt DateTime?
+
   orders Order[]
 
   @@index([date, status])
@@ -398,6 +407,19 @@ model Order {
   refundedAt       DateTime?
   /// Motif du remboursement, repris sur l'avoir.
   refundReason     String    @default("")
+
+  /// Code à quatre chiffres remis au client, qu'il donne au livreur.
+  ///
+  /// Preuve de remise : le livreur le saisit pour clore l'arrêt. Généré au
+  /// départ en livraison et envoyé avec l'email « en route » — pas avant, un
+  /// code communiqué trop tôt se perd dans la boîte de réception.
+  deliveryCode       String?
+  /// Livrée sans que le code ait pu être fourni — le motif est dans `driverNote`.
+  deliveredWithoutCode Boolean @default(false)
+  /// Ce que le livreur a signalé depuis la rue : client absent, adresse
+  /// introuvable, code oublié.
+  driverNote         String    @default("")
+  incidentAt         DateTime?
 
   /// Annulation demandée par le client alors que la commande était déjà
   /// engagée en cuisine : elle attend une décision humaine, elle n'annule rien

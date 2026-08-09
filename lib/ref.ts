@@ -91,6 +91,28 @@ export async function nextCreditNoteNumber(): Promise<number> {
  */
 export { formatInvoiceNumber } from "@/lib/money";
 
+/**
+ * Jeton du lien de tournée remis au livreur.
+ *
+ * 32 caractères tirés dans un alphabet de 31 signes : deviner un lien valide
+ * est hors de portée, ce qui compte puisqu'il ouvre les adresses des clients
+ * du jour.
+ */
+export function makeRunToken(): string {
+  return pick(32).toLowerCase();
+}
+
+/**
+ * Code de remise dicté au livreur par le client.
+ *
+ * Quatre chiffres : assez pour prouver la présence du bon destinataire, assez
+ * court pour être lu à voix haute sur un pas de porte. Ce n'est pas un secret
+ * cryptographique — c'est une preuve de remise en main propre.
+ */
+export function makeDeliveryCode(): string {
+  return pick(4, "0123456789");
+}
+
 /** Code promo de dédommagement, généré depuis un ticket SAV. */
 export function makeGestureCode(): string {
   return "SAV" + pick(6);

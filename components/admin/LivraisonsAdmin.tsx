@@ -117,6 +117,12 @@ export function LivraisonsAdmin() {
 
   // Feuille de route à imprimer (une seule à la fois)
   const [printRunId, setPrintRunId] = useState<string | null>(null);
+  /** Dernier lien livreur engendré, affiché sous sa tournée. */
+  const [shareLink, setShareLink] = useState<{
+    runId: string;
+    url: string;
+    message: string;
+  } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -279,6 +285,32 @@ export function LivraisonsAdmin() {
     setPrintRunId(run.id);
     // Laisser React peindre la feuille avant d'ouvrir la boîte d'impression.
     window.setTimeout(() => window.print(), 60);
+  };
+
+  /**
+   * Engendre le lien privé de la tournée et le met dans le presse-papiers.
+   *
+   * Rappelé, il **remplace** le précédent : c'est le geste qui coupe l'accès
+   * d'un livreur parti ou d'un lien transmis par erreur. Le message prêt à
+   * coller donne le contexte au livreur — un lien nu par SMS ressemble à une
+   * tentative d'hameçonnage, et ne serait pas ouvert.
+   */
+  const shareRun = async (run: RunView) => {
+    try {
+      const res = await fetch(`/api/delivery-runs/${run.id}/share`, { method: "POST" });
+      const data = (await res.json()) as { message?: string; url?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error ?? "Lien impossible à créer.");
+
+      setShareLink({ runId: run.id, url: data.url, message: data.message ?? data.url });
+      try {
+        await navigator.clipboard.writeText(data.message ?? data.url);
+      } catch {
+        /* presse-papiers refusé : le lien reste affiché, à copier à la main */
+      }
+    } catch (e) {
+      setShareLink(null);
+      window.alert(e instanceof Error ? e.message : "Lien impossible à créer.");
+    }
   };
 
   const sheet = runs.find((r) => r.id === printRunId) ?? null;
@@ -683,6 +715,28 @@ export function LivraisonsAdmin() {
                       >
                         <Icon name="print" size={15} /> Feuille de route
                       </button>
+                      {/* Lien privé du livreur : il n'a pas de compte, c'est le
+                          lien qui l'autorise. Le régénérer révoque le précédent. */}
+                      <button
+                        type="button"
+                        onClick={() => void shareRun(run)}
+                        className="inline-flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-semibold hover:border-primary"
+                      >
+                        <Icon name="scooter" size={15} /> Lien livreur
+                      </button>
+                      {shareLink?.runId === run.id && (
+                        <div className="w-full rounded-xl border border-teal/40 bg-teal/10 p-3 text-sm">
+                          <p className="font-semibold text-teal">
+                            Lien copié — collez-le dans un SMS à {run.driverName}.
+                          </p>
+                          <p className="mt-1 break-all font-mono text-xs text-ink-2">
+                            {shareLink.url}
+                          </p>
+                          <p className="mt-1 text-xs text-ink-2">
+                            Valable 16 h. Recréer un lien annule le précédent.
+                          </p>
+                        </div>
+                      )}
                       {(run.status === "preparee" || run.status === "en_cours") && (
                         <button
                           type="button"

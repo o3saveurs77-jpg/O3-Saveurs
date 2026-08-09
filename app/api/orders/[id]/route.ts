@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { rowToOrderWithDriver } from "@/lib/serialize";
 import { requireAdmin, optionalUser, readJson, badRequest, notFound } from "@/lib/guard";
 import { releaseStock } from "@/lib/stock";
-import { nextInvoiceNumber } from "@/lib/ref";
+import { nextInvoiceNumber, makeDeliveryCode } from "@/lib/ref";
 import { sendStatusUpdate, sendInvoice, sendCancelDeclined } from "@/lib/email";
 import { STATUS_NEXT, type OrderStatus } from "@/lib/types";
 import type { OrderLine } from "@/lib/types";
@@ -90,7 +90,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       data.status = to;
       if (to === "confirmee") data.confirmedAt = current.confirmedAt ?? now;
       if (to === "cuisine") data.cookingAt = now;
-      if (to === "route") data.routeAt = now;
+      if (to === "route") {
+        data.routeAt = now;
+        /* Code de remise, engendré au départ et une seule fois : le regénérer
+         * invaliderait celui que le client a déjà sous les yeux. Inutile pour
+         * une commande à emporter, que le client vient chercher lui-même. */
+        if (current.mode === "livraison" && !current.deliveryCode) {
+          data.deliveryCode = makeDeliveryCode();
+        }
+      }
       if (to === "livree") data.deliveredAt = now;
       if (to === "annulee") data.canceledAt = now;
     }

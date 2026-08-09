@@ -291,12 +291,30 @@ export async function sendStatusUpdate(row: OrderRow): Promise<void> {
   const message = messages[order.status];
   if (!message) return; // pas d'email pour les étapes internes
 
+  /* Code de remise, sur le départ en livraison uniquement.
+   *
+   * Il part avec cet email et pas plus tôt : communiqué à la commande, il
+   * serait enseveli sous les messages suivants au moment où le livreur le
+   * demande. C'est aussi la preuve que la commande est bien remise à son
+   * destinataire, et non déposée dans le hall d'un immeuble. */
+  const code =
+    order.status === "route" && row.deliveryCode
+      ? `<p style="margin:0 0 14px;padding:14px;background:#fce4cf;border-radius:10px;text-align:center">
+           <span style="display:block;font-size:13px;color:#856a50">Code à donner au livreur</span>
+           <strong style="display:block;font-size:30px;letter-spacing:6px;color:#a6243a">${escapeHtml(row.deliveryCode)}</strong>
+           <span style="display:block;font-size:12px;color:#856a50">Il vous le demandera à la remise de votre commande.</span>
+         </p>`
+      : "";
+
   await send({
     to: order.customer.email,
-    subject: `${order.ref} — ${STATUS_LABEL[order.status]} — Ô 3 Saveurs`,
+    subject:
+      order.status === "route" && row.deliveryCode
+        ? `${order.ref} — en route ! Votre code : ${row.deliveryCode} — Ô 3 Saveurs`
+        : `${order.ref} — ${STATUS_LABEL[order.status]} — Ô 3 Saveurs`,
     html: layout(
       STATUS_LABEL[order.status],
-      `<p style="margin:0 0 12px">${escapeHtml(message)}</p>${orderSummary(order)}`,
+      `<p style="margin:0 0 12px">${escapeHtml(message)}</p>${code}${orderSummary(order)}`,
     ),
     kind: "statut",
     orderId: order.id,
