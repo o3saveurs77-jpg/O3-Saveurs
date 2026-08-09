@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { rowToOrder } from "@/lib/serialize";
 import { optionalUser, canAccess, readJson, notFound, conflict } from "@/lib/guard";
 import { releaseStock } from "@/lib/stock";
-import { sendStatusUpdate } from "@/lib/email";
+import { sendStatusUpdate, sendCancelRequest } from "@/lib/email";
 import { cancelAbility, refundableCents } from "@/lib/refunds";
 import type { OrderLine, OrderStatus } from "@/lib/types";
 
@@ -55,6 +55,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       where: { id },
       data: { cancelRequestedAt: new Date(), cancelReason: reason },
     });
+
+    /* La demande doit atteindre un humain tout de suite : elle n'annule rien
+     * par elle-même, et pendant qu'elle attend, les plats cuisent. */
+    const origin = process.env.NEXTAUTH_URL ?? "";
+    await sendCancelRequest(updated, `${origin}/admin/commandes`).catch((error) =>
+      console.error(`[annulation] alerte au restaurant pour ${id} échouée:`, error),
+    );
+
     return NextResponse.json({
       outcome: "requested" as const,
       message:

@@ -4,7 +4,7 @@ import { rowToOrderWithDriver } from "@/lib/serialize";
 import { requireAdmin, optionalUser, readJson, badRequest, notFound } from "@/lib/guard";
 import { releaseStock } from "@/lib/stock";
 import { nextInvoiceNumber } from "@/lib/ref";
-import { sendStatusUpdate, sendInvoice } from "@/lib/email";
+import { sendStatusUpdate, sendInvoice, sendCancelDeclined } from "@/lib/email";
 import { STATUS_NEXT, type OrderStatus } from "@/lib/types";
 import type { OrderLine } from "@/lib/types";
 
@@ -48,6 +48,10 @@ interface PatchBody {
   paid?: boolean;
   deliveryRunId?: string | null;
   runPosition?: number | null;
+  /** Refuse une demande d'annulation : la commande suit son cours. */
+  declineCancel?: boolean;
+  /** Explication reprise dans l'email de refus. */
+  declineReason?: string;
 }
 
 /**
@@ -113,6 +117,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
+  /* Refus d'une demande d'annulation : la commande suit son cours et le client
+   * l'apprend. Sans réponse, il resterait à attendre une annulation qui ne
+   * viendra pas, puis verrait arriver la commande — le litige assuré. */
+  let refusAnnulation = false;
+  if (body.declineCancel === true) {
+    if (!current.cancelRequestedAt) return badRequest("Aucune demande d'annulation en attente.");
+    if (current.status === "annulee") return badRequest("Cette commande est déjà annulée.");
+    data.cancelRequestedAt = null;
+    refusAnnulation = true;
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json(rowToOrderWithDriver({ ...current, driver: null }));
   }
@@ -134,6 +149,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (data.status) {
     await sendStatusUpdate(updated).catch((error) =>
       console.error(`[orders] email de statut pour ${id} échoué:`, error),
+    );
+  }
+
+  if (refusAnnulation) {
+    await sendCancelDeclined(updated, typeof body.declineReason === "string" ? body.declineReason : "").catch(
+      (error) => console.error(`[orders] email de refus d'annulation pour ${id} échoué:`, error),
     );
   }
 

@@ -144,6 +144,7 @@ export function OrdersAdmin() {
             onToggle={() => setOpenId((id) => (id === o.id ? null : o.id))}
             onStatus={(status) => patch(o.id, { status })}
             onCollect={() => patch(o.id, { paid: true })}
+            onDeclineCancel={() => patch(o.id, { declineCancel: true })}
             /* Le remboursement passe par sa propre route : on recharge la liste
                pour que le montant restant affiché soit celui de la base. */
             onRefunded={(message) => {
@@ -170,6 +171,7 @@ function OrderRow({
   onStatus,
   onCollect,
   onRefunded,
+  onDeclineCancel,
 }: {
   order: Order;
   open: boolean;
@@ -178,6 +180,7 @@ function OrderRow({
   onStatus: (s: OrderStatus) => void;
   onCollect: () => void;
   onRefunded: (message: string) => void;
+  onDeclineCancel: () => void;
 }) {
   // Seules les transitions déclarées sont proposées, et la première est mise en
   // avant comme action principale.
@@ -355,14 +358,33 @@ function OrderRow({
           {/* Ce que le client a écrit en demandant l'annulation : la décision
               revient au restaurant, encore faut-il lui donner le motif. */}
           {order.cancelRequestedAt !== null && order.status !== "annulee" && (
-            <p className="mt-3 rounded-xl bg-gold/15 p-3 text-sm print:hidden">
-              <strong>Annulation demandée par le client.</strong>{" "}
-              {order.cancelReason || "Aucun motif précisé."}{" "}
-              <span className="text-ink-2">
-                Acceptez en passant la commande à « Annulée », puis remboursez si elle a été
-                réglée.
-              </span>
-            </p>
+            <div className="mt-3 rounded-xl bg-gold/15 p-3 text-sm print:hidden">
+              <p>
+                <strong>Annulation demandée par le client.</strong>{" "}
+                {order.cancelReason || "Aucun motif précisé."}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => onStatus("annulee")}
+                  disabled={busy}
+                  className="rounded-full bg-brick px-4 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                >
+                  Accepter et annuler
+                </button>
+                {/* Refuser sans le dire laisserait le client attendre une
+                    annulation qui ne vient pas, puis recevoir sa commande. */}
+                <button
+                  onClick={onDeclineCancel}
+                  disabled={busy}
+                  className="rounded-full border border-line bg-panel px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
+                >
+                  Refuser — prévenir le client
+                </button>
+                <span className="text-xs text-ink-2">
+                  {order.paid ? "Commande payée : pensez à rembourser si vous acceptez." : ""}
+                </span>
+              </div>
+            </div>
           )}
 
           {/* Remboursement — le panneau se retire de lui-même sur une commande

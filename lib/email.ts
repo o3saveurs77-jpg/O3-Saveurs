@@ -13,6 +13,33 @@
  *
  *  · **Un template par étape** du cycle de vie, au lieu d'un seul email de
  *    confirmation réutilisé pour tout.
+ *
+ * ── Qui reçoit quoi, et quand ───────────────────────────────────────────────
+ *
+ * Commande, côté client :
+ *   commande enregistrée ......... sendOrderConfirmation   (checkout)
+ *   paiement encaissé ............ sendPaymentReceived     (webhook Stripe)
+ *   en cuisine / en route /
+ *     livrée / annulée ........... sendStatusUpdate        (chaque changement)
+ *   facture ...................... sendInvoice             (encaissement, carte ou espèces)
+ *   avoir ........................ sendCreditNote          (remboursement)
+ *   annulation refusée ........... sendCancelDeclined      (décision du restaurant)
+ *   panier abandonné ............. sendAbandonedCartReminder (tâche planifiée)
+ *
+ * Commande, côté restaurant (RESTAURANT_NOTIFY_EMAIL) :
+ *   nouvelle commande ............ sendOrderConfirmation
+ *   paiement encaissé ............ sendPaymentReceived
+ *   annulation demandée .......... sendCancelRequest
+ *
+ * Hors commande :
+ *   newsletter ................... sendNewsletterConfirmation, sendCampaign
+ *   réclamation .................. sendTicketOpened (client + restaurant), sendTicketReply
+ *   devis traiteur ............... sendCateringInquiryReceived, sendCateringInquiryNotify
+ *
+ * Les changements d'étape ne sont **pas** notifiés au restaurant : c'est lui
+ * qui les provoque depuis le back-office. Il n'est alerté que de ce qu'il ne
+ * peut pas voir venir — une commande qui tombe, un paiement, une demande
+ * d'annulation.
  */
 
 import { Resend } from "resend";
@@ -40,6 +67,7 @@ export type EmailKind =
   | "statut"
   | "facture"
   | "avoir"
+  | "annulation"
   | "relance"
   | "newsletter"
   | "sav"
@@ -274,6 +302,73 @@ export async function sendStatusUpdate(row: OrderRow): Promise<void> {
     orderId: order.id,
     // Une seule notification par étape, même si le statut est remis deux fois.
     dedupeKey: `statut:${order.id}:${order.status}`,
+  });
+}
+
+/**
+ * Demande d'annulation déposée par un client sur une commande déjà engagée.
+ *
+ * Part **au restaurant**, pas au client : c'est une décision qui attend un
+ * humain. Sans cet email, la demande n'existait que dans l'écran des
+ * commandes — invisible tant que personne ne pensait à l'ouvrir, alors que
+ * les plats continuaient de cuire.
+ */
+export async function sendCancelRequest(row: OrderRow, orderUrl: string): Promise<void> {
+  if (!NOTIFY) return;
+
+  const order = rowToOrder(row);
+
+  await send({
+    to: NOTIFY,
+    subject: `⚠ Annulation demandée — commande ${order.ref} (${STATUS_LABEL[order.status]})`,
+    html: layout(
+      `${order.customer.name} demande l'annulation de ${order.ref}`,
+      `<p style="margin:0 0 12px;padding:10px;background:#fce4cf;border-radius:8px;font-size:13px">
+         La commande est <strong>${escapeHtml(STATUS_LABEL[order.status])}</strong> :
+         elle n'a pas été annulée. À vous de décider.
+       </p>
+       ${
+         order.cancelReason
+           ? `<p style="margin:0 0 12px"><strong>Motif :</strong> ${escapeHtml(order.cancelReason)}</p>`
+           : `<p style="margin:0 0 12px;color:#856a50">Aucun motif précisé.</p>`
+       }
+       ${orderSummary(order)}
+       <p style="margin:0 0 14px;font-size:13px">
+         ${order.paid ? `Commande <strong>payée</strong> — un remboursement sera à émettre si vous acceptez.` : "Commande non encaissée."}
+         <br>Téléphone : ${escapeHtml(order.customer.phone)}
+       </p>
+       <p style="margin:0"><a href="${escapeHtml(orderUrl)}" style="color:#e8732a;font-weight:bold">Ouvrir la commande</a></p>`,
+    ),
+    kind: "annulation",
+    orderId: order.id,
+    dedupeKey: `annulation-demande:${order.id}`,
+  });
+}
+
+/**
+ * Demande d'annulation refusée : la commande suit son cours.
+ *
+ * Le pendant du message ci-dessus. Sans lui, un client ayant demandé
+ * l'annulation restait sans nouvelle et voyait arriver une commande qu'il
+ * croyait annulée — la pire des surprises, et un litige assuré.
+ */
+export async function sendCancelDeclined(row: OrderRow, reason: string): Promise<void> {
+  const order = rowToOrder(row);
+
+  await send({
+    to: order.customer.email,
+    subject: `${order.ref} — votre commande est maintenue — Ô 3 Saveurs`,
+    html: layout(
+      "Votre commande est maintenue",
+      `<p style="margin:0 0 12px">Nous avons bien reçu votre demande d'annulation, mais votre
+         commande était déjà en préparation : nous ne pouvons plus l'arrêter.</p>
+       ${reason ? `<p style="margin:0 0 12px">${escapeHtml(reason)}</p>` : ""}
+       ${orderSummary(order)}
+       <p style="margin:0;font-size:13px">Une question ? Répondez à cet email ou appelez-nous.</p>`,
+    ),
+    kind: "annulation",
+    orderId: order.id,
+    dedupeKey: `annulation-refus:${order.id}`,
   });
 }
 
