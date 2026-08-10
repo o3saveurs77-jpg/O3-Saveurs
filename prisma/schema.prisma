@@ -481,8 +481,22 @@ model NewsletterSubscriber {
   confirmed   Boolean   @default(false)
   confirmedAt DateTime?
   unsubscribedAt DateTime?
-  /// footer | checkout | admin | import
+  /// footer | checkout | admin | import | boutique
   source String @default("footer")
+
+  /// Base légale de la prospection : `optin` ou `client`.
+  ///
+  /// `optin` — la personne s'est inscrite et a cliqué le lien de confirmation.
+  /// `client` — l'adresse a été recueillie **à l'occasion d'une vente**, ce qui
+  /// autorise la prospection pour des produits analogues sans consentement
+  /// préalable (art. L34-5 du code des postes et des communications
+  /// électroniques), à condition d'informer au moment du recueil et d'offrir la
+  /// désinscription dans chaque envoi.
+  ///
+  /// Ce champ n'est pas décoratif : en cas de contrôle, c'est lui qui justifie
+  /// qu'on avait le droit d'écrire à cette adresse. Le déduire du `source`
+  /// mélangerait « d'où vient l'adresse » et « à quel titre on écrit ».
+  basis String @default("optin")
 
   createdAt DateTime @default(now())
 

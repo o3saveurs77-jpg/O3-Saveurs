@@ -2,6 +2,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { OU_JOIGNABLE } from "@/lib/prospection";
 import { requireAdmin, readJson, badRequest, serverError } from "@/lib/guard";
 import { collect, str, oneOf, isoDate } from "@/lib/validate";
 
@@ -24,9 +25,7 @@ export async function GET() {
   const rows = await prisma.campaign.findMany({ orderBy: { createdAt: "desc" }, take: 200 });
 
   // Taille de l'audience joignable, pour annoncer un volume avant l'envoi.
-  const reachable = await prisma.newsletterSubscriber.count({
-    where: { confirmed: true, unsubscribedAt: null },
-  });
+  const reachable = await prisma.newsletterSubscriber.count({ where: OU_JOIGNABLE });
 
   return NextResponse.json({
     campaigns: rows.map((c) => ({

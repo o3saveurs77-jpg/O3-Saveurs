@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { ModelesCampagne } from "./ModelesCampagne";
+import { SaisieBoutique } from "./SaisieBoutique";
 
 /**
  * Newsletter : abonnés et campagnes.
@@ -202,6 +203,10 @@ export function NewsletterAdmin() {
           </button>
         </div>
       </header>
+
+      {/* Saisie au comptoir : la voie par laquelle entrent les clients qui
+          n’ont pas commandé en ligne. */}
+      <SaisieBoutique onAjout={charger} />
 
       {message && (
         <p
