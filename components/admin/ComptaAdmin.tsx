@@ -12,8 +12,9 @@
 
 import { useMemo, useState } from "react";
 import { useOrders } from "@/components/providers/OrdersContext";
-import { collected, inRange, modeSplit } from "@/lib/analytics";
-import { vatBreakdown, fmtVatRate } from "@/lib/money";
+import { invoiced, inRange, modeSplit, netCollectedCents } from "@/lib/analytics";
+import { vatBreakdown, fmtVatRate, formatInvoiceNumber } from "@/lib/money";
+import { formatCreditNoteNumber } from "@/lib/refunds";
 import { fmtPrice } from "@/lib/menu";
 import { Icon } from "@/components/Icon";
 import type { Order } from "@/lib/types";
@@ -60,18 +61,30 @@ export function ComptaAdmin() {
     () => inRange(orders, range.start, range.end),
     [orders, range],
   );
-  const encaissees = useMemo(() => collected(periode), [periode]);
+  /* Base comptable : les commandes **facturées**, et non les seules commandes
+   * non annulées. Un plat sur commande refusé par le restaurant est annulé
+   * après avoir été facturé et remboursé ; l'écarter ferait disparaître du
+   * journal une facture et son avoir, donc un trou inexpliqué dans deux
+   * numérotations séquentielles. Voir `lib/analytics.ts`. */
+  const facturees = useMemo(() => invoiced(periode), [periode]);
 
-  const totalTTC = encaissees.reduce((s, o) => s + o.totalCents, 0);
-  const panierMoyen = encaissees.length > 0 ? Math.round(totalTTC / encaissees.length) : 0;
+  /** Ce qui reste réellement acquis : facturé moins remboursé. */
+  const totalTTC = facturees.reduce((s, o) => s + netCollectedCents(o), 0);
+  const totalRembourse = facturees.reduce((s, o) => s + o.refundedCents, 0);
+  const avoirs = useMemo(() => facturees.filter((o) => o.refundedCents > 0), [facturees]);
+  const panierMoyen = facturees.length > 0 ? Math.round(totalTTC / facturees.length) : 0;
 
   /** Ventilation par taux de TVA — la plupart des commandes partagent le même taux,
    * mais `vatRateBp` est figé par commande : un changement de taux en cours de
-   * route ne doit jamais réécrire les commandes passées. */
+   * route ne doit jamais réécrire les commandes passées.
+   *
+   * L'assiette est le montant **net de remboursement** : la ventiler sur le
+   * total facturé faisait déclarer, et payer, de la TVA sur des sommes rendues
+   * au client. */
   const parTaux = useMemo(() => {
     const map = new Map<number, { rateBp: number; netCents: number; vatCents: number; grossCents: number; n: number }>();
-    for (const o of encaissees) {
-      const vat = vatBreakdown(o.totalCents, o.vatRateBp);
+    for (const o of facturees) {
+      const vat = vatBreakdown(netCollectedCents(o), o.vatRateBp);
       const e = map.get(o.vatRateBp) ?? { rateBp: o.vatRateBp, netCents: 0, vatCents: 0, grossCents: 0, n: 0 };
       e.netCents += vat.netCents;
       e.vatCents += vat.vatCents;
@@ -80,38 +93,59 @@ export function ComptaAdmin() {
       map.set(o.vatRateBp, e);
     }
     return [...map.values()].sort((a, b) => a.rateBp - b.rateBp);
-  }, [encaissees]);
+  }, [facturees]);
 
   const parPaiement = useMemo(() => {
     const map = new Map<string, { n: number; cents: number }>();
-    for (const o of encaissees) {
+    for (const o of facturees) {
       const e = map.get(o.paymentMethod) ?? { n: 0, cents: 0 };
       e.n += 1;
-      e.cents += o.totalCents;
+      e.cents += netCollectedCents(o);
       map.set(o.paymentMethod, e);
     }
     return [...map.entries()].sort((a, b) => b[1].cents - a[1].cents);
-  }, [encaissees]);
+  }, [facturees]);
 
-  const parMode = useMemo(() => modeSplit(encaissees), [encaissees]);
+  const parMode = useMemo(() => modeSplit(facturees), [facturees]);
 
   /** Compte de caisse/banque selon le moyen de paiement — seule distinction
    * qui compte pour l'écriture comptable : espèces vs tout le reste. */
   const compteEncaissement = (o: Order) => (o.paymentMethod === "Espèces sur place" ? "530" : "512");
 
+  const dateFr = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
+
+  /* Journal des ventes : les lignes restent au prix facturé — c'est ce qui a
+     été vendu. La colonne « Avoir » signale la pièce qui l'annule, sans quoi
+     un plat sur commande refusé apparaîtrait comme une vente ordinaire. */
   const exportVentes = () => {
-    const header = ["Date", "Référence", "Article", "Qté", "P.U. TTC", "Total TTC", "Taux TVA"];
+    const header = [
+      "Date",
+      "Référence",
+      "Facture",
+      "Article",
+      "Qté",
+      "P.U. TTC",
+      "Total TTC",
+      "Taux TVA",
+      "Avoir",
+      "Remboursé TTC",
+    ];
     const rows: (string | number)[][] = [];
-    for (const o of encaissees) {
+    for (const o of facturees) {
       for (const l of o.lines) {
         rows.push([
-          new Date(o.createdAt).toLocaleDateString("fr-FR"),
+          dateFr(o.createdAt),
           o.ref,
+          formatInvoiceNumber(o.invoiceNumber, new Date(o.createdAt)),
           l.name,
           l.qty,
           euros(l.unitPriceCents),
           euros(l.lineTotalCents),
           fmtVatRate(o.vatRateBp),
+          o.refundedCents > 0
+            ? formatCreditNoteNumber(o.creditNoteNumber, new Date(o.refundedAt ?? o.createdAt))
+            : "",
+          o.refundedCents > 0 ? euros(o.refundedCents) : "",
         ]);
       }
     }
@@ -119,30 +153,66 @@ export function ComptaAdmin() {
   };
 
   const exportEcritures = () => {
-    const header = ["Date", "Compte", "Libellé", "Débit", "Crédit"];
+    const header = ["Date", "Pièce", "Compte", "Libellé", "Débit", "Crédit"];
     const rows: (string | number)[][] = [];
-    for (const o of encaissees) {
-      const vat = vatBreakdown(o.totalCents, o.vatRateBp);
-      const date = new Date(o.createdAt).toLocaleDateString("fr-FR");
+    for (const o of facturees) {
+      const date = dateFr(o.createdAt);
+      const piece = formatInvoiceNumber(o.invoiceNumber, new Date(o.createdAt));
       const libelle = `Commande ${o.ref}`;
-      rows.push([date, "411", `${libelle} — client`, euros(o.totalCents), ""]);
-      rows.push([date, "707", `${libelle} — vente HT`, "", euros(vat.netCents)]);
-      rows.push([date, "44571", `${libelle} — TVA collectée`, "", euros(vat.vatCents)]);
-      rows.push([date, compteEncaissement(o), `${libelle} — encaissement`, euros(o.totalCents), ""]);
-      rows.push([date, "411", `${libelle} — solde client`, "", euros(o.totalCents)]);
+
+      /* La vente est enregistrée pour son montant **facturé**, pas pour son
+         montant net : c'est ce que dit la facture, et une facture ne se
+         réécrit pas. Le remboursement vient ensuite, en pièce séparée. */
+      const vat = vatBreakdown(o.totalCents, o.vatRateBp);
+      rows.push([date, piece, "411", `${libelle} — client`, euros(o.totalCents), ""]);
+      rows.push([date, piece, "707", `${libelle} — vente HT`, "", euros(vat.netCents)]);
+      rows.push([date, piece, "44571", `${libelle} — TVA collectée`, "", euros(vat.vatCents)]);
+      rows.push([date, piece, compteEncaissement(o), `${libelle} — encaissement`, euros(o.totalCents), ""]);
+      rows.push([date, piece, "411", `${libelle} — solde client`, "", euros(o.totalCents)]);
+
+      /* Avoir : l'écriture exactement symétrique, à sa propre date et sous son
+         propre numéro. C'est elle qui neutralise la TVA collectée sur une
+         somme rendue — sans quoi la déclaration porte sur de l'argent que le
+         restaurant n'a plus. */
+      if (o.refundedCents > 0) {
+        const dateAvoir = dateFr(o.refundedAt ?? o.createdAt);
+        const avoir = formatCreditNoteNumber(
+          o.creditNoteNumber,
+          new Date(o.refundedAt ?? o.createdAt),
+        );
+        const rembourse = vatBreakdown(o.refundedCents, o.vatRateBp);
+        const lib = `Avoir ${o.ref}`;
+        rows.push([dateAvoir, avoir, "707", `${lib} — annulation vente HT`, euros(rembourse.netCents), ""]);
+        rows.push([dateAvoir, avoir, "44571", `${lib} — TVA à régulariser`, euros(rembourse.vatCents), ""]);
+        rows.push([dateAvoir, avoir, "411", `${lib} — client`, "", euros(o.refundedCents)]);
+        rows.push([dateAvoir, avoir, "411", `${lib} — remboursement`, euros(o.refundedCents), ""]);
+        rows.push([dateAvoir, avoir, compteEncaissement(o), `${lib} — sortie`, "", euros(o.refundedCents)]);
+      }
     }
     downloadCsv(`ecritures-comptables-${du}-au-${au}.csv`, header, rows);
   };
 
   const exportTva = () => {
-    const header = ["Taux TVA", "Nombre de commandes", "Total HT", "TVA collectée", "Total TTC"];
-    const rows = parTaux.map((t) => [
+    const header = [
+      "Taux TVA",
+      "Nombre de factures",
+      "Total HT",
+      "TVA collectée",
+      "Total TTC",
+    ];
+    const rows: (string | number)[][] = parTaux.map((t) => [
       fmtVatRate(t.rateBp),
       t.n,
       euros(t.netCents),
       euros(t.vatCents),
       euros(t.grossCents),
     ]);
+    // Le total remboursé est déjà déduit ligne à ligne ; on le rappelle pour
+    // que le rapprochement avec les relevés bancaires soit immédiat.
+    if (totalRembourse > 0) {
+      rows.push([]);
+      rows.push(["Dont avoirs déduits", avoirs.length, "", "", `- ${euros(totalRembourse)}`]);
+    }
     downloadCsv(`tva-${du}-au-${au}.csv`, header, rows);
   };
 
@@ -173,14 +243,27 @@ export function ComptaAdmin() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
-          <p className="text-sm text-ink-2">CA encaissé</p>
+          <p className="text-sm text-ink-2">CA net encaissé</p>
           <p className="mt-1 font-display text-2xl text-brick">{fmtPrice(totalTTC)}</p>
+          <p className="mt-0.5 text-xs text-ink-2">facturé moins remboursé</p>
         </div>
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
-          <p className="text-sm text-ink-2">Commandes encaissées</p>
-          <p className="mt-1 font-display text-2xl">{encaissees.length}</p>
+          <p className="text-sm text-ink-2">Factures émises</p>
+          <p className="mt-1 font-display text-2xl">{facturees.length}</p>
+        </div>
+        {/* Le montant rendu doit se lire, et pas seulement se déduire : c'est
+            lui qui explique l'écart entre le chiffre d'affaires facturé et ce
+            qui est réellement resté sur le compte. */}
+        <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
+          <p className="text-sm text-ink-2">Avoirs</p>
+          <p className="mt-1 font-display text-2xl text-teal">
+            {totalRembourse > 0 ? `− ${fmtPrice(totalRembourse)}` : fmtPrice(0)}
+          </p>
+          <p className="mt-0.5 text-xs text-ink-2">
+            {avoirs.length} pièce{avoirs.length > 1 ? "s" : ""}
+          </p>
         </div>
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
           <p className="text-sm text-ink-2">Panier moyen</p>

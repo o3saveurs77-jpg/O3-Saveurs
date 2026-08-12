@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   valid,
   collected,
+  invoiced,
+  netCollectedCents,
   orderedCents,
   collectedCents,
   pendingCents,
@@ -49,6 +51,7 @@ function order(p: Partial<Order> & { id: string }): Order {
     paymentMethod: p.paymentMethod ?? "Carte bancaire",
     refundedCents: p.refundedCents ?? 0,
     creditNoteNumber: p.creditNoteNumber ?? null,
+    refundedAt: p.refundedAt ?? null,
     refundReason: p.refundReason ?? "",
     cancelRequestedAt: p.cancelRequestedAt ?? null,
     cancelReason: p.cancelReason ?? "",
@@ -92,6 +95,45 @@ describe("valid / collected", () => {
       order({ id: "3", paid: true, status: "annulee" }),
     ];
     expect(collected(list).map((o) => o.id)).toEqual(["1"]);
+  });
+});
+
+/**
+ * Le pilotage et la déclaration ne regardent pas la même chose, et les
+ * confondre coûte de l'argent dans les deux sens : soit on déclare de la TVA
+ * sur des sommes rendues, soit on fait disparaître une facture émise.
+ */
+describe("assiette comptable", () => {
+  it("retient les commandes facturées, annulées comprises", () => {
+    const list = [
+      order({ id: "1", paid: true, invoiceNumber: 1 }),
+      // Plat sur commande refusé : facturé, remboursé, puis annulé. La facture
+      // et l'avoir existent — les écarter creuserait un trou dans deux
+      // numérotations séquentielles.
+      order({ id: "2", paid: true, invoiceNumber: 2, status: "annulee", refundedCents: 5000 }),
+      // Jamais encaissée, donc jamais facturée : rien à déclarer.
+      order({ id: "3", paid: false, invoiceNumber: null }),
+    ];
+    expect(invoiced(list).map((o) => o.id)).toEqual(["1", "2"]);
+  });
+
+  it("ne retient pas une commande payée sans facture émise", () => {
+    expect(invoiced([order({ id: "1", paid: true, invoiceNumber: null })])).toEqual([]);
+  });
+
+  it("déduit le remboursement de l'assiette taxable", () => {
+    expect(netCollectedCents(order({ id: "1", totalCents: 5000, refundedCents: 0 }))).toBe(5000);
+    expect(netCollectedCents(order({ id: "2", totalCents: 5000, refundedCents: 2000 }))).toBe(3000);
+  });
+
+  it("un remboursement intégral ne laisse aucune base taxable", () => {
+    expect(netCollectedCents(order({ id: "1", totalCents: 5000, refundedCents: 5000 }))).toBe(0);
+  });
+
+  /* Filet : un remboursement supérieur au total ne doit pas produire une base
+     négative, qui viendrait *réduire* la TVA due sur les autres ventes. */
+  it("ne descend jamais sous zéro", () => {
+    expect(netCollectedCents(order({ id: "1", totalCents: 5000, refundedCents: 9000 }))).toBe(0);
   });
 });
 

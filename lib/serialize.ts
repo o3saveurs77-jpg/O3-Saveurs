@@ -161,6 +161,7 @@ export function rowToOrder(r: OrderRow, driverName: string | null = null): Order
     paymentMethod: r.paymentMethod,
     refundedCents: r.refundedCents,
     creditNoteNumber: r.creditNoteNumber,
+    refundedAt: ms(r.refundedAt),
     refundReason: r.refundReason,
     cancelRequestedAt: ms(r.cancelRequestedAt),
     cancelReason: r.cancelReason,

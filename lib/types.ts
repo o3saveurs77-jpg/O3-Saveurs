@@ -207,6 +207,8 @@ export interface Order {
   refundedCents: number;
   /** Numéro d'avoir séquentiel, une fois le premier remboursement émis. */
   creditNoteNumber: number | null;
+  /** Date d'émission de l'avoir, en ms — la pièce porte sa propre date. */
+  refundedAt: number | null;
   refundReason: string;
   /** Annulation demandée par le client sur une commande déjà engagée. */
   cancelRequestedAt: number | null;
