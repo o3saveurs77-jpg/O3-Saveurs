@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isStorageConfigured } from "@/lib/storage";
 import { isStripeConfigured } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,11 @@ export async function GET() {
     database,
     stripe: isStripeConfigured(),
     email: !!process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes("placeholder"),
-    blob: !!process.env.BLOB_READ_WRITE_TOKEN && !process.env.BLOB_READ_WRITE_TOKEN.includes("placeholder"),
+    // Le stockage des photos est passé de Vercel Blob à S3 (Cellar). La sonde
+    // interrogeait encore `BLOB_READ_WRITE_TOKEN` : elle annonçait un stockage
+    // opérationnel sur la foi d'un jeton que plus rien ne lit, Cellar fût-il
+    // entièrement absent. On demande maintenant au module de stockage lui-même.
+    storage: isStorageConfigured(),
   };
 
   // Seule la base rend le site inutilisable. Les intégrations manquantes sont

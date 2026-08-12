@@ -40,6 +40,21 @@ next-env.d.ts
 
 # déploiement
 .vercel
+# Bloc de variables à coller dans la console Clever Cloud : mêmes secrets que
+# `.env`, sous un autre nom. Une fois collé, ce fichier n'a plus de raison
+# d'exister — le supprimer.
+/clever-env.txt
+
+# Vidage de pile laissé par Git Bash sous Windows — pas un artefact du projet.
+bash.exe.stackdump
+
+# La carte finale pèse 119 Mo : GitHub refuse tout fichier au-delà de 100 Mo, et
+# ce poids vient d'un défaut d'export (couches superposées, cf. §13 de
+# RECONCILIATION-CARTE.md). Elle reste sur le disque en attendant un export à
+# plat, qui tiendra dans quelques mégaoctets et pourra, lui, être versionné.
+/O3-Saveurs Carte-FINALE-corrigee.pdf
+# Doublon exact de « O3-Saveurs Carte-mise-a-jour.pdf », déjà versionné.
+/carte-o3-saveurs.pdf
 
 # Sources et médias lourds — conservés sur le disque, hors du dépôt.
 # `uploads/` contient les originaux fournis par la cliente (dépliant PDF, photos
