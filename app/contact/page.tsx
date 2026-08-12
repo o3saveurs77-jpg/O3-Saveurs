@@ -5,7 +5,7 @@ import { ContactForm } from "@/components/contact/ContactForm";
 
 export const metadata: Metadata = {
   title: "Contact · Ô 3 Saveurs — Chez Laila",
-  description: "Coordonnées, horaires et accès du restaurant Ô 3 Saveurs — Chez Laila à Lognes.",
+  description: "Coordonnées, horaires et accès du restaurant Ô 3 Saveurs — Chez Laila à Pontault-Combault.",
 };
 
 export default function ContactPage() {

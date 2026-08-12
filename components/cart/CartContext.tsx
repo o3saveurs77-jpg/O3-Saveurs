@@ -9,7 +9,7 @@ import {
   useMemo,
 } from "react";
 import type { Dish } from "@/lib/menu";
-import type { CartLine } from "@/lib/types";
+import type { CartLine, FormulaPick } from "@/lib/types";
 
 export type { CartLine };
 
@@ -19,6 +19,22 @@ interface AddArgs {
   formule?: string | null;
   /** prix unitaire **d'affichage**, en centimes (le serveur recalcule) */
   unitPriceCents?: number;
+  note?: string;
+}
+
+/** Formule garnie, telle que l'assistant de composition la produit. */
+interface AddFormulaArgs {
+  formulaId: string;
+  /** code court, repris comme étiquette de ligne (« F3 ») */
+  code: string;
+  name: string;
+  photo: string | null;
+  picks: FormulaPick[];
+  /** récapitulatif lisible « Votre plat » → « Mafé · Riz blanc » */
+  opts: Record<string, string>;
+  /** prix unitaire **d'affichage**, en centimes (le serveur recalcule) */
+  unitPriceCents: number;
+  qty?: number;
   note?: string;
 }
 
@@ -32,6 +48,7 @@ interface CartData {
 interface CartActions {
   setOpen: (v: boolean) => void;
   add: (dish: Dish, args?: AddArgs) => void;
+  addFormula: (args: AddFormulaArgs) => void;
   setQty: (key: string, qty: number) => void;
   remove: (key: string) => void;
   clear: () => void;
@@ -56,8 +73,15 @@ const OpenCtx = createContext<boolean>(false);
 function reviveLine(raw: unknown): CartLine | null {
   if (!raw || typeof raw !== "object") return null;
   const l = raw as Record<string, unknown>;
-  if (typeof l.dishId !== "string" || !l.dishId) return null;
   if (typeof l.name !== "string") return null;
+
+  /* Une ligne porte soit un plat, soit une formule garnie — jamais rien. */
+  const formulaId = typeof l.formulaId === "string" && l.formulaId ? l.formulaId : null;
+  const dishId = typeof l.dishId === "string" ? l.dishId : "";
+  if (!formulaId && !dishId) return null;
+
+  const picks = formulaId ? revivePicks(l.picks) : null;
+  if (formulaId && (!picks || picks.length === 0)) return null;
 
   const qty = Number(l.qty);
   if (!Number.isInteger(qty) || qty < 1 || qty > 50) return null;
@@ -77,9 +101,23 @@ function reviveLine(raw: unknown): CartLine | null {
   const formule = typeof l.formule === "string" ? l.formule : null;
   const note = typeof l.note === "string" ? l.note.slice(0, 300) : "";
 
+  /* Panier enregistré avant l'arrivée des plats sur commande : pas de délai,
+   * donc commande du jour. Le serveur relit de toute façon le vrai délai en
+   * base — au pire le tunnel n'affiche pas le sélecteur de date et le checkout
+   * refuse, ce qui est le bon sens de l'erreur. */
+  const lead = Number(l.leadTimeHours);
+  const leadTimeHours = Number.isInteger(lead) && lead > 0 && lead <= 24 * 60 ? lead : 0;
+
   return {
-    key: typeof l.key === "string" && l.key ? l.key : lineKey(l.dishId, opts, formule, note),
-    dishId: l.dishId,
+    key:
+      typeof l.key === "string" && l.key
+        ? l.key
+        : formulaId
+          ? formulaKey(formulaId, picks ?? [], note)
+          : lineKey(dishId, opts, formule, note),
+    dishId,
+    formulaId,
+    picks,
     name: l.name,
     photo: typeof l.photo === "string" ? l.photo : null,
     unitPriceCents,
@@ -87,7 +125,37 @@ function reviveLine(raw: unknown): CartLine | null {
     opts,
     formule,
     note,
+    leadTimeHours,
   };
+}
+
+/** Relit la composition d'une formule stockée dans le navigateur. */
+function revivePicks(raw: unknown): FormulaPick[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: FormulaPick[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const p = item as Record<string, unknown>;
+    if (typeof p.slotId !== "string" || !p.slotId) continue;
+    if (typeof p.dishId !== "string" || !p.dishId) continue;
+    out.push({
+      slotId: p.slotId,
+      slotLabel: typeof p.slotLabel === "string" ? p.slotLabel : "",
+      dishId: p.dishId,
+      dishName: typeof p.dishName === "string" ? p.dishName : "",
+      // Montant purement indicatif : le serveur le recalcule à la commande.
+      supplementCents: Number.isInteger(p.supplementCents) ? (p.supplementCents as number) : 0,
+      opts:
+        p.opts && typeof p.opts === "object" && !Array.isArray(p.opts)
+          ? Object.fromEntries(
+              Object.entries(p.opts as Record<string, unknown>)
+                .filter(([, v]) => typeof v === "string")
+                .map(([k, v]) => [k, String(v)]),
+            )
+          : {},
+    });
+  }
+  return out;
 }
 
 function lineKey(
@@ -97,6 +165,15 @@ function lineKey(
   note: string,
 ): string {
   return `${dishId}|${JSON.stringify(opts)}|${formule ?? ""}|${note}`;
+}
+
+/* Deux formules identiques se cumulent, deux compositions différentes restent
+ * deux lignes : la clé porte donc la composition, options comprises. */
+function formulaKey(formulaId: string, picks: FormulaPick[], note: string): string {
+  const composition = picks
+    .map((p) => `${p.slotId}:${p.dishId}:${JSON.stringify(p.opts)}`)
+    .join("+");
+  return `formule:${formulaId}|${composition}|${note}`;
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
@@ -145,6 +222,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         {
           key,
           dishId: dish.id,
+          formulaId: null,
+          picks: null,
           name: dish.name,
           photo: dish.photo,
           unitPriceCents: unitPriceCents ?? dish.priceCents ?? 0,
@@ -152,6 +231,38 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           opts,
           formule,
           note,
+          leadTimeHours: dish.leadTimeHours ?? 0,
+        },
+      ];
+    });
+    setOpen(true);
+  }, []);
+
+  const addFormula = useCallback((args: AddFormulaArgs) => {
+    const { formulaId, code, name, photo, picks, opts, unitPriceCents, qty = 1, note = "" } = args;
+    const key = formulaKey(formulaId, picks, note);
+    setLines((s) => {
+      const existing = s.find((l) => l.key === key);
+      if (existing) {
+        return s.map((l) => (l.key === key ? { ...l, qty: Math.min(50, l.qty + qty) } : l));
+      }
+      return [
+        ...s,
+        {
+          key,
+          dishId: "",
+          formulaId,
+          picks,
+          name: `Formule ${name}`,
+          photo,
+          unitPriceCents,
+          qty,
+          opts,
+          formule: code,
+          note,
+          /* Une formule est composée de plats de la carte du jour : aucun plat
+             sur commande n'y figure, et une formule ne se réserve pas. */
+          leadTimeHours: 0,
         },
       ];
     });
@@ -182,8 +293,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   );
 
   const actions = useMemo<CartActions>(
-    () => ({ setOpen, add, setQty, remove, clear }),
-    [add, setQty, remove, clear],
+    () => ({ setOpen, add, addFormula, setQty, remove, clear }),
+    [add, addFormula, setQty, remove, clear],
   );
 
   return (

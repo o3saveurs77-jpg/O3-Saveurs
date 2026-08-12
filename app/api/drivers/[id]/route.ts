@@ -18,10 +18,26 @@ interface PatchBody {
   name?: unknown;
   phone?: unknown;
   vehicle?: unknown;
+  email?: unknown;
   active?: unknown;
 }
 
 /** PATCH /api/drivers/[id] — **administration uniquement**. */
+/**
+ * Email facultatif du livreur. `email()` de `lib/validate` exige une valeur ;
+ * ici l’absence est le cas normal — un extra livre sans compte.
+ */
+function optionalEmail(v: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (v === undefined || v === null || v === "") return { ok: true, value: null };
+  if (typeof v !== "string") return { ok: false, error: "L’email n’est pas valide" };
+  const value = v.trim().toLowerCase();
+  if (!value) return { ok: true, value: null };
+  if (value.length > 254 || !/^[^s@]+@[^s@]+.[a-z]{2,}$/i.test(value)) {
+    return { ok: false, error: "L’email du livreur n’est pas valide" };
+  }
+  return { ok: true, value };
+}
+
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response;
@@ -56,6 +72,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const v = str(body.vehicle, "Le véhicule", { max: 40, required: false });
     if (!v.ok) return badRequest(v.error);
     data.vehicle = v.value || null;
+  }
+
+  if (body.email !== undefined) {
+    /* Vide = on délie le compte : le livreur perd l’accès à /livreur mais
+       garde ses tournées et son historique. */
+    const v = optionalEmail(body.email);
+    if (!v.ok) return badRequest(v.error);
+    data.email = v.value;
   }
 
   if (body.active !== undefined) data.active = bool(body.active, current.active);

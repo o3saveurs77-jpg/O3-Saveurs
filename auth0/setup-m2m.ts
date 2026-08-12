@@ -23,9 +23,15 @@
  *
  * Usage : npm run auth0:setup
  *
- * Après coup, supprimer ou désactiver l'application M2M dans Auth0 : elle n'a
- * plus d'usage une fois le rôle assigné et l'Action déployée.
+ * ⚠ Ne pas supprimer l'application M2M après coup, contrairement à ce que cette
+ * note conseillait : `lib/auth0Roles.ts` s'en sert **en production** pour relire
+ * le rôle en cours de session (scope `read:roles`). Sans elle, un rôle retiré
+ * dans Auth0 resterait actif jusqu'à la reconnexion de la personne. Les deux
+ * variables `AUTH0_M2M_*` doivent donc être présentes dans l'environnement de
+ * déploiement, au même titre que `AUTH0_CLIENT_*`.
  */
+
+import { readFileSync } from "node:fs";
 
 try {
   process.loadEnvFile(); // charge .env — ce script tourne hors Next.js/Prisma
@@ -33,20 +39,27 @@ try {
   /* pas de .env local (ex. CI) : les variables viennent déjà de l'environnement */
 }
 
-const ROLE_CLAIM = "https://o3saveurs.fr/role";
 const ACTION_NAME = "Add role claim";
-const ACTION_CODE = `
-const ROLE_CLAIM = "${ROLE_CLAIM}";
-const KNOWN_ROLES = ["ADMIN", "CLIENT"];
 
-exports.onExecutePostLogin = async (event, api) => {
-  const assigned = event.authorization?.roles ?? [];
-  const role = KNOWN_ROLES.find((r) => assigned.includes(r)) ?? "CLIENT";
-
-  api.idToken.setCustomClaim(ROLE_CLAIM, role);
-  api.accessToken.setCustomClaim(ROLE_CLAIM, role);
-};
-`.trim();
+/**
+ * Code déployé, lu depuis `auth0/actions/add-role-claim.js`.
+ *
+ * Ce script en portait auparavant sa **propre copie**, dans un littéral de
+ * gabarit. Les deux exemplaires avaient déjà divergé : relancer
+ * `npm run auth0:setup` réécrasait le trigger déployé avec la version périmée
+ * du script, silencieusement. Un contrôle d'accès n'a qu'une source.
+ */
+function actionCode(): string {
+  const file = new URL("./actions/add-role-claim.js", import.meta.url);
+  const code = readFileSync(file, "utf8").trim();
+  if (!code.includes("onExecutePostLogin")) {
+    throw new Error(
+      "auth0/actions/add-role-claim.js ne définit pas onExecutePostLogin — " +
+        "déploiement interrompu pour ne pas casser la connexion au site.",
+    );
+  }
+  return code;
+}
 
 function env(key: string): string {
   const v = process.env[key]?.trim();
@@ -136,6 +149,7 @@ interface ActionResource {
 }
 
 async function ensureAction(token: string): Promise<ActionResource> {
+  const code = actionCode();
   const existing = await api<{ actions: ActionResource[] }>(
     token,
     "/api/v2/actions/actions?triggerId=post-login&per_page=100",
@@ -145,7 +159,7 @@ async function ensureAction(token: string): Promise<ActionResource> {
   if (found) {
     await api(token, `/api/v2/actions/actions/${found.id}`, {
       method: "PATCH",
-      body: JSON.stringify({ code: ACTION_CODE }),
+      body: JSON.stringify({ code }),
     });
     console.log(`  · action "${ACTION_NAME}" mise à jour (${found.id})`);
     return found;
@@ -156,7 +170,7 @@ async function ensureAction(token: string): Promise<ActionResource> {
     body: JSON.stringify({
       name: ACTION_NAME,
       supported_triggers: [{ id: "post-login", version: "v3" }],
-      code: ACTION_CODE,
+      code,
       runtime: "node18",
     }),
   });
@@ -169,22 +183,43 @@ async function deployAction(token: string, actionId: string) {
   console.log(`  · action déployée`);
 }
 
+/**
+ * L'API n'est pas symétrique : la **lecture** décrit chaque étape par un objet
+ * `action` ({ id, name }), tandis que l'**écriture** attend un `ref`
+ * ({ type, value }). Le code lisait `b.ref.value` sur la réponse de lecture et
+ * plantait donc systématiquement — « Cannot read properties of undefined » —
+ * juste après avoir déployé l'action, en laissant croire à un échec global
+ * alors que le déploiement, lui, avait réussi.
+ */
 interface Bindings {
-  bindings: { id?: string; ref: { type: string; value: string }; display_name: string }[];
+  bindings: {
+    id?: string;
+    display_name: string;
+    action?: { id: string; name: string };
+  }[];
 }
 
 async function ensureBinding(token: string, actionId: string) {
   const current = await api<Bindings>(token, "/api/v2/actions/triggers/post-login/bindings");
-  const already = current.bindings.some((b) => b.ref.value === actionId);
-  if (already) {
+  if (current.bindings.some((b) => b.action?.id === actionId)) {
     console.log(`  · déjà présente dans le flow Login`);
     return;
   }
+
+  /* Les étapes existantes sont réécrites telles quelles : un PATCH remplace la
+   * liste entière, en omettre une la retirerait du flow. */
+  const conservees = current.bindings
+    .filter((b) => b.action?.id)
+    .map((b) => ({
+      ref: { type: "action_id", value: b.action!.id },
+      display_name: b.display_name,
+    }));
+
   await api(token, "/api/v2/actions/triggers/post-login/bindings", {
     method: "PATCH",
     body: JSON.stringify({
       bindings: [
-        ...current.bindings.map((b) => ({ ref: b.ref, display_name: b.display_name })),
+        ...conservees,
         { ref: { type: "action_id", value: actionId }, display_name: ACTION_NAME },
       ],
     }),
@@ -199,6 +234,11 @@ async function main() {
 
   console.log("Rôles :");
   const adminRole = await ensureRole(token, "ADMIN");
+  /* LIVREUR existe pour être assignable et reconnu par l'application. Il
+   * n'ouvre aucune page pour l'instant : la tournée s'atteint par un lien
+   * privé, sans compte. Le rôle prépare le jour où un livreur permanent
+   * voudra se connecter plutôt que de recevoir un SMS. */
+  await ensureRole(token, "LIVREUR");
   await ensureRole(token, "CLIENT");
 
   console.log("\nAssignation :");

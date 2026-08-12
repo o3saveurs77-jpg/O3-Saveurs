@@ -2,15 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Logo } from "./Brand";
 import { Icon } from "./Icon";
 import { useCart } from "./cart/CartContext";
 import { CartDrawer } from "./cart/CartDrawer";
+import { useAuth } from "./providers/AuthContext";
 
 const LINKS = [
   { href: "/", label: "Accueil" },
   { href: "/carte", label: "La Carte" },
+  { href: "/formules", label: "Formules" },
+  { href: "/traiteur", label: "Traiteur" },
   { href: "/a-propos", label: "À propos" },
   { href: "/contact", label: "Contact" },
 ];
@@ -18,7 +21,60 @@ const LINKS = [
 export function Nav() {
   const pathname = usePathname();
   const { count, setOpen } = useCart();
+  const { user, logout } = useAuth();
   const [mobile, setMobile] = useState(false);
+
+  /* Se déconnecter n'existait que sur `/compte` : il fallait deviner qu'il
+   * fallait aller là pour en sortir. Le menu du bouton « Compte » l'expose
+   * depuis n'importe quelle page. */
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+
+    const onPointerDown = (e: MouseEvent | TouchEvent) => {
+      if (!accountRef.current?.contains(e.target as Node)) setAccountOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAccountOpen(false);
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [accountOpen]);
+
+  // Le menu ne doit pas rester ouvert par-dessus la page suivante.
+  useEffect(() => {
+    setAccountOpen(false);
+    setMobile(false);
+  }, [pathname]);
+
+  /**
+   * Déconnexion puis retour à l'accueil, en rechargement complet.
+   *
+   * `signOut` efface le cookie mais les pages déjà rendues côté serveur
+   * gardent la session dans leur HTML : sans ce rechargement, on restait sur
+   * un écran qui affiche encore son nom et ses commandes, et on pouvait
+   * croire la déconnexion sans effet.
+   */
+  /* `/compte` renvoie une administratrice vers le back-office : sans ce
+   * paramètre, « Mon compte » la ferait rebondir sur `/admin` et son espace
+   * client deviendrait inatteignable. */
+  const accountHref = user?.role === "ADMIN" ? "/compte?client=1" : "/compte";
+
+  const handleLogout = async () => {
+    setAccountOpen(false);
+    setMobile(false);
+    await logout();
+    window.location.assign("/");
+  };
 
   return (
     <>
@@ -36,8 +92,21 @@ export function Nav() {
             <Logo />
           </Link>
 
-          {/* nav desktop */}
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Navigation principale">
+          {/* nav desktop
+              `shrink-0` + `whitespace-nowrap` : les six liens sont des éléments
+              flex, donc compressibles jusqu'à leur plus long mot. Faute de
+              place entre le logo et les boutons d'action, « La Carte » et
+              « À propos » se repliaient sur deux lignes et déformaient la barre.
+              Le logo tronque déjà : c'est à lui de céder la place, pas aux liens.
+
+              La barre ne tient réellement qu'à partir de 1024 px (six liens +
+              « Commander » + « Compte » + panier). Sous ce seuil, le burger —
+              qui porte exactement les mêmes liens — prend le relais ; entre
+              1024 et 1280 px les pastilles sont resserrées d'un cran. */}
+          <nav
+            className="hidden shrink-0 items-center gap-0.5 lg:flex xl:gap-1"
+            aria-label="Navigation principale"
+          >
             {LINKS.map((l) => {
               const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
               return (
@@ -45,7 +114,7 @@ export function Nav() {
                   key={l.href}
                   href={l.href}
                   aria-current={active ? "page" : undefined}
-                  className={`rounded-full px-4 py-2 text-[15px] font-semibold transition ${
+                  className={`whitespace-nowrap rounded-full px-2.5 py-2 text-[14px] font-semibold transition xl:px-4 xl:text-[15px] ${
                     // `text-primary` sur `bg-primary-soft` plafonne à 2,48:1, sous
                     // le seuil WCAG AA. `text-brick` sur le même fond passe.
                     active ? "bg-primary-soft text-brick" : "text-ink hover:bg-panel-2"
@@ -67,24 +136,95 @@ export function Nav() {
               Commander
             </Link>
 
-            {/* compte */}
+            {/* compte — icône seule sous sm, pilule icône + texte à partir de sm.
+                Connecté, la pilule ouvre un menu ; le petit bouton mobile reste
+                un simple lien, le menu de déconnexion vivant dans le burger. */}
             <Link
               href="/compte"
-              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2 sm:h-11 sm:w-11"
+              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2 sm:hidden"
               aria-label="Mon compte"
             >
               <Icon name="user" size={20} />
             </Link>
 
+            {user ? (
+              <div ref={accountRef} className="relative hidden sm:block">
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen((v) => !v)}
+                  aria-expanded={accountOpen}
+                  aria-haspopup="menu"
+                  className="flex items-center gap-2 rounded-full border border-line bg-panel px-4 py-2.5 text-[15px] font-semibold text-ink transition hover:bg-panel-2"
+                >
+                  <Icon name="user" size={18} />
+                  Compte
+                  <Icon
+                    name="chevDown"
+                    size={15}
+                    className={`transition ${accountOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {accountOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-[calc(100%+8px)] w-64 overflow-hidden rounded-[var(--radius-card)] border border-line bg-panel shadow-[var(--shadow-lg)]"
+                  >
+                    <p className="truncate border-b border-line px-4 py-3 text-sm text-ink-2">
+                      Connecté en tant que
+                      <span className="block truncate font-bold text-ink">{user.email}</span>
+                    </p>
+
+                    <Link
+                      href={accountHref}
+                      role="menuitem"
+                      onClick={() => setAccountOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-3 text-sm font-semibold hover:bg-panel-2"
+                    >
+                      <Icon name="user" size={17} className="text-primary" /> Mon compte
+                    </Link>
+
+                    {user.role === "ADMIN" && (
+                      <Link
+                        href="/admin"
+                        role="menuitem"
+                        onClick={() => setAccountOpen(false)}
+                        className="flex items-center gap-2.5 px-4 py-3 text-sm font-semibold hover:bg-panel-2"
+                      >
+                        <Icon name="settings" size={17} className="text-primary" /> Back-office
+                      </Link>
+                    )}
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2.5 border-t border-line px-4 py-3 text-left text-sm font-semibold text-brick hover:bg-brick/10"
+                    >
+                      <Icon name="lock" size={17} /> Se déconnecter
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link
+                href="/compte"
+                className="hidden items-center gap-2 rounded-full border border-line bg-panel px-4 py-2.5 text-[15px] font-semibold text-ink transition hover:bg-panel-2 sm:flex"
+              >
+                <Icon name="user" size={18} />
+                Compte
+              </Link>
+            )}
+
             {/* bouton panier */}
             <button
               onClick={() => setOpen(true)}
-              className="relative grid h-10 w-10 place-items-center rounded-full border border-line bg-panel transition hover:bg-panel-2 sm:h-11 sm:w-11"
+              className="relative grid h-10 w-10 place-items-center rounded-full bg-primary text-white transition hover:brightness-105 sm:h-11 sm:w-11"
               aria-label="Ouvrir le panier"
             >
               <Icon name="bag" size={20} />
               {count > 0 && (
-                <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-brick px-1 text-[11px] font-bold text-white">
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-brick px-1 text-[11px] font-bold text-white ring-2 ring-panel">
                   {count}
                 </span>
               )}
@@ -93,7 +233,7 @@ export function Nav() {
             {/* burger mobile */}
             <button
               onClick={() => setMobile((v) => !v)}
-              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel md:hidden"
+              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel lg:hidden"
               aria-label="Menu"
               aria-expanded={mobile}
               aria-controls="nav-mobile"
@@ -107,7 +247,7 @@ export function Nav() {
         {mobile && (
           <nav
             id="nav-mobile"
-            className="border-t border-line bg-page px-4 py-3 md:hidden"
+            className="border-t border-line bg-page px-4 py-3 lg:hidden"
             aria-label="Navigation principale"
           >
             {LINKS.map((l) => (
@@ -130,6 +270,38 @@ export function Nav() {
             >
               Commander
             </Link>
+
+            {/* Le menu compte de la barre n'existe qu'à partir de 640 px : sans
+                ce relais, se déconnecter depuis un téléphone obligeait à passer
+                par la page « Mon compte ». */}
+            {user && (
+              <div className="mt-3 border-t border-line pt-3">
+                <p className="truncate px-3 pb-1 text-xs text-ink-2">{user.email}</p>
+                <Link
+                  href={accountHref}
+                  onClick={() => setMobile(false)}
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-3 font-semibold hover:bg-panel-2"
+                >
+                  <Icon name="user" size={17} className="text-primary" /> Mon compte
+                </Link>
+                {user.role === "ADMIN" && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMobile(false)}
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-3 font-semibold hover:bg-panel-2"
+                  >
+                    <Icon name="settings" size={17} className="text-primary" /> Back-office
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-3 text-left font-semibold text-brick hover:bg-brick/10"
+                >
+                  <Icon name="lock" size={17} /> Se déconnecter
+                </button>
+              </div>
+            )}
           </nav>
         )}
       </header>

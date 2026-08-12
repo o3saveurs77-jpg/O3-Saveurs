@@ -134,6 +134,33 @@ export const valid = (orders: Order[]): Order[] => orders.filter((o) => o.status
 /** Commandes réellement encaissées (et non annulées). */
 export const collected = (orders: Order[]): Order[] => valid(orders).filter((o) => o.paid);
 
+/**
+ * Commandes qui existent **pour la comptabilité** : celles qui ont donné lieu à
+ * une facture.
+ *
+ * Le critère n'est pas « non annulée » mais « facturée », et la différence
+ * n'est pas théorique. Une facture émise ne se modifie ni ne s'efface (art. 242
+ * nonies A CGI) : rembourser produit un avoir, une pièce distincte, pas la
+ * disparition de la vente. Une commande annulée après facturation — un plat sur
+ * commande refusé par le restaurant, typiquement — doit donc rester au journal,
+ * compensée par son avoir. L'écarter creuserait dans la numérotation un trou
+ * que rien n'expliquerait devant un contrôle.
+ *
+ * `collected` reste le bon filtre pour le pilotage (« qu'ai-je vendu ? ») ;
+ * celui-ci est le bon pour la déclaration (« qu'ai-je facturé ? »).
+ */
+export const invoiced = (orders: Order[]): Order[] =>
+  orders.filter((o) => o.paid && o.invoiceNumber !== null);
+
+/**
+ * Montant réellement acquis sur une commande : facturé moins ce qui a été rendu.
+ *
+ * C'est cette base-là qui porte la TVA collectée. La ventiler sur `totalCents`
+ * fait déclarer — et payer — la taxe sur des sommes rendues au client.
+ */
+export const netCollectedCents = (o: Order): number =>
+  Math.max(0, o.totalCents - o.refundedCents);
+
 /** Commandes créées dans `[start, end)`. */
 export const inRange = (orders: Order[], start: number, end: number): Order[] =>
   orders.filter((o) => o.createdAt >= start && o.createdAt < end);
@@ -387,10 +414,15 @@ export function topDishes(orders: Order[], limit = 6): DishStat[] {
   const map = new Map<string, DishStat>();
   for (const o of valid(orders)) {
     for (const l of o.lines) {
-      const e = map.get(l.dishId) ?? { dishId: l.dishId, name: l.name, qty: 0, orderedCents: 0 };
+      /* Une ligne formule n'a pas de `dishId` : elle est comptée sous son
+       * propre identifiant, sans quoi toutes les formules se cumuleraient sur
+       * une même clé vide. Savoir laquelle se vend est une information utile en
+       * soi — c'est le produit que la cliente met en avant. */
+      const key = l.formulaId ? `formule:${l.formulaId}` : l.dishId;
+      const e = map.get(key) ?? { dishId: key, name: l.name, qty: 0, orderedCents: 0 };
       e.qty += l.qty;
       e.orderedCents += l.lineTotalCents;
-      map.set(l.dishId, e);
+      map.set(key, e);
     }
   }
   return [...map.values()].sort((a, b) => b.qty - a.qty || b.orderedCents - a.orderedCents).slice(0, limit);
@@ -422,6 +454,29 @@ export function estimatedMargin(
   for (const o of valid(orders)) {
     for (const l of o.lines) {
       total += l.lineTotalCents;
+
+      /* Le coût d'une formule est celui des plats qui la composent. Il n'est
+       * retenu que si **tous** sont chiffrés : additionner deux plats sur
+       * quatre gonflerait artificiellement la marge de la formule. */
+      if (l.formulaId) {
+        const picks = l.picks ?? [];
+        if (picks.length === 0) continue;
+        let sum = 0;
+        let complete = true;
+        for (const p of picks) {
+          const unit = costByDish.get(p.dishId);
+          if (unit === null || unit === undefined) {
+            complete = false;
+            break;
+          }
+          sum += unit;
+        }
+        if (!complete) continue;
+        covered += l.lineTotalCents;
+        cost += sum * l.qty;
+        continue;
+      }
+
       const unitCost = costByDish.get(l.dishId);
       if (unitCost === null || unitCost === undefined) continue;
       covered += l.lineTotalCents;

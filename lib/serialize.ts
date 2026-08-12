@@ -21,6 +21,7 @@ import type {
   SupportTicket as TicketRow,
   TicketMessage as TicketMessageRow,
   ContactMessage as ContactMessageRow,
+  CateringInquiry as CateringInquiryRow,
 } from "@prisma/client";
 
 import type { Dish, DishOption, Zone } from "./menu";
@@ -41,6 +42,8 @@ import type {
   TicketMessageView,
   TicketStatus,
   ContactMessageView,
+  CateringInquiryView,
+  CateringStatus,
 } from "./types";
 import { ALLERGENS } from "./types";
 
@@ -81,6 +84,8 @@ export function rowToDish(r: DishRow): Dish {
     stockAlert: r.stockAlert,
     costCents: r.costCents,
     position: r.position,
+    leadTimeHours: r.leadTimeHours,
+    vatRateBp: r.vatRateBp,
   };
 }
 
@@ -104,6 +109,8 @@ export function dishToRow(d: Partial<Dish>) {
   if (d.stockAlert !== undefined) row.stockAlert = d.stockAlert;
   if (d.costCents !== undefined) row.costCents = d.costCents;
   if (d.position !== undefined) row.position = d.position;
+  if (d.leadTimeHours !== undefined) row.leadTimeHours = d.leadTimeHours;
+  if (d.vatRateBp !== undefined) row.vatRateBp = d.vatRateBp;
   return row;
 }
 
@@ -133,6 +140,9 @@ export function rowToOrder(r: OrderRow, driverName: string | null = null): Order
     mode: r.mode as OrderMode,
     zoneIdx: r.zoneIdx,
     slot: r.slot,
+    preorder: r.preorder,
+    scheduledFor: ms(r.scheduledFor),
+    refusalReason: r.refusalReason,
     customer: {
       name: r.customerName,
       email: r.customerEmail,
@@ -151,6 +161,12 @@ export function rowToOrder(r: OrderRow, driverName: string | null = null): Order
     paid: r.paid,
     paymentStatus: r.paymentStatus as PaymentStatus,
     paymentMethod: r.paymentMethod,
+    refundedCents: r.refundedCents,
+    creditNoteNumber: r.creditNoteNumber,
+    refundedAt: ms(r.refundedAt),
+    refundReason: r.refundReason,
+    cancelRequestedAt: ms(r.cancelRequestedAt),
+    cancelReason: r.cancelReason,
     createdAt: r.createdAt.getTime(),
     driverId: r.driverId,
     driverName,
@@ -305,5 +321,23 @@ export function rowToContactMessage(r: ContactMessageRow): ContactMessageView {
     message: r.message,
     handled: r.handled,
     createdAt: r.createdAt.getTime(),
+  };
+}
+
+export function rowToCateringInquiry(r: CateringInquiryRow): CateringInquiryView {
+  return {
+    id: r.id,
+    eventType: r.eventType,
+    eventDate: r.eventDate ? r.eventDate.getTime() : null,
+    guestCount: r.guestCount,
+    location: r.location,
+    customerName: r.customerName,
+    customerPhone: r.customerPhone,
+    customerEmail: r.customerEmail,
+    message: r.message,
+    status: r.status as CateringStatus,
+    note: r.note,
+    createdAt: r.createdAt.getTime(),
+    updatedAt: r.updatedAt.getTime(),
   };
 }

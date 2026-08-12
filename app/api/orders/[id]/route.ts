@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { rowToOrderWithDriver } from "@/lib/serialize";
 import { requireAdmin, optionalUser, readJson, badRequest, notFound } from "@/lib/guard";
 import { releaseStock } from "@/lib/stock";
-import { nextInvoiceNumber } from "@/lib/ref";
-import { sendStatusUpdate } from "@/lib/email";
+import { nextInvoiceNumber, makeDeliveryCode } from "@/lib/ref";
+import { sendStatusUpdate, sendInvoice, sendCancelDeclined } from "@/lib/email";
 import { STATUS_NEXT, type OrderStatus } from "@/lib/types";
 import type { OrderLine } from "@/lib/types";
 
@@ -48,6 +48,10 @@ interface PatchBody {
   paid?: boolean;
   deliveryRunId?: string | null;
   runPosition?: number | null;
+  /** Refuse une demande d'annulation : la commande suit son cours. */
+  declineCancel?: boolean;
+  /** Explication reprise dans l'email de refus. */
+  declineReason?: string;
 }
 
 /**
@@ -79,6 +83,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const from = current.status as OrderStatus;
     const to = body.status;
     if (from !== to) {
+      /* Une commande sur commande ne sort pas de l'attente par un simple
+       * changement de statut. Accepter, c'est prévenir le client que sa date
+       * est tenue ; refuser, c'est lui rendre son argent, émettre l'avoir et
+       * lui dire pourquoi. `STATUS_NEXT` autorise bien la transition — c'est le
+       * même mouvement métier — mais elle doit passer par la route qui produit
+       * ces effets, sinon le client attend une confirmation qui ne vient jamais
+       * ou voit sa commande annulée sans être remboursé. */
+      if (from === "en_attente_validation") {
+        return badRequest(
+          "Cette commande sur commande s'accepte ou se refuse depuis le panneau dédié " +
+            "(POST /api/orders/{id}/preorder) : la valider ici n'enverrait ni confirmation " +
+            "ni remboursement.",
+        );
+      }
+
       const allowed = STATUS_NEXT[from] ?? [];
       if (!allowed.includes(to)) {
         return badRequest(`Transition impossible : « ${from} » → « ${to} »`);
@@ -86,7 +105,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       data.status = to;
       if (to === "confirmee") data.confirmedAt = current.confirmedAt ?? now;
       if (to === "cuisine") data.cookingAt = now;
-      if (to === "route") data.routeAt = now;
+      if (to === "route") {
+        data.routeAt = now;
+        /* Code de remise, engendré au départ et une seule fois : le regénérer
+         * invaliderait celui que le client a déjà sous les yeux. Inutile pour
+         * une commande à emporter, que le client vient chercher lui-même. */
+        if (current.mode === "livraison" && !current.deliveryCode) {
+          data.deliveryCode = makeDeliveryCode();
+        }
+      }
       if (to === "livree") data.deliveredAt = now;
       if (to === "annulee") data.canceledAt = now;
     }
@@ -113,6 +140,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
+  /* Refus d'une demande d'annulation : la commande suit son cours et le client
+   * l'apprend. Sans réponse, il resterait à attendre une annulation qui ne
+   * viendra pas, puis verrait arriver la commande — le litige assuré. */
+  let refusAnnulation = false;
+  if (body.declineCancel === true) {
+    if (!current.cancelRequestedAt) return badRequest("Aucune demande d'annulation en attente.");
+    if (current.status === "annulee") return badRequest("Cette commande est déjà annulée.");
+    data.cancelRequestedAt = null;
+    refusAnnulation = true;
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json(rowToOrderWithDriver({ ...current, driver: null }));
   }
@@ -134,6 +172,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (data.status) {
     await sendStatusUpdate(updated).catch((error) =>
       console.error(`[orders] email de statut pour ${id} échoué:`, error),
+    );
+  }
+
+  if (refusAnnulation) {
+    await sendCancelDeclined(updated, typeof body.declineReason === "string" ? body.declineReason : "").catch(
+      (error) => console.error(`[orders] email de refus d'annulation pour ${id} échoué:`, error),
+    );
+  }
+
+  /* Encaissement en espèces : la facture part par email, comme pour un
+   * paiement par carte.
+   *
+   * Le numéro de facture était bien attribué ci-dessus, mais `sendInvoice`
+   * n'était appelé que par le webhook Stripe : une commande réglée en liquide
+   * obtenait donc une facture consultable en ligne que le client ne recevait
+   * jamais. `sendInvoice` porte une clé de déduplication, un double
+   * encaissement ne renvoie donc pas deux fois le même document. */
+  if (data.paid === true && !current.paid) {
+    const origin = process.env.NEXTAUTH_URL ?? "";
+    await sendInvoice(updated, `${origin}/facture/${updated.id}`).catch((error) =>
+      console.error(`[orders] envoi de la facture de ${id} échoué:`, error),
     );
   }
 

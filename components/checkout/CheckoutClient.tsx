@@ -7,6 +7,7 @@ import { useAuth } from "@/components/providers/AuthContext";
 import { fmtPrice, info } from "@/lib/menu";
 import type { Zone } from "@/lib/menu";
 import { resolveZone } from "@/lib/zones";
+import { formatLeadTime } from "@/lib/preorder";
 import { formatKm } from "@/lib/delivery";
 import { Icon } from "@/components/Icon";
 import { AddressAutocomplete } from "./AddressAutocomplete";
@@ -14,8 +15,16 @@ import type { DeliveryQuote } from "@/app/api/delivery-quote/route";
 import type { OrderMode } from "@/lib/types";
 
 /** Doit rester aligné sur `PAYMENT_METHODS` de `app/api/checkout/route.ts`. */
-const PAYMENTS = ["Carte bancaire", "Apple Pay", "Google Pay", "Espèces sur place"] as const;
+const PAYMENTS = ["Carte bancaire", "Apple Pay", "Google Pay", "PayPal", "Espèces sur place"] as const;
 type Payment = (typeof PAYMENTS)[number];
+
+const PAYMENT_INFO: Record<Payment, string> = {
+  "Carte bancaire": "Débit immédiat, sécurisé par Stripe",
+  "Apple Pay": "Paiement en un geste depuis votre iPhone",
+  "Google Pay": "Paiement en un geste depuis Android",
+  PayPal: "Redirection vers votre compte PayPal",
+  "Espèces sur place": "Réglez en liquide à la livraison ou au retrait",
+};
 
 /**
  * Clé de la commande en attente de retour de paiement — sert à vider le panier
@@ -40,6 +49,12 @@ interface SlotsResponse {
   nextService: { weekday: number; weekdayLabel: string; label: string; opensAt: string } | null;
 }
 
+/** Dates de retrait d'un panier contenant un plat sur commande. */
+interface PreorderSlotsResponse {
+  leadTimeHours: number;
+  days: { date: string; label: string; weekdayLabel: string; slots: string[] }[];
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 
 export function CheckoutClient() {
@@ -59,6 +74,18 @@ export function CheckoutClient() {
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [slots, setSlots] = useState<SlotsResponse | null>(null);
   const [freeDeliveryThresholdCents, setFreeDeliveryThresholdCents] = useState<number | null>(null);
+
+  /* Plats sur commande : le panier porte le délai de chaque plat, et c'est le
+   * plus long qui commande — un gigot à 48 h et des pastels partent ensemble,
+   * donc au rythme du gigot. Ce délai n'est qu'un affichage : le serveur relit
+   * les vrais délais en base avant d'accepter la date. */
+  const cartLeadTimeHours = useMemo(
+    () => lines.reduce((max, l) => Math.max(max, l.leadTimeHours || 0), 0),
+    [lines],
+  );
+  const isPreorder = cartLeadTimeHours > 0;
+  const [preorderSlots, setPreorderSlots] = useState<PreorderSlotsResponse | null>(null);
+  const [scheduledDate, setScheduledDate] = useState("");
 
   /* Une panne de `/api/zones` ou `/api/slots` était présentée au client comme
    * un refus du restaurant : zones à `[]` faisait afficher « hors zone de
@@ -150,29 +177,89 @@ export function CheckoutClient() {
     };
   }, []);
 
-  // Créneaux réels : plus de liste codée en dur proposant le midi les jours de fermeture.
+  /* Créneaux réels : plus de liste codée en dur proposant le midi les jours de
+   * fermeture. Rafraîchi toutes les minutes : sans ça, un onglet ouvert avant
+   * l'heure d'ouverture du service reste bloqué sur « Nous sommes fermés »
+   * même après l'heure d'ouverture réelle, tant que le client ne recharge pas
+   * la page à la main. */
   useEffect(() => {
     let alive = true;
-    setSlotsError(false);
-    fetch("/api/slots", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("slots"))))
-      .then((data: SlotsResponse) => {
+
+    const load = () => {
+      fetch("/api/slots", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error("slots"))))
+        .then((data: SlotsResponse) => {
+          if (!alive) return;
+          setSlots(data);
+          setSlotsError(false);
+          /* Le créneau n'est **pas** réécrit ici. Cette fonction est rejouée
+           * toutes les minutes : un `setSlot(data.slots[0])` inconditionnel
+           * ramenait le choix du client au premier créneau de la liste à chaque
+           * passage. Quelqu'un qui demandait 20:00 pendant qu'on est fermé
+           * repassait silencieusement à 18:00 soixante secondes plus tard, et
+           * découvrait l'horaire réel sur son email de confirmation.
+           * L'effet ci-dessous s'en charge, mais seulement quand le créneau
+           * retenu a réellement cessé d'être proposable. */
+        })
+        // `slots` reste `null` : une réponse « fermé, aucun créneau » fabriquée
+        // ici annoncerait au client que le restaurant est fermé alors que c'est
+        // le serveur qui n'a pas répondu.
+        .catch(() => {
+          if (!alive) return;
+          setSlots(null);
+          setSlotsError(true);
+        });
+    };
+
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [reloadKey]);
+
+  /* Dates de retrait d'un plat sur commande. Rechargé quand le délai du panier
+   * change — retirer le gigot ramène le tunnel aux créneaux du jour. Pas de
+   * rafraîchissement périodique ici : à 48 h d'échéance, une date ne devient
+   * pas caduque pendant que le client remplit son adresse. */
+  useEffect(() => {
+    if (!isPreorder) {
+      setPreorderSlots(null);
+      return;
+    }
+    let alive = true;
+    fetch(`/api/preorder-slots?hours=${cartLeadTimeHours}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("preorder-slots"))))
+      .then((data: PreorderSlotsResponse) => {
         if (!alive) return;
-        setSlots(data);
-        if (!data.open) setSlot(data.slots[0] ?? "");
+        setPreorderSlots(data);
+        setSlotsError(false);
       })
-      // `slots` reste `null` : une réponse « fermé, aucun créneau » fabriquée
-      // ici annoncerait au client que le restaurant est fermé alors que c'est
-      // le serveur qui n'a pas répondu.
       .catch(() => {
         if (!alive) return;
-        setSlots(null);
+        setPreorderSlots(null);
         setSlotsError(true);
       });
     return () => {
       alive = false;
     };
-  }, [reloadKey]);
+  }, [isPreorder, cartLeadTimeHours, reloadKey]);
+
+  /* Première date proposable retenue d'office : le client n'a rien à faire
+   * s'il veut au plus tôt, et le tunnel n'est jamais dans un état où aucune
+   * date n'est choisie. */
+  useEffect(() => {
+    if (!isPreorder || !preorderSlots) return;
+    const days = preorderSlots.days;
+    const current = days.find((d) => d.date === scheduledDate);
+    if (!current) {
+      setScheduledDate(days[0]?.date ?? "");
+      setSlot(days[0]?.slots[0] ?? "");
+    } else if (!current.slots.includes(slot)) {
+      setSlot(current.slots[0] ?? "");
+    }
+  }, [isPreorder, preorderSlots, scheduledDate, slot]);
 
   /* Zone déduite du code postal, comme le fera le serveur. C'est un affichage :
    * la zone facturée est celle que `computeOrder()` recalcule. */
@@ -187,6 +274,25 @@ export function CheckoutClient() {
   );
 
   const addressFilled = form.zip.length === 5 || form.city.trim().length > 1;
+
+  /**
+   * Adresse suffisamment renseignée pour qu'un refus ait un sens.
+   *
+   * `addressFilled` déclenche l'estimation dès qu'une ville est tapée — c'est
+   * voulu, le retour arrive plus tôt. Mais s'en servir aussi pour **refuser**
+   * annonçait « nous ne livrons pas à cette adresse » à quelqu'un qui n'avait
+   * saisi qu'un début de ville, voire rien du tout quand un profil enregistré
+   * pré-remplissait la ville sans le code postal. C'est le code postal qui
+   * détermine la zone facturée : sans lui, on ne conclut pas.
+   */
+  const addressJudgeable = /^\d{5}$/.test(form.zip.trim());
+
+  /** Emmène au champ adresse — il vit à l'étape 3, loin de ce message. */
+  const focusAddress = () => {
+    const field = document.getElementById("co-address");
+    field?.scrollIntoView({ behavior: "smooth", block: "center" });
+    field?.focus({ preventScroll: true });
+  };
 
   /* Estimation des frais auprès du serveur : c'est lui qui mesure la distance
    * (le navigateur n'a ni la clé Google ni le barème). Même logique et mêmes
@@ -232,7 +338,7 @@ export function CheckoutClient() {
    * correspond. */
   const outOfZone =
     mode === "livraison" &&
-    addressFilled &&
+    addressJudgeable &&
     (quote ? !quote.deliverable : !!zones && !zone && !quoting);
 
   const minimumCents =
@@ -261,28 +367,120 @@ export function CheckoutClient() {
   // avertissement (voir plus bas) plutôt qu'un blocage silencieux.
   const canPreOrderNext = !!slots && slotOptions.length === 0 && !!slots.nextService;
 
-  // Un créneau devenu indisponible (service terminé pendant la saisie) est réajusté.
+  // Un créneau devenu indisponible (service terminé pendant la saisie) est
+  // réajusté. Sans la garde, cet effet et celui des dates de réservation se
+  // disputeraient `slot` : « 19:30 » de jeudi serait ramené au premier créneau
+  // d'aujourd'hui, à chaque render.
   useEffect(() => {
-    if (!slots) return;
+    if (isPreorder || !slots) return;
     if (slotOptions.length > 0 && !slotOptions.includes(slot)) setSlot(slotOptions[0]);
     else if (slotOptions.length === 0 && canPreOrderNext && slot !== "next") setSlot("next");
-  }, [slots, slotOptions, slot, canPreOrderNext]);
+  }, [isPreorder, slots, slotOptions, slot, canPreOrderNext]);
 
-  const valid = useMemo(() => {
-    if (lines.length === 0 || belowMin || outOfZone) return false;
-    if (!cgv) return false;
-    const slotOk = slotOptions.length > 0 ? slotOptions.includes(slot) : canPreOrderNext && slot === "next";
-    if (!slotOk) return false;
-    if (form.name.trim().length < 2) return false;
-    if (!EMAIL_RE.test(form.email.trim())) return false;
-    if (form.phone.replace(/\D/g, "").length < 9) return false;
-    if (mode === "livraison") {
-      if (form.address.trim().length < 5) return false;
-      if (form.city.trim().length < 2) return false;
-      if (!/^\d{5}$/.test(form.zip.trim())) return false;
+  /** Jour retenu pour un plat sur commande, avec ses heures de retrait. */
+  const preorderDay = useMemo(
+    () => preorderSlots?.days.find((d) => d.date === scheduledDate) ?? null,
+    [preorderSlots, scheduledDate],
+  );
+
+  /* Un plat sur commande engage un achat chez le boucher plusieurs jours à
+   * l'avance : le régler en espèces au retrait laisserait la cliente avec un
+   * agneau entier sur les bras si personne ne vient. Le serveur refuse cette
+   * combinaison ; on retire l'option plutôt que de laisser le client la choisir
+   * pour se la voir refuser au dernier écran. */
+  const paymentOptions = useMemo(
+    () => (isPreorder ? PAYMENTS.filter((p) => p !== "Espèces sur place") : [...PAYMENTS]),
+    [isPreorder],
+  );
+
+  useEffect(() => {
+    if (isPreorder && payment === "Espèces sur place") setPayment(PAYMENTS[0]);
+  }, [isPreorder, payment]);
+
+  /**
+   * Ce qui empêche encore de valider, énoncé en clair.
+   *
+   * Le bouton se contentait d'être grisé : le client remplissait tout son
+   * formulaire, ne pouvait pas payer, et rien à l'écran ne lui disait pourquoi.
+   * Une case CGV non cochée, un créneau jamais choisi ou un chiffre manquant au
+   * téléphone bloquaient la commande en silence — et donnaient l'impression
+   * d'un site cassé plutôt que d'un champ à compléter.
+   *
+   * La liste sert aussi de définition unique de la validité : `valid` en
+   * découle, il ne peut donc pas exister de blocage sans message correspondant.
+   */
+  const blockers = useMemo(() => {
+    const out: string[] = [];
+
+    if (isPreorder) {
+      /* Une réservation ne se contrôle pas comme une commande du jour : il ne
+         s'agit pas de savoir si le restaurant est ouvert *maintenant*, mais si
+         la date choisie est servable. */
+      if (!preorderSlots) out.push("Chargement des dates disponibles…");
+      else if (preorderSlots.days.length === 0) {
+        out.push(`Aucune date n'est disponible pour ces plats. Appelez-nous au ${info.phone}.`);
+      } else if (!preorderDay) out.push("Choisissez une date de retrait à l'étape 2.");
+      else if (!preorderDay.slots.includes(slot)) out.push("Choisissez une heure à l'étape 2.");
+
+      if (payment === "Espèces sur place") {
+        out.push("Les plats sur commande se règlent en ligne : choisissez un paiement par carte.");
+      }
+    } else {
+      const slotOk =
+        slotOptions.length > 0 ? slotOptions.includes(slot) : canPreOrderNext && slot === "next";
+      if (!slotOk) {
+        out.push(
+          !slots
+            ? "Chargement des créneaux en cours…"
+            : slotOptions.length === 0 && !canPreOrderNext
+              ? "Aucun créneau n'est disponible pour le moment."
+              : "Choisissez un créneau à l'étape 2.",
+        );
+      }
     }
-    return true;
-  }, [lines.length, belowMin, outOfZone, cgv, slot, slotOptions, canPreOrderNext, form, mode]);
+
+    if (form.name.trim().length < 2) out.push("Indiquez votre nom complet (étape 3).");
+    if (!EMAIL_RE.test(form.email.trim())) out.push("Indiquez une adresse email valide (étape 3).");
+    if (form.phone.replace(/\D/g, "").length < 9) {
+      out.push("Indiquez un numéro de téléphone valide (étape 3).");
+    }
+
+    if (mode === "livraison") {
+      if (form.address.trim().length < 5) out.push("Indiquez votre adresse de livraison (étape 3).");
+      if (form.city.trim().length < 2) out.push("Indiquez votre ville (étape 3).");
+      if (!/^\d{5}$/.test(form.zip.trim())) out.push("Indiquez un code postal à 5 chiffres (étape 3).");
+      if (outOfZone) {
+        out.push("Cette adresse est hors de notre zone de livraison — choisissez « à emporter ».");
+      }
+      if (belowMin) {
+        out.push(
+          `Il manque ${fmtPrice(minimumCents - subtotalCents)} pour atteindre le minimum de commande.`,
+        );
+      }
+    }
+
+    if (!cgv) out.push("Cochez l'acceptation des conditions générales de vente.");
+
+    return out;
+  }, [
+    slots,
+    slot,
+    slotOptions,
+    canPreOrderNext,
+    isPreorder,
+    preorderSlots,
+    preorderDay,
+    payment,
+    form,
+    mode,
+    outOfZone,
+    belowMin,
+    minimumCents,
+    subtotalCents,
+    cgv,
+  ]);
+
+  const valid = lines.length > 0 && blockers.length === 0;
 
   const placeOrder = useCallback(async () => {
     if (!valid || placing) return; // garde de double soumission
@@ -294,15 +492,32 @@ export function CheckoutClient() {
      * la faille qui permettait d'encaisser un panier de 80 € à 1 centime.
      * La zone n'est pas envoyée non plus : elle est déduite du code postal. */
     const payload = {
-      lines: lines.map((l) => ({
-        dishId: l.dishId,
-        qty: l.qty,
-        opts: l.opts,
-        formule: l.formule,
-        note: l.note,
-      })),
+      lines: lines.map((l) =>
+        l.formulaId
+          ? {
+              // Ligne formule : la formule et le plat retenu par créneau. Les
+              // suppléments et le prix sont recalculés en base.
+              formulaId: l.formulaId,
+              picks: (l.picks ?? []).map((p) => ({
+                slotId: p.slotId,
+                dishId: p.dishId,
+                opts: p.opts,
+              })),
+              qty: l.qty,
+              note: l.note,
+            }
+          : {
+              dishId: l.dishId,
+              qty: l.qty,
+              opts: l.opts,
+              formule: l.formule,
+              note: l.note,
+            },
+      ),
       mode,
       slot,
+      // Ignorée par le serveur si le panier ne contient aucun plat sur commande.
+      ...(isPreorder ? { scheduledDate } : {}),
       customer: {
         name: form.name.trim(),
         email: form.email.trim(),
@@ -358,7 +573,21 @@ export function CheckoutClient() {
       setError("Le paiement est momentanément indisponible. Réessayez dans un instant.");
       setPlacing(false);
     }
-  }, [valid, placing, lines, mode, slot, form, placeId, promoCode, payment, user, wantsAccount]);
+  }, [
+    valid,
+    placing,
+    lines,
+    mode,
+    slot,
+    isPreorder,
+    scheduledDate,
+    form,
+    placeId,
+    promoCode,
+    payment,
+    user,
+    wantsAccount,
+  ]);
 
   if (lines.length === 0) {
     return (
@@ -392,7 +621,9 @@ export function CheckoutClient() {
   const minimumAffiche = quote?.minimumCents ?? zone?.minimumCents ?? 0;
   // `closed` n'est vrai que sur une réponse réellement reçue : sans cette
   // garde, une panne de `/api/slots` afficherait « Nous sommes fermés ».
-  const closed = !!slots && slotOptions.length === 0;
+  // Sans effet sur une réservation : on commande très bien un gigot à minuit
+  // pour jeudi soir, l'horaire d'aujourd'hui n'y change rien.
+  const closed = !isPreorder && !!slots && slotOptions.length === 0;
 
   return (
     <div className="wrap grid gap-8 py-10 lg:grid-cols-[1.4fr_1fr]">
@@ -512,16 +743,100 @@ export function CheckoutClient() {
                 // distance réelle et le rayon, l'interface non.
                 <>
                   {quote?.message ??
-                    "Nous ne livrons pas encore à cette adresse. Vérifiez le code postal, ou choisissez « à emporter »."}
+                    "Nous ne livrons pas encore à cette adresse. Vérifiez le code postal, ou choisissez « à emporter »."}{" "}
+                  <button type="button" onClick={focusAddress} className="font-semibold text-primary underline">
+                    Corriger l&apos;adresse
+                  </button>
                 </>
               ) : (
-                <>Renseignez votre adresse ci-dessous pour vérifier qu&apos;elle est livrable.</>
+                /* Ce bloc annonçait « renseignez votre adresse ci-dessous »
+                   alors que le champ se trouve deux sections plus bas, sans
+                   rien pour y mener : on pouvait chercher un formulaire
+                   d'adresse à l'étape 1 et conclure qu'il manquait. Le lien y
+                   emmène et y place le curseur. */
+                <>
+                  <button type="button" onClick={focusAddress} className="font-semibold text-primary underline">
+                    Renseignez votre adresse
+                  </button>{" "}
+                  (étape 3, plus bas) pour vérifier qu&apos;elle est livrable.
+                </>
               )}
             </p>
           )}
         </section>
 
-        {/* créneau */}
+        {/* créneau — réservation sur commande, ou créneau du jour */}
+        {isPreorder ? (
+          <section className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
+            <h2 className="mb-1 text-lg">2 · Date de retrait</h2>
+            <p className="mb-3 text-xs text-ink-2">
+              Votre panier contient un plat préparé sur commande : comptez{" "}
+              <strong className="text-ink">{formatLeadTime(cartLeadTimeHours)}</strong> de
+              préparation.
+            </p>
+
+            <p className="mb-4 flex items-start gap-2 rounded-xl bg-primary-soft p-3 text-sm text-brick">
+              <Icon name="clock" size={18} className="mt-0.5 shrink-0" />
+              <span>
+                Ces plats se préparent à l&apos;avance. Votre paiement réserve la date, et nous
+                vous confirmons la commande par email sous 24 h. Si nous ne pouvions pas
+                l&apos;honorer, vous seriez <strong>intégralement remboursé</strong>.
+              </span>
+            </p>
+
+            {!preorderSlots ? (
+              <p className="text-sm text-ink-2">Chargement des dates disponibles…</p>
+            ) : preorderSlots.days.length === 0 ? (
+              <p className="text-sm text-ink-2">
+                Aucune date n&apos;est disponible pour ces plats en ce moment. Appelez-nous au{" "}
+                {info.phone}.
+              </p>
+            ) : (
+              <>
+                <p className={labelCls}>Jour</p>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {preorderSlots.days.map((d) => (
+                    <button
+                      key={d.date}
+                      type="button"
+                      onClick={() => {
+                        setScheduledDate(d.date);
+                        setSlot(d.slots[0] ?? "");
+                      }}
+                      aria-pressed={scheduledDate === d.date}
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                        scheduledDate === d.date
+                          ? "border-primary bg-primary text-white"
+                          : "border-line hover:border-primary/40"
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+
+                <p className={labelCls}>Heure</p>
+                <div className="flex flex-wrap gap-2">
+                  {(preorderDay?.slots ?? []).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSlot(s)}
+                      aria-pressed={slot === s}
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                        slot === s
+                          ? "border-primary bg-primary text-white"
+                          : "border-line hover:border-primary/40"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        ) : (
         <section className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
           <h2 className="mb-1 text-lg">2 · Créneau</h2>
           <p className="mb-3 text-xs text-ink-2">
@@ -577,6 +892,7 @@ export function CheckoutClient() {
             </p>
           )}
         </section>
+        )}
 
         {/* coordonnées */}
         <section className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
@@ -682,7 +998,7 @@ export function CheckoutClient() {
                     className={inputCls}
                     value={form.city}
                     onChange={set("city")}
-                    placeholder="Lognes"
+                    placeholder="Pontault-Combault"
                     required
                   />
                 </div>
@@ -718,20 +1034,29 @@ export function CheckoutClient() {
             Paiement par carte sécurisé par Stripe — nous ne voyons ni ne conservons vos données
             bancaires.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {PAYMENTS.map((p) => (
+          <div className="space-y-2">
+            {paymentOptions.map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => setPayment(p)}
                 aria-pressed={payment === p}
-                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                  payment === p
-                    ? "border-primary bg-primary text-white"
-                    : "border-line hover:border-primary/40"
+                className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                  payment === p ? "border-primary bg-primary-soft" : "border-line hover:border-primary/30"
                 }`}
               >
-                {p}
+                <span
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${
+                    payment === p ? "border-primary" : "border-line"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {payment === p && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold text-ink">{p}</span>
+                  <span className="block text-xs text-ink-2">{PAYMENT_INFO[p]}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -770,11 +1095,31 @@ export function CheckoutClient() {
                   <span className="font-semibold">
                     {l.qty}× {l.name}
                   </span>
-                  {l.formule && <span className="block text-xs text-ink-2">{l.formule}</span>}
-                  {Object.values(l.opts).length > 0 && (
-                    <span className="block text-xs text-ink-2">
-                      {Object.values(l.opts).join(" · ")}
-                    </span>
+                  {/* Même règle que le tiroir du panier : une formule dit qu'elle
+                      en est une et détaille sa composition. C'est l'écran où le
+                      client vérifie avant de payer — il doit pouvoir compter ce
+                      qu'il commande sans se demander si un plat est facturé deux
+                      fois. */}
+                  {l.formulaId ? (
+                    <>
+                      <span className="mt-0.5 block text-xs font-bold uppercase tracking-wide text-teal">
+                        Formule {l.formule} · tout compris
+                      </span>
+                      {Object.entries(l.opts).map(([slotLabel, choix]) => (
+                        <span key={slotLabel} className="block text-xs text-ink-2">
+                          › <span className="font-semibold">{slotLabel}</span> : {choix}
+                        </span>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      {l.formule && <span className="block text-xs text-ink-2">{l.formule}</span>}
+                      {Object.values(l.opts).length > 0 && (
+                        <span className="block text-xs text-ink-2">
+                          {Object.values(l.opts).join(" · ")}
+                        </span>
+                      )}
+                    </>
                   )}
                 </span>
                 <span className="font-semibold">{fmtPrice(l.unitPriceCents * l.qty)}</span>
@@ -861,6 +1206,7 @@ export function CheckoutClient() {
             type="button"
             onClick={placeOrder}
             disabled={!valid || placing}
+            aria-describedby={blockers.length > 0 ? "co-blocages" : undefined}
             className={`mt-4 flex w-full items-center justify-center gap-2 rounded-full px-6 py-4 font-bold transition ${
               valid && !placing
                 ? "bg-primary text-white hover:brightness-105"
@@ -875,6 +1221,27 @@ export function CheckoutClient() {
               <>Payer {fmtPrice(totalCents)}</>
             )}
           </button>
+
+          {/* Pourquoi le bouton ne répond pas. Sans cette liste, le client ne
+              pouvait que constater un bouton mort et quitter le site. */}
+          {!placing && blockers.length > 0 && (
+            <div
+              id="co-blocages"
+              className="mt-3 rounded-xl border border-line bg-panel-2 p-3 text-sm"
+            >
+              <p className="flex items-center gap-2 font-semibold text-ink">
+                <Icon name="warning" size={16} className="shrink-0 text-primary" />
+                {blockers.length === 1
+                  ? "Il reste une chose à compléter :"
+                  : `Il reste ${blockers.length} choses à compléter :`}
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-8 text-ink-2">
+                {blockers.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Récapitulatif légal — remplace les mentions « Démonstration » et
               « Paiement simulé — aucune carte débitée », qui étaient fausses : le

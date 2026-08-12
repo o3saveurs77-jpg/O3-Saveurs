@@ -27,6 +27,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Carte & stocks",
     items: [
       { href: "/admin/plats", label: "Plats", icon: "bag" },
+      { href: "/admin/formules", label: "Formules", icon: "list" },
       { href: "/admin/stocks", label: "Stocks", icon: "box" },
       { href: "/admin/mise-en-avant", label: "Mise en avant", icon: "star" },
       { href: "/admin/promotions", label: "Promotions", icon: "tag" },
@@ -34,11 +35,18 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     ],
   },
   {
+    // Le contenu des pages de présentation vit en base depuis qu'il est
+    // modifiable : il a son entrée à part, distincte du catalogue.
+    title: "Site vitrine",
+    items: [{ href: "/admin/contenu", label: "Contenu du site", icon: "edit" }],
+  },
+  {
     title: "Relation client",
     items: [
       { href: "/admin/clients", label: "Clients", icon: "user" },
       { href: "/admin/messages", label: "Messages", icon: "mail" },
       { href: "/admin/sav", label: "Réclamations", icon: "chat" },
+      { href: "/admin/traiteur", label: "Traiteur", icon: "sparkle" },
       { href: "/admin/newsletter", label: "Newsletter", icon: "megaphone" },
     ],
   },
@@ -46,9 +54,11 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Gestion",
     items: [
       { href: "/admin/facturation", label: "Facturation", icon: "euro" },
+      { href: "/admin/compta", label: "Compta & TVA", icon: "chart" },
       { href: "/admin/livreurs", label: "Livreurs", icon: "scooter" },
       { href: "/admin/livraison", label: "Barème livraison", icon: "truck" },
       { href: "/admin/zones", label: "Zones (repli)", icon: "pin" },
+      { href: "/admin/roles", label: "Accès & rôles", icon: "lock" },
       { href: "/admin/reglages", label: "Réglages", icon: "settings" },
     ],
   },

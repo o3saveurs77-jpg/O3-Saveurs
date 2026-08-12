@@ -26,6 +26,8 @@ export function DeliveryTiersAdmin() {
   const [data, setData] = useState<TiersResponse | null>(null);
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<number | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const baseId = useId();
 
@@ -83,6 +85,7 @@ export function DeliveryTiersAdmin() {
   const add = async () => {
     const last = sortTiers(tiers).at(-1);
     setNotice(null);
+    setAdding(true);
     try {
       const res = await fetch("/api/delivery-tiers", {
         method: "POST",
@@ -97,17 +100,25 @@ export function DeliveryTiersAdmin() {
       await load();
     } catch {
       setNotice({ tone: "erreur", text: "Le palier n'a pas pu être ajouté." });
+    } finally {
+      setAdding(false);
     }
   };
 
-  const remove = async (idx: number) => {
+  const remove = async (tier: DeliveryTier) => {
+    // Un palier supprimé par erreur retire aussitôt une tranche de distance de la
+    // tarification : comme pour un livreur, on confirme avant d'agir.
+    if (!confirm(`Supprimer le palier jusqu'à ${formatKm(tier.maxKm)} km ?`)) return;
     setNotice(null);
+    setRemoving(tier.idx);
     try {
-      const res = await fetch(`/api/delivery-tiers?idx=${idx}`, { method: "DELETE" });
+      const res = await fetch(`/api/delivery-tiers?idx=${tier.idx}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Suppression refusée");
       await load();
     } catch {
       setNotice({ tone: "erreur", text: "Le palier n'a pas pu être supprimé." });
+    } finally {
+      setRemoving(null);
     }
   };
 
@@ -183,15 +194,16 @@ export function DeliveryTiersAdmin() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => save(t)}
-                      disabled={saving === t.idx}
+                      disabled={saving === t.idx || removing === t.idx}
                       className="rounded-full bg-primary px-4 py-1.5 text-sm font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {saving === t.idx ? "Enregistrement…" : "Enregistrer"}
                     </button>
                     <button
-                      onClick={() => remove(t.idx)}
+                      onClick={() => remove(t)}
+                      disabled={removing === t.idx}
                       aria-label={`Supprimer le palier jusqu'à ${formatKm(t.maxKm)} km`}
-                      className="grid h-8 w-8 place-items-center rounded-full text-ink-2 transition hover:bg-brick/10 hover:text-brick"
+                      className="grid h-8 w-8 place-items-center rounded-full text-ink-2 transition hover:bg-brick/10 hover:text-brick disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Icon name="x" size={16} />
                     </button>
@@ -269,9 +281,10 @@ export function DeliveryTiersAdmin() {
 
       <button
         onClick={add}
-        className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-card)] border border-dashed border-line py-4 font-semibold text-ink-2 transition hover:bg-panel-2"
+        disabled={adding}
+        className="flex w-full items-center justify-center gap-2 rounded-[var(--radius-card)] border border-dashed border-line py-4 font-semibold text-ink-2 transition hover:bg-panel-2 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <Icon name="plus" size={18} /> Ajouter un palier
+        <Icon name="plus" size={18} /> {adding ? "Ajout…" : "Ajouter un palier"}
       </button>
     </div>
   );

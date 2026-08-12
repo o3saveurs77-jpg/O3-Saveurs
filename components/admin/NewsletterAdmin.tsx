@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { ModelesCampagne } from "./ModelesCampagne";
+import { SaisieBoutique } from "./SaisieBoutique";
 
 /**
  * Newsletter : abonnés et campagnes.
@@ -96,18 +98,16 @@ export function NewsletterAdmin() {
       const ds = (await rs.json()) as {
         subscribers: Subscriber[];
         total: number;
-        confirmed: number;
-        pending: number;
-        unsubscribed: number;
+        stats: { confirmed: number; pending: number; unsubscribed: number };
       };
       const dc = (await rc.json()) as { campaigns: Campaign[]; reachable: number };
 
       setSubs(ds.subscribers);
       setStats({
         total: ds.total,
-        confirmed: ds.confirmed,
-        pending: ds.pending,
-        unsubscribed: ds.unsubscribed,
+        confirmed: ds.stats.confirmed,
+        pending: ds.stats.pending,
+        unsubscribed: ds.stats.unsubscribed,
       });
       setCampagnes(dc.campaigns);
       setReachable(dc.reachable);
@@ -204,6 +204,10 @@ export function NewsletterAdmin() {
         </div>
       </header>
 
+      {/* Saisie au comptoir : la voie par laquelle entrent les clients qui
+          n’ont pas commandé en ligne. */}
+      <SaisieBoutique onAjout={charger} />
+
       {message && (
         <p
           role={message.tone === "erreur" ? "alert" : "status"}
@@ -236,6 +240,15 @@ export function NewsletterAdmin() {
           <p className="mt-1 text-sm text-ink-2">
             Créée en brouillon : rien n&apos;est envoyé tant que vous ne la programmez pas.
           </p>
+
+          {/* Le modèle remplit l'objet et le contenu, puis s'efface : tout
+              reste modifiable à la main ensuite. */}
+          <div className="mt-4">
+            <ModelesCampagne
+              onAppliquer={(subject, html) => setForm((f) => (f ? { ...f, subject, html } : f))}
+            />
+          </div>
+
           <div className="mt-4 grid gap-4">
             <div>
               <label

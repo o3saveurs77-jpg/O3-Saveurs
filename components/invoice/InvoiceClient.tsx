@@ -22,23 +22,13 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { Emblem } from "@/components/Brand";
-import { fmtCents, fmtVatRate, vatBreakdown } from "@/lib/money";
+import { fmtCents, fmtVatRate, vatBreakdownByRate } from "@/lib/money";
 import { formatInvoiceNumber } from "@/lib/money";
-import { PAYMENT_STATUS_LABEL } from "@/lib/types";
+import { PAYMENT_STATUS_LABEL, vatPartsOf } from "@/lib/types";
 import type { Order } from "@/lib/types";
+import type { InvoiceSeller } from "@/lib/invoice";
 
-/** Identité du vendeur, lue dans les réglages par la page serveur. */
-export interface InvoiceSeller {
-  name: string;
-  tagline: string;
-  company: string;
-  legalForm: string;
-  address: string;
-  phone: string;
-  email: string;
-  siret: string;
-  vatNumber: string;
-}
+export type { InvoiceSeller };
 
 const dateFmt = new Intl.DateTimeFormat("fr-FR", {
   day: "2-digit",
@@ -82,6 +72,7 @@ export function InvoiceClient({
   seller,
   isAdmin = false,
   legalOk = true,
+  pdfUrl,
 }: {
   order: Order;
   seller: InvoiceSeller;
@@ -89,9 +80,20 @@ export function InvoiceClient({
   isAdmin?: boolean;
   /** `legalComplete()` — faux tant que les informations légales manquent. */
   legalOk?: boolean;
+  /** Route qui régénère le même document en PDF, prête à télécharger. */
+  pdfUrl: string;
 }) {
   const createdAt = new Date(order.createdAt);
-  const vat = vatBreakdown(order.totalCents, order.vatRateBp);
+
+  /* Ventilation par taux, et non taux unique : la facture d'une formule
+     « plat + canette » porte 10 % sur l'un et 5,5 % sur l'autre. Les commandes
+     antérieures retombent sur leur `vatRateBp` d'origine — une facture émise
+     ne se recalcule pas. */
+  const buckets = vatBreakdownByRate(vatPartsOf(order), {
+    feeCents: order.feeCents,
+    discountCents: order.discountCents,
+  });
+  const totalHT = buckets.reduce((s, b) => s + b.netCents, 0);
 
   // Le numéro n'est attribué qu'à l'émission : une commande en attente de
   // paiement n'en a pas, et la séquence ne doit comporter aucun trou.
@@ -113,17 +115,27 @@ export function InvoiceClient({
         >
           <Icon name="chevL" size={18} /> {isAdmin ? "Facturation" : "Mon compte"}
         </Link>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 font-bold text-white hover:brightness-105 sm:px-6"
-        >
-          <Icon name="print" size={18} />
-          {/* Le libellé complet fait déborder la barre sous 400 px ; le geste
-              reste le même, seul son intitulé se raccourcit. */}
-          <span className="sm:hidden">Imprimer</span>
-          <span className="hidden sm:inline">Imprimer / Enregistrer en PDF</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <a
+            href={pdfUrl}
+            className="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-5 py-3 font-bold text-ink hover:bg-panel-2 sm:px-6"
+          >
+            <Icon name="download" size={18} />
+            <span className="sm:hidden">PDF</span>
+            <span className="hidden sm:inline">Télécharger le PDF</span>
+          </a>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 font-bold text-white hover:brightness-105 sm:px-6"
+          >
+            <Icon name="print" size={18} />
+            {/* Le libellé complet fait déborder la barre sous 400 px ; le geste
+                reste le même, seul son intitulé se raccourcit. */}
+            <span className="sm:hidden">Imprimer</span>
+            <span className="hidden sm:inline">Imprimer</span>
+          </button>
+        </div>
       </div>
 
       {/* Avertissements de conformité — administration uniquement, jamais imprimés.
@@ -308,16 +320,25 @@ export function InvoiceClient({
             </div>
           )}
 
-          {/* Ventilation obligatoire (art. 242 nonies A du CGI). */}
+          {/* Ventilation obligatoire (art. 242 nonies A du CGI) — **une ligne
+              par taux**. Une commande peut en porter deux : 10 % sur les plats,
+              5,5 % sur une boisson en contenant fermé. */}
           <div className="mt-2 space-y-1.5 border-t border-line pt-2">
             <div className="flex justify-between">
               <span className="text-ink-2">Total HT</span>
-              <span>{fmtCents(vat.netCents)}</span>
+              <span>{fmtCents(totalHT)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-ink-2">TVA {fmtVatRate(order.vatRateBp)}</span>
-              <span>{fmtCents(vat.vatCents)}</span>
-            </div>
+            {buckets.map((b) => (
+              <div key={b.rateBp} className="flex justify-between">
+                <span className="text-ink-2">
+                  TVA {fmtVatRate(b.rateBp)}
+                  {buckets.length > 1 && (
+                    <span className="text-xs"> (sur {fmtCents(b.netCents)} HT)</span>
+                  )}
+                </span>
+                <span>{fmtCents(b.vatCents)}</span>
+              </div>
+            ))}
           </div>
 
           <div className="flex justify-between border-t border-line pt-2 text-base font-bold">
@@ -328,8 +349,8 @@ export function InvoiceClient({
 
         <footer className="mt-8 space-y-1 border-t border-line pt-4 text-center text-xs text-ink-2">
           <p>
-            Montants en euros. TVA au taux de {fmtVatRate(order.vatRateBp)} applicable à la vente de
-            produits alimentaires à emporter ou livrés (art. 279 m du CGI).
+            Montants en euros. Restauration à emporter ou livrée : TVA à 10 % (art. 279 m du CGI).
+            Boissons non alcoolisées en contenant fermé : 5,5 % (art. 278-0 bis A).
           </p>
           <p>
             {order.paid

@@ -52,6 +52,7 @@ export const ICONS = {
   download: "M12 4v12M8 12l4 4 4-4M5 20h14",
   refresh: "M20 12a8 8 0 1 1-2.3-5.7M20 4v4h-4",
   megaphone: "M4 10v4l10 4V6L4 10Zm10 0h3a3 3 0 0 1 0 6h-3M7 15v4",
+  qr: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h3v3h-3zM20 14h.01M20 17v3h-3",
 } as const;
 
 export type IconName = keyof typeof ICONS;

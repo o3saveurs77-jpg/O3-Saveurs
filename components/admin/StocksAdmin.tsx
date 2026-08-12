@@ -63,8 +63,13 @@ const TABS: { id: Tab; label: string; icon: "download" | "upload" | "list" | "cl
   { id: "historique", label: "Historique", icon: "clock" },
 ];
 
-/** Motifs proposés pour une saisie manuelle : la vente est tracée par la commande. */
-const MANUAL_REASONS: StockReason[] = STOCK_REASONS.filter((r) => r !== "inventaire");
+/** Motifs proposés pour une saisie manuelle : la vente est tracée par la commande.
+ *  « inventaire » a son propre onglet, « vente » n'est jamais saisie à la main —
+ *  le filtre n'écartait que le premier, laissant « Vente » choisissable ici et
+ *  permettant d'enregistrer une fausse vente sans commande associée. */
+const MANUAL_REASONS: StockReason[] = STOCK_REASONS.filter(
+  (r) => r !== "inventaire" && r !== "vente",
+);
 
 const INPUT =
   "w-full rounded-[var(--radius-soft)] border border-line bg-page px-3 py-2 outline-none focus:border-primary";

@@ -49,18 +49,18 @@ describe("findZoneForCity", () => {
   it("trouve une ville exacte dans la bonne zone", () => {
     const m = findZoneForCity(zones, "Lognes");
     expect(m).not.toBeNull();
-    expect(m!.zoneIdx).toBe(0);
+    expect(m!.zoneIdx).toBe(1);
     expect(m!.city).toBe("Lognes");
     expect(m!.via).toBe("city");
   });
 
   it("est insensible aux accents et à la casse", () => {
-    expect(findZoneForCity(zones, "émerainville")).toMatchObject({ zoneIdx: 0 });
-    expect(findZoneForCity(zones, "TORCY")).toMatchObject({ zoneIdx: 0 });
+    expect(findZoneForCity(zones, "émerainville")).toMatchObject({ zoneIdx: 1 });
+    expect(findZoneForCity(zones, "CROISSY-BEAUBOURG")).toMatchObject({ zoneIdx: 1 });
   });
 
   it("trouve une ville d'une zone plus lointaine", () => {
-    expect(findZoneForCity(zones, "Serris")!.zoneIdx).toBe(3);
+    expect(findZoneForCity(zones, "Chelles")!.zoneIdx).toBe(3);
   });
 
   it("renvoie null hors zone et pour une saisie vide", () => {
@@ -83,9 +83,9 @@ describe("findZoneForCity", () => {
 
 describe("findZoneForZip", () => {
   it("trouve la zone par code postal", () => {
-    expect(findZoneForZip(zones, "77185")!.zoneIdx).toBe(0);
-    expect(findZoneForZip(zones, "77600")!.zoneIdx).toBe(1);
-    expect(findZoneForZip(zones, "77700")!.zoneIdx).toBe(3);
+    expect(findZoneForZip(zones, "77185")!.zoneIdx).toBe(1);
+    expect(findZoneForZip(zones, "77600")!.zoneIdx).toBe(3);
+    expect(findZoneForZip(zones, "77500")!.zoneIdx).toBe(3);
   });
 
   it("renvoie null pour un code postal hors zone", () => {
@@ -98,13 +98,13 @@ describe("resolveZone", () => {
     // Code postal de la zone 3, nom de commune de la zone 0 : le code gagne,
     // parce que c'est la donnée fiable.
     const m = resolveZone(zones, { zip: "77340", city: "Lognes" });
-    expect(m!.zoneIdx).toBe(2);
+    expect(m!.zoneIdx).toBe(0);
     expect(m!.via).toBe("zip");
   });
 
   it("retombe sur la commune quand le code postal est absent ou inconnu", () => {
     expect(resolveZone(zones, { zip: null, city: "Torcy" })!.via).toBe("city");
-    expect(resolveZone(zones, { zip: "99999", city: "Torcy" })!.zoneIdx).toBe(0);
+    expect(resolveZone(zones, { zip: "99999", city: "Torcy" })!.zoneIdx).toBe(2);
   });
 
   it("renvoie null quand rien ne correspond — la commande en livraison est alors refusée", () => {
@@ -126,8 +126,8 @@ describe("suggestCities", () => {
 
 describe("zoneByIdx", () => {
   it("retrouve une zone par son index", () => {
-    expect(zoneByIdx(zones, 0)!.feeCents).toBe(400);
-    expect(zoneByIdx(zones, 3)!.minimumCents).toBe(1500);
+    expect(zoneByIdx(zones, 0)!.feeCents).toBe(250);
+    expect(zoneByIdx(zones, 3)!.minimumCents).toBe(3500);
   });
 
   it("renvoie null pour un index absent ou nul", () => {

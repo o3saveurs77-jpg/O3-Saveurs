@@ -68,11 +68,50 @@ export async function nextInvoiceNumber(): Promise<number> {
 }
 
 /**
+ * Numéro d'avoir suivant, incrémenté atomiquement.
+ *
+ * Compteur **distinct** de celui des factures : mêler les deux suites rendrait
+ * impossible de dire, devant un contrôle, combien de factures ont été émises
+ * sur l'exercice. Comme pour les factures, à n'appeler qu'une fois par pièce —
+ * la séquence ne doit comporter aucun trou.
+ */
+export async function nextCreditNoteNumber(): Promise<number> {
+  const counter = await prisma.counter.upsert({
+    where: { key: "creditNote" },
+    create: { key: "creditNote", value: 1 },
+    update: { value: { increment: 1 } },
+  });
+  return counter.value;
+}
+
+/**
  * Le *formatage* d'un numéro de facture vit dans `lib/money.ts`, qui est pur :
  * ce module-ci importe Prisma et `node:crypto`, donc un composant client ne peut
  * pas l'importer sans tirer la base dans le bundle du navigateur.
  */
 export { formatInvoiceNumber } from "@/lib/money";
+
+/**
+ * Jeton du lien de tournée remis au livreur.
+ *
+ * 32 caractères tirés dans un alphabet de 31 signes : deviner un lien valide
+ * est hors de portée, ce qui compte puisqu'il ouvre les adresses des clients
+ * du jour.
+ */
+export function makeRunToken(): string {
+  return pick(32).toLowerCase();
+}
+
+/**
+ * Code de remise dicté au livreur par le client.
+ *
+ * Quatre chiffres : assez pour prouver la présence du bon destinataire, assez
+ * court pour être lu à voix haute sur un pas de porte. Ce n'est pas un secret
+ * cryptographique — c'est une preuve de remise en main propre.
+ */
+export function makeDeliveryCode(): string {
+  return pick(4, "0123456789");
+}
 
 /** Code promo de dédommagement, généré depuis un ticket SAV. */
 export function makeGestureCode(): string {

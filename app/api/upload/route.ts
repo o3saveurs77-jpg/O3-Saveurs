@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { isStorageConfigured, putPublicObject } from "@/lib/storage";
 import { requireAdmin } from "@/lib/guard";
 
 export const dynamic = "force-dynamic";
@@ -55,11 +55,28 @@ const EXTENSION: Record<string, string> = {
 
 /**
  * POST /api/upload (multipart, champ « file ») — réservé à l'administration.
- * Renvoie `{ url }`, l'URL publique Vercel Blob à stocker dans `Dish.photo`.
+ * Renvoie `{ url }`, l'adresse publique à stocker dans `Dish.photo`.
  */
 export async function POST(req: Request) {
   const guard = await requireAdmin();
   if (!guard.ok) return guard.response; // 401 sans session, 403 sans le rôle
+
+  /* Contrôlé avant de lire le fichier : sans cela on faisait monter plusieurs
+   * mégaoctets depuis un téléphone pour échouer à l'arrivée, sur un message
+   * qui ne parlait qu'à un développeur. */
+  if (!isStorageConfigured()) {
+    console.error("[upload] stockage objet non configuré (variables CELLAR_*).");
+    return NextResponse.json(
+      {
+        error:
+          "L'espace de stockage des photos n'est pas encore configuré. " +
+          "Sur Clever Cloud : ajouter l'addon Cellar à l'application, puis créer un bucket " +
+          "et renseigner CELLAR_BUCKET. En attendant, vous pouvez saisir une adresse d'image " +
+          "du site, par exemple /photos/p04.jpg.",
+      },
+      { status: 503 },
+    );
+  }
 
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
@@ -74,8 +91,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Image trop lourde (5 Mo maximum)." }, { status: 413 });
   }
   if (!(ALLOWED as readonly string[]).includes(file.type)) {
+    /* Le cas courant est la photo prise à l'iPhone, enregistrée en HEIC : le
+     * format est refusé par les navigateurs autant que par nous, et le dire
+     * évite de croire à une panne du site. */
+    const heic = /hei[cf]/i.test(file.type);
     return NextResponse.json(
-      { error: "Format non supporté (JPEG, PNG, WebP ou AVIF)." },
+      {
+        error: heic
+          ? "Les photos iPhone au format HEIC ne sont pas acceptées. Sur l'iPhone : Réglages → Appareil photo → Formats → « Le plus compatible », ou envoyez la photo par email pour la convertir en JPEG."
+          : "Format non supporté (JPEG, PNG, WebP ou AVIF).",
+      },
       { status: 415 },
     );
   }
@@ -98,18 +123,19 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Nom recalculé : `addRandomSuffix` empêche déjà l'écrasement, mais on ne
-    // reprend pas le nom fourni par le client, qui peut contenir n'importe quoi.
-    const blob = await put(`dishes/plat.${EXTENSION[detected]}`, file, {
-      access: "public",
-      addRandomSuffix: true,
-      contentType: detected,
-    });
-    return NextResponse.json({ url: blob.url }, { status: 201 });
+    // La clé est calculée côté serveur : un nom de fichier venu du navigateur
+    // peut contenir n'importe quoi, y compris de quoi sortir du dossier prévu.
+    const url = await putPublicObject(
+      "dishes",
+      EXTENSION[detected],
+      Buffer.from(await file.arrayBuffer()),
+      detected,
+    );
+    return NextResponse.json({ url }, { status: 201 });
   } catch (error) {
-    console.error("[upload] Vercel Blob échoué:", error);
+    console.error("[upload] dépôt sur le stockage objet échoué:", error);
     return NextResponse.json(
-      { error: "Envoi impossible (vérifier BLOB_READ_WRITE_TOKEN)." },
+      { error: "Envoi impossible. Vérifiez la configuration du stockage (addon Cellar)." },
       { status: 500 },
     );
   }

@@ -20,17 +20,29 @@ import { resolveZone } from "@/lib/zones";
 import { formatKm, maxDeliveryKm, tierForDistance } from "@/lib/delivery";
 import { isGeoConfigured, roadDistanceKm } from "@/lib/geo";
 import { deliveryOrigin, getDeliveryTiers, getSetting } from "@/lib/settings";
-import type { Dish, Zone } from "@/lib/menu";
+import { priceFormula, rowToFormula, type RawPick } from "@/lib/formulas";
+import { cartLeadTimeHours } from "@/lib/preorder";
+import type { Dish, Formula, Zone } from "@/lib/menu";
 import type { OrderLine, OrderMode, PromotionKind } from "@/lib/types";
 import { err, ok, type Result } from "@/lib/validate";
 
-/** Ce que le client est autorisé à choisir. Aucun montant. */
+/**
+ * Ce que le client est autorisé à choisir. Aucun montant.
+ *
+ * Deux formes de ligne : un plat à la carte (`dishId`), ou une formule garnie
+ * (`formulaId` + un plat par créneau). Les deux sont valorisées ici, jamais par
+ * le navigateur.
+ */
 export interface RawLine {
-  dishId: string;
+  dishId?: string;
   qty: number;
   opts?: Record<string, string>;
   formule?: string | null;
   note?: string;
+  /** formule composée — exclusif de `dishId` */
+  formulaId?: string;
+  /** plat retenu par créneau */
+  picks?: RawPick[];
 }
 
 export interface ComputeInput {
@@ -74,6 +86,14 @@ export interface PricedOrder {
   /** Distance routière retenue, quand la tarification s'est faite à la distance. */
   distanceKm: number | null;
   promotion: AppliedPromotion | null;
+  /**
+   * Délai de préparation du panier, en heures : le plus long de ses plats.
+   *
+   * Zéro pour une commande du jour. Au-delà, le tunnel exige une date de
+   * retrait et la commande passera par l'accord du restaurant — voir
+   * `lib/preorder.ts`.
+   */
+  leadTimeHours: number;
 }
 
 const MAX_QTY_PER_LINE = 50;
@@ -118,20 +138,36 @@ export function unitPriceOf(dish: Dish, line: RawLine): Result<number> {
 }
 
 /** Valorise chaque ligne et vérifie disponibilité, prix et stock. */
-export function priceLines(dishes: Dish[], raw: RawLine[]): Result<OrderLine[]> {
+export function priceLines(
+  dishes: Dish[],
+  raw: RawLine[],
+  formulas: Formula[] = [],
+): Result<OrderLine[]> {
   if (!raw.length) return err("Votre panier est vide");
   if (raw.length > MAX_LINES) return err("Trop d'articles dans le panier");
 
   const byId = new Map(dishes.map((d) => [d.id, d]));
+  const formulaById = new Map(formulas.map((f) => [f.id, f]));
 
   // Le stock se vérifie sur le cumul du panier : deux lignes du même plat
-  // (options différentes) puisent dans le même stock.
+  // (options différentes) puisent dans le même stock. Une formule y puise elle
+  // aussi, par chacun des plats qui la composent — sinon deux formules
+  // « thiéboudiène » videraient la marmite sans que le stock bouge.
   const wanted = new Map<string, number>();
   for (const line of raw) {
     if (!Number.isInteger(line.qty) || line.qty < 1 || line.qty > MAX_QTY_PER_LINE) {
       return err("Quantité invalide");
     }
-    wanted.set(line.dishId, (wanted.get(line.dishId) ?? 0) + line.qty);
+    if (line.formulaId) {
+      for (const pick of line.picks ?? []) {
+        if (typeof pick?.dishId !== "string" || !pick.dishId) continue;
+        wanted.set(pick.dishId, (wanted.get(pick.dishId) ?? 0) + line.qty);
+      }
+    } else if (line.dishId) {
+      wanted.set(line.dishId, (wanted.get(line.dishId) ?? 0) + line.qty);
+    } else {
+      return err("Ligne de panier invalide");
+    }
   }
 
   for (const [dishId, qty] of wanted) {
@@ -149,9 +185,46 @@ export function priceLines(dishes: Dish[], raw: RawLine[]): Result<OrderLine[]> 
 
   const lines: OrderLine[] = [];
   for (const line of raw) {
-    const dish = byId.get(line.dishId)!;
+    const note = String(line.note ?? "").slice(0, 300);
+
+    // ── Ligne formule ──
+    if (line.formulaId) {
+      const formula = formulaById.get(line.formulaId);
+      if (!formula) return err("Cette formule n'est plus proposée");
+
+      const priced = priceFormula(formula, line.picks ?? [], byId);
+      if (!priced.ok) return priced;
+
+      // La vignette du panier reprend la photo du premier plat retenu qui en a
+      // une : une formule n'a pas d'image propre.
+      const photo =
+        priced.value.picks.map((p) => byId.get(p.dishId)?.photo).find((p) => p) ?? null;
+
+      const lineTotalCents = priced.value.unitPriceCents * line.qty;
+
+      lines.push({
+        dishId: "",
+        formulaId: formula.id,
+        picks: priced.value.picks,
+        name: `Formule ${formula.name}`,
+        photo,
+        unitPriceCents: priced.value.unitPriceCents,
+        qty: line.qty,
+        lineTotalCents,
+        opts: priced.value.opts,
+        formule: formula.code,
+        note,
+        vatSplit: formulaVatSplit(priced.value.picks, lineTotalCents, byId),
+      });
+      continue;
+    }
+
+    // ── Ligne à la carte ──
+    const dish = byId.get(line.dishId!)!;
     const unit = unitPriceOf(dish, line);
     if (!unit.ok) return unit;
+
+    const lineTotalCents = unit.value * line.qty;
 
     lines.push({
       dishId: dish.id,
@@ -159,15 +232,69 @@ export function priceLines(dishes: Dish[], raw: RawLine[]): Result<OrderLine[]> 
       photo: dish.photo,
       unitPriceCents: unit.value,
       qty: line.qty,
-      lineTotalCents: unit.value * line.qty,
+      lineTotalCents,
       opts: line.opts ?? {},
       formule: line.formule ?? null,
-      note: String(line.note ?? "").slice(0, 300),
+      note,
+      // Un plat à la carte relève d'un seul taux : un seau, tout le montant.
+      vatSplit: [[dish.vatRateBp, lineTotalCents]],
     });
   }
 
   return ok(lines);
 }
+
+/**
+ * Ventilation TVA d'une formule, au prorata de la valeur des plats retenus.
+ *
+ * Une formule « plat + boisson » à 10,90 € n'a pas de taux propre : elle vend
+ * un plat à 10 % et une canette à 5,5 % sous un prix unique. Le fisc demande
+ * de ventiler ce prix entre les taux au prorata des valeurs respectives des
+ * produits ; c'est ce que fait cette fonction, sur la base du prix de carte de
+ * chaque plat retenu, supplément compris.
+ *
+ * Le prix de la formule étant inférieur à la somme des prix de carte, la remise
+ * implicite se répartit ainsi proportionnellement — elle ne se loge pas
+ * arbitrairement sur le taux qui arrangerait.
+ */
+function formulaVatSplit(
+  picks: { dishId: string; supplementCents: number }[],
+  lineTotalCents: number,
+  byId: Map<string, Dish>,
+): [number, number][] {
+  const valeur = new Map<number, number>();
+  let base = 0;
+
+  for (const pick of picks) {
+    const dish = byId.get(pick.dishId);
+    if (!dish) continue;
+    const v = (dish.priceCents ?? 0) + pick.supplementCents;
+    if (v <= 0) continue;
+    base += v;
+    valeur.set(dish.vatRateBp, (valeur.get(dish.vatRateBp) ?? 0) + v);
+  }
+
+  /* Aucune valeur de référence — plats sans prix, ou composition vide : on ne
+   * devine pas, la formule part au taux normal de la restauration. */
+  if (base === 0 || valeur.size === 0) return [[VAT_RATE_BP, lineTotalCents]];
+
+  const rates = [...valeur.keys()].sort((a, b) => a - b);
+  const split = new Map<number, number>();
+  for (const r of rates) {
+    split.set(r, Math.round(((valeur.get(r) ?? 0) * lineTotalCents) / base));
+  }
+
+  // La somme doit valoir le total de la ligne au centime près : l'écart
+  // d'arrondi va au seau principal.
+  const somme = rates.reduce((s, r) => s + (split.get(r) ?? 0), 0);
+  if (somme !== lineTotalCents) {
+    const principal = rates.reduce((a, b) => ((split.get(a) ?? 0) >= (split.get(b) ?? 0) ? a : b));
+    split.set(principal, (split.get(principal) ?? 0) + (lineTotalCents - somme));
+  }
+
+  return rates.map((r) => [r, split.get(r) ?? 0] as [number, number]).filter(([, c]) => c !== 0);
+}
+
 
 export const subtotalOf = (lines: OrderLine[]): number =>
   lines.reduce((sum, l) => sum + l.lineTotalCents, 0);
@@ -241,18 +368,35 @@ export function promotionDiscount(
  * (hors zone, sous le minimum, plat épuisé, code invalide…).
  */
 export async function computeOrder(input: ComputeInput): Promise<Result<PricedOrder>> {
-  const dishIds = [...new Set(input.lines.map((l) => l.dishId))];
-  if (!dishIds.length) return err("Votre panier est vide");
+  /* Les plats à relire couvrent les deux formes de ligne : ceux commandés à la
+   * carte, et ceux retenus dans les créneaux d'une formule. */
+  const dishIds = [
+    ...new Set([
+      ...input.lines.map((l) => l.dishId).filter((id): id is string => Boolean(id)),
+      ...input.lines.flatMap((l) => (l.picks ?? []).map((p) => p.dishId)),
+    ]),
+  ];
+  const formulaIds = [
+    ...new Set(input.lines.map((l) => l.formulaId).filter((id): id is string => Boolean(id))),
+  ];
+  if (!dishIds.length && !formulaIds.length) return err("Votre panier est vide");
 
-  const [dishRows, zoneRows] = await Promise.all([
+  const [dishRows, zoneRows, formulaRows] = await Promise.all([
     prisma.dish.findMany({ where: { id: { in: dishIds } } }),
     prisma.zone.findMany({ where: { active: true }, orderBy: { idx: "asc" } }),
+    formulaIds.length
+      ? prisma.formula.findMany({
+          where: { id: { in: formulaIds } },
+          include: { slots: { include: { choices: true } } },
+        })
+      : Promise.resolve([]),
   ]);
 
   const dishes = dishRows.map(rowToDish);
   const zones: Zone[] = zoneRows.map(rowToZone);
+  const formulas: Formula[] = formulaRows.map(rowToFormula);
 
-  const priced = priceLines(dishes, input.lines);
+  const priced = priceLines(dishes, input.lines, formulas);
   if (!priced.ok) return priced;
   const lines = priced.value;
   const subtotalCents = subtotalOf(lines);
@@ -347,6 +491,10 @@ export async function computeOrder(input: ComputeInput): Promise<Result<PricedOr
     zone,
     distanceKm,
     promotion,
+    /* `dishes` ne contient que les plats réellement au panier — ceux commandés
+     * à la carte comme ceux retenus dans les créneaux d'une formule. Le délai
+     * du panier est donc bien celui du plat le plus lent qu'il contient. */
+    leadTimeHours: cartLeadTimeHours(dishes),
   });
 }
 
@@ -447,7 +595,8 @@ export function stripeLineItems(order: PricedOrder) {
       unit_amount: l.unitPriceCents,
       product_data: {
         name: l.name,
-        description: l.formule || Object.values(l.opts).join(", ") || undefined,
+        // Sur une formule, la composition est plus parlante que le code « F3 ».
+        description: Object.values(l.opts).join(", ") || l.formule || undefined,
       },
     },
   }));

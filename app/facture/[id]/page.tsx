@@ -15,8 +15,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { canAccess, optionalUser } from "@/lib/guard";
 import { rowToOrder } from "@/lib/serialize";
-import { formatAddress, getSettings, legalComplete } from "@/lib/settings";
-import { InvoiceClient, type InvoiceSeller } from "@/components/invoice/InvoiceClient";
+import { getSettings, legalComplete } from "@/lib/settings";
+import { sellerFromSettings } from "@/lib/invoice";
+import { InvoiceClient } from "@/components/invoice/InvoiceClient";
 
 export const dynamic = "force-dynamic";
 
@@ -40,24 +41,13 @@ export default async function FacturePage({ params }: { params: Promise<{ id: st
 
   const settings = await getSettings();
 
-  const seller: InvoiceSeller = {
-    name: settings["restaurant.name"],
-    tagline: settings["restaurant.tagline"],
-    company: settings["legal.company"],
-    legalForm: settings["legal.legalForm"],
-    address: formatAddress(settings),
-    phone: settings["restaurant.phone"],
-    email: settings["restaurant.email"],
-    siret: settings["legal.siret"],
-    vatNumber: settings["legal.vatNumber"],
-  };
-
   return (
     <InvoiceClient
       order={rowToOrder(row)}
-      seller={seller}
+      seller={sellerFromSettings(settings)}
       isAdmin={user.role === "ADMIN"}
       legalOk={legalComplete(settings)}
+      pdfUrl={`/api/facture/${id}/pdf`}
     />
   );
 }

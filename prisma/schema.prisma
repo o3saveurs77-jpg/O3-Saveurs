@@ -61,6 +61,24 @@ model Dish {
   /// JSON: Allergen[] — 14 allergènes réglementaires (INCO 1169/2011)
   allergens String @default("[]")
 
+  /// Taux de TVA du plat, en points de base (1000 = 10 %, 550 = 5,5 %).
+  ///
+  /// Le taux vit sur le plat et non sur la commande : la restauration à
+  /// consommer immédiatement relève de 10 % (art. 279 m CGI), mais une boisson
+  /// non alcoolisée vendue en contenant fermé relève de 5,5 % (art. 278-0 bis
+  /// A). Une formule « plat + boisson » mélange donc les deux, et un taux
+  /// unique par commande faisait déclarer les canettes à 10 %.
+  vatRateBp Int @default(1000)
+
+  /// Délai de préparation, en **heures**. 0 = plat servi au créneau habituel.
+  ///
+  /// Au-delà de zéro, le plat est « sur commande » : un gigot, une paella pour
+  /// vingt ou un agneau entier ne se lancent pas à réception, il faut acheter
+  /// la viande et occuper le four. Le tunnel refuse alors toute date de retrait
+  /// plus proche que ce délai, et la commande n'entre pas en cuisine tant que
+  /// le restaurant ne l'a pas acceptée — voir `en_attente_validation`.
+  leadTimeHours Int @default(0)
+
   /// null = stock illimité (plat toujours disponible)
   stock      Int?
   /// seuil d'alerte de réapprovisionnement
@@ -74,9 +92,66 @@ model Dish {
 
   movements StockMovement[]
   specials  DailySpecial[]
+  formulaChoices FormulaChoice[]
 
   @@index([cat, position])
   @@index([available])
+}
+
+// ─── Formules ─────────────────────────────────────────────────
+// Une formule n'est pas un plat : c'est un prix fixe et une composition
+// (« entrée + plat + dessert »). Chaque créneau porte la liste des plats que
+// la cliente accepte à cet endroit-là, ce qui rend la formule pilotable depuis
+// le back-office sans toucher au code. Le prix facturé reste calculé par le
+// serveur : prix de la formule + suppléments des plats choisis.
+
+model Formula {
+  id String @id @default(cuid())
+  /// pastille courte affichée sur la carte : F1, F2…
+  code String @unique
+  name String
+  desc String @default("")
+  /// argument secondaire, affiché sous le prix (« Sur le pouce »)
+  extra      String  @default("")
+  priceCents Int
+  active     Boolean @default(true)
+  position   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  slots FormulaSlot[]
+
+  @@index([active, position])
+}
+
+model FormulaSlot {
+  id        String  @id @default(cuid())
+  formulaId String
+  formula   Formula @relation(fields: [formulaId], references: [id], onDelete: Cascade)
+  /// « Votre entrée », « Votre plat »…
+  label String
+  /// un créneau facultatif peut rester vide (supplément offert, boisson…)
+  required Boolean @default(true)
+  position Int     @default(0)
+
+  choices FormulaChoice[]
+
+  @@index([formulaId, position])
+}
+
+model FormulaChoice {
+  id     String      @id @default(cuid())
+  slotId String
+  slot   FormulaSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  dishId String
+  dish   Dish        @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  /// supplément en centimes (Thiéboudiène Poisson +4 €, poisson entier +9 €)
+  supplementCents Int @default(0)
+  position        Int @default(0)
+
+  @@unique([slotId, dishId])
+  @@index([slotId, position])
 }
 
 model StockMovement {
@@ -150,6 +225,13 @@ model Driver {
   vehicle String?
   active  Boolean @default(true)
 
+  /// Email du compte Auth0 du livreur, s'il en a un.
+  ///
+  /// C'est le seul lien entre une session et une fiche livreur : un compte
+  /// portant le rôle LIVREUR retrouve ses tournées par cette adresse. Reste
+  /// facultatif — un extra livre très bien avec le lien privé, sans compte.
+  email String? @unique
+
   createdAt DateTime @default(now())
   runs      DeliveryRun[]
   orders    Order[]
@@ -170,6 +252,15 @@ model DeliveryRun {
   startedAt DateTime?
   endedAt   DateTime?
   createdAt DateTime  @default(now())
+
+  /// Jeton du lien privé remis au livreur (`/tournee/<jeton>`).
+  ///
+  /// Le livreur n'a pas de compte : il reçoit un lien par SMS et l'ouvre sur
+  /// son téléphone, ce qui permet de faire rouler un extra embauché le matin
+  /// même. Ce lien donne accès aux adresses et téléphones de la tournée : il
+  /// expire donc (`accessExpiresAt`) et peut être révoqué en le régénérant.
+  accessToken     String?   @unique
+  accessExpiresAt DateTime?
 
   orders Order[]
 
@@ -293,8 +384,22 @@ model Order {
 
   /// livraison | emporter
   mode   String
-  /// en_attente_paiement | confirmee | cuisine | route | livree | annulee
+  /// en_attente_paiement | en_attente_validation | confirmee | cuisine | route | livree | annulee
   status String @default("en_attente_paiement")
+
+  /// La commande porte au moins un plat sur commande (`Dish.leadTimeHours > 0`).
+  ///
+  /// Figé à la commande : le délai du plat peut changer ensuite, la commande
+  /// déjà passée reste une commande à valider. C'est aussi ce qui alimente le
+  /// filtre « À valider » du back-office.
+  preorder Boolean @default(false)
+  /// Date et heure de retrait/livraison demandées, pour une commande sur
+  /// commande. `null` pour une commande du jour, servie au créneau `slot`.
+  scheduledFor DateTime?
+  /// Ce que le restaurant a répondu en refusant une commande sur commande.
+  /// Repris tel quel dans l'email au client — c'est la seule explication qu'il
+  /// recevra d'un refus.
+  refusalReason String @default("")
 
   /// Index de zone **ou** de palier de distance selon le mode de tarification
   /// en vigueur au moment de la commande (voir `delivery.mode`).
@@ -324,9 +429,43 @@ model Order {
   promoCode   String?
 
   paid Boolean @default(false)
-  /// en_attente | paye | echec | rembourse | expire
+  /// en_attente | paye | echec | rembourse_partiel | rembourse | expire
   paymentStatus String @default("en_attente")
   paymentMethod String @default("Carte")
+
+  /// Total déjà remboursé, en centimes. Cumulatif : plusieurs remboursements
+  /// partiels s'additionnent, et la somme ne peut jamais dépasser `totalCents`.
+  refundedCents Int @default(0)
+  /// Numéro d'avoir séquentiel, figé à l'émission.
+  ///
+  /// Une facture émise ne se modifie ni ne s'efface (art. 242 nonies A CGI) :
+  /// rembourser produit une **pièce distincte**, l'avoir, avec sa propre suite
+  /// de numéros. Marquer la facture « remboursée » sans avoir ne justifierait
+  /// aucune sortie d'argent devant un contrôle.
+  creditNoteNumber Int? @unique
+  refundedAt       DateTime?
+  /// Motif du remboursement, repris sur l'avoir.
+  refundReason     String    @default("")
+
+  /// Code à quatre chiffres remis au client, qu'il donne au livreur.
+  ///
+  /// Preuve de remise : le livreur le saisit pour clore l'arrêt. Généré au
+  /// départ en livraison et envoyé avec l'email « en route » — pas avant, un
+  /// code communiqué trop tôt se perd dans la boîte de réception.
+  deliveryCode       String?
+  /// Livrée sans que le code ait pu être fourni — le motif est dans `driverNote`.
+  deliveredWithoutCode Boolean @default(false)
+  /// Ce que le livreur a signalé depuis la rue : client absent, adresse
+  /// introuvable, code oublié.
+  driverNote         String    @default("")
+  incidentAt         DateTime?
+
+  /// Annulation demandée par le client alors que la commande était déjà
+  /// engagée en cuisine : elle attend une décision humaine, elle n'annule rien
+  /// par elle-même.
+  cancelRequestedAt DateTime?
+  /// Ce que le client a écrit en demandant l'annulation.
+  cancelReason      String    @default("")
 
   stripeSessionId       String?
   stripePaymentIntentId String?
@@ -360,6 +499,8 @@ model Order {
   @@index([stripeSessionId])
   @@index([paid, createdAt])
   @@index([deliveryRunId, runPosition])
+  /// Planning des plats sur commande : « qu'est-ce qu'on doit lancer demain ? »
+  @@index([preorder, scheduledFor])
 }
 
 // ─── Newsletter ───────────────────────────────────────────────
@@ -374,8 +515,22 @@ model NewsletterSubscriber {
   confirmed   Boolean   @default(false)
   confirmedAt DateTime?
   unsubscribedAt DateTime?
-  /// footer | checkout | admin | import
+  /// footer | checkout | admin | import | boutique
   source String @default("footer")
+
+  /// Base légale de la prospection : `optin` ou `client`.
+  ///
+  /// `optin` — la personne s'est inscrite et a cliqué le lien de confirmation.
+  /// `client` — l'adresse a été recueillie **à l'occasion d'une vente**, ce qui
+  /// autorise la prospection pour des produits analogues sans consentement
+  /// préalable (art. L34-5 du code des postes et des communications
+  /// électroniques), à condition d'informer au moment du recueil et d'offrir la
+  /// désinscription dans chaque envoi.
+  ///
+  /// Ce champ n'est pas décoratif : en cas de contrôle, c'est lui qui justifie
+  /// qu'on avait le droit d'écrire à cette adresse. Le déduire du `source`
+  /// mélangerait « d'où vient l'adresse » et « à quel titre on écrit ».
+  basis String @default("optin")
 
   createdAt DateTime @default(now())
 
@@ -460,6 +615,70 @@ model ContactMessage {
   createdAt DateTime @default(now())
 
   @@index([handled, createdAt])
+}
+
+// ─── Traiteur (réunions & réceptions) ──────────────────────────
+
+/// Demande de devis traiteur, déposée depuis la page publique `/traiteur`.
+model CateringInquiry {
+  id String @id @default(cuid())
+
+  /// bureau | mariage | autre — correspond aux offres présentées en page Traiteur
+  eventType     String
+  eventDate     DateTime?
+  guestCount    Int?
+  location      String
+
+  customerName  String
+  customerPhone String
+  customerEmail String
+  message       String @default("")
+
+  /// nouveau | contacte | devis_envoye | confirme | decline
+  status String @default("nouveau")
+  /// note interne, jamais montrée au client
+  note   String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+// ─── Contenu éditorial des pages vitrine ──────────────────────
+
+/// Une section de page vitrine (accueil, à propos), ordonnable et modifiable
+/// depuis le back-office.
+///
+/// Les textes, titres, photos et prix de ces pages étaient écrits en dur dans
+/// les composants : la cliente ne pouvait ni corriger une faute, ni ajouter un
+/// encart, ni masquer une section sans passer par un développeur. Chaque bloc
+/// est désormais une ligne de cette table.
+///
+/// `kind` détermine la mise en page (le style maison reste garanti) et
+/// `contentJson` porte ce qui est libre : titres, textes, photos, éléments.
+/// Voir `lib/pageSections.ts` pour le catalogue des blocs et leur validation.
+model PageSection {
+  id String @id @default(cuid())
+
+  /// accueil | a-propos — voir PAGES dans lib/pageSections.ts
+  page String
+  /// type de bloc — voir SECTION_KINDS dans lib/pageSections.ts
+  kind String
+  /// nom interne, affiché dans la liste du back-office uniquement
+  label String @default("")
+
+  position Int     @default(0)
+  /// masquée = conservée en base mais absente du site public
+  visible  Boolean @default(true)
+
+  /// JSON: SectionContent (titres, textes, photos, éléments, prix…)
+  contentJson String @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([page, position])
 }
 
 // ─── Achats & budget ──────────────────────────────────────────

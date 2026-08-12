@@ -20,6 +20,7 @@ import { bool, err, int, isoDate, num, ok, oneOf, str, type Result } from "@/lib
 import { PROMOTION_KINDS, type PromotionKind, BUDGET_CATEGORIES, type BudgetCategory } from "@/lib/types";
 import { fmtCents } from "@/lib/money";
 import { PARIS_TZ, WEEKDAY_LABEL } from "@/lib/hours";
+import { isStorageUrl } from "@/lib/storageHost";
 
 // ─── Fenêtres de diffusion (commun aux 4 modèles) ──────────────
 
@@ -97,21 +98,22 @@ export function validateLink(raw: unknown, field = "Le lien"): Result<string | n
  * Image d'un encart. `next/image` refuse tout hôte absent de
  * `next.config.mjs` → `images.remotePatterns` : une URL externe ferait tomber la
  * page publique. On n'accepte donc qu'un fichier local (`/photos/…`) ou un
- * envoi Vercel Blob, les deux seules sources autorisées par la configuration.
+ * envoi sur notre stockage objet — les deux seules sources que la politique de
+ * sécurité du site accepte de charger.
  */
 export function validateBannerImage(raw: unknown): Result<string> {
   const s = str(raw, "L'image", { min: 1, max: 500 });
   if (!s.ok) return s;
 
   const value = s.value;
-  if (value.startsWith("//")) return err("L'image doit être un fichier local ou un envoi Vercel Blob");
+  if (value.startsWith("//")) {
+    return err("L'image doit être un fichier du site ou un envoi depuis l'administration");
+  }
   if (value.startsWith("/")) return ok(value);
 
   try {
     const url = new URL(value);
-    if (url.protocol === "https:" && url.hostname.endsWith(".public.blob.vercel-storage.com")) {
-      return ok(url.toString());
-    }
+    if (isStorageUrl(value)) return ok(url.toString());
   } catch {
     /* traité ci-dessous */
   }

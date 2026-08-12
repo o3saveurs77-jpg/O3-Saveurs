@@ -26,6 +26,7 @@ export const FLOW_RAMP = ["#f0a06b", "#e8732a", "#c25c17", "#8d3f0d"] as const;
 /** Le statut n'est pas une identité de série : c'est un état. Couleurs réservées. */
 export const STATUS_COLOR: Record<OrderStatus, string> = {
   en_attente_paiement: "#b98705", // attention — paiement non acquis
+  en_attente_validation: "#8a6d00", // payée, mais en attente d'une décision humaine
   confirmee: FLOW_RAMP[0],
   cuisine: FLOW_RAMP[1],
   route: FLOW_RAMP[2],

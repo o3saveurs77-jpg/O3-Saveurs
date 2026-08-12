@@ -2,10 +2,12 @@
  *
  * Trois exigences, dans cet ordre de priorité :
  *
- *  1. **Ne jamais écrire à quelqu'un qui n'a pas consenti.** Seules les adresses
- *     `confirmed: true` et `unsubscribedAt: null` sont retenues. Le lien de
- *     désinscription est fourni à `sendCampaign()` pour chaque destinataire :
- *     il est obligatoire dans toute prospection (RGPD art. 21, LCEN art. L34-5).
+ *  1. **Ne jamais écrire à quelqu'un sans base légale.** Deux seulement, tenues
+ *     par `lib/prospection.ts` : le consentement confirmé (double opt-in), ou
+ *     le client dont l'adresse a été recueillie lors d'un achat (art. L34-5
+ *     CPCE). Une adresse désinscrite n'est jamais retenue, quelle que soit la
+ *     base — l'opposition prime (RGPD art. 21). Le lien de désinscription est
+ *     fourni à `sendCampaign()` pour chaque destinataire : il est obligatoire.
  *
  *  2. **Idempotence.** Un double clic sur « Envoyer », ou deux onglets ouverts,
  *     ne doivent pas expédier la campagne deux fois. La campagne est
@@ -20,6 +22,7 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { OU_JOIGNABLE } from "@/lib/prospection";
 import { requireAdmin, readJson, notFound, conflict, badRequest } from "@/lib/guard";
 import { sendCampaign } from "@/lib/email";
 
@@ -148,8 +151,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
  * rend le lien de désinscription valable en un clic, sans connexion.
  */
 async function audienceOf(audience: string): Promise<{ email: string; token: string }[]> {
+  /* La règle de joignabilité vit dans `lib/prospection.ts` et n'est pas
+   * recopiée ici : c'est elle qui décide à qui la loi permet d'écrire, et une
+   * copie divergente enverrait à des gens que le reste du code croit exclus. */
   const subscribers = await prisma.newsletterSubscriber.findMany({
-    where: { confirmed: true, unsubscribedAt: null },
+    where: OU_JOIGNABLE,
     select: { email: true, token: true },
   });
 

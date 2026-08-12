@@ -60,13 +60,18 @@ export function ZoneCheck() {
     setResult(zone ? { kind: "in", zone, city: match.city } : { kind: "out", suggestions: [] });
   };
 
+  // Pastilles de villes rapides, dérivées des zones déjà chargées (5 max,
+  // dédupliquées) — un clic remplit simplement le champ, la vérification
+  // reste un geste volontaire de la cliente.
+  const quickCities = zones ? Array.from(new Set(zones.flatMap((z) => z.villes))).slice(0, 5) : [];
+
   return (
-    <div className="rounded-[var(--radius-card)] border border-white/20 bg-white/10 p-5 text-white shadow-[var(--shadow-soft)] backdrop-blur-md">
+    <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 text-ink shadow-[var(--shadow-soft)]">
       <div className="mb-2 flex items-center gap-2">
-        <Icon name="truck" size={22} className="text-gold" />
-        <h3 className="text-lg">On livre chez vous ?</h3>
+        <Icon name="truck" size={22} className="text-primary" />
+        <h3 className="text-lg font-display">On livre chez vous ?</h3>
       </div>
-      <p className="mb-3 text-sm text-white/75">
+      <p className="mb-3 text-sm text-ink-2">
         Code postal ou ville : frais et minimum affichés en un clic.
       </p>
 
@@ -74,33 +79,48 @@ export function ZoneCheck() {
         {/* `min-w-0` : sans ça l'input garde sa largeur minimale de contenu
             (~180 px) au lieu de suivre `w-full`, et pousse « Vérifier » hors
             champ sous ~375 px. */}
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4">
+        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-line bg-panel-2 px-4">
           <label htmlFor="zone-check" className="sr-only">
             Code postal ou ville de livraison
           </label>
-          <Icon name="pin" size={18} className="text-white/70" />
+          <Icon name="pin" size={18} className="text-ink-2" />
           <input
             id="zone-check"
             name="zone-check"
             autoComplete="postal-code"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ex. 77185, Lognes, Torcy…"
-            className="w-full bg-transparent py-3 text-[15px] text-white outline-none placeholder:text-white/50"
+            placeholder="Ex. 77340, Pontault-Combault, Roissy…"
+            className="w-full bg-transparent py-3 text-[15px] text-ink outline-none placeholder:text-ink-2/70"
           />
         </div>
         <button
           type="submit"
           disabled={!zones}
-          className="rounded-full bg-gold px-5 py-3 font-bold text-ink transition hover:brightness-105 disabled:opacity-60"
+          className="rounded-full bg-primary px-5 py-3 font-bold text-primary-ink transition hover:brightness-110 disabled:opacity-60"
         >
           Vérifier
         </button>
       </form>
 
+      {quickCities.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {quickCities.map((city) => (
+            <button
+              key={city}
+              type="button"
+              onClick={() => setQuery(city)}
+              className="rounded-full border border-line bg-panel-2 px-3 py-1 text-xs font-semibold text-ink-2 transition hover:border-primary hover:text-primary"
+            >
+              {city}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div aria-live="polite">
         {result?.kind === "in" && (
-          <div className="mt-4 flex items-start gap-3 rounded-xl bg-[#e9f7f4] p-4 text-[#0f6b5e]">
+          <div className="mt-4 flex items-start gap-3 rounded-xl bg-teal/10 p-4 text-teal">
             <Icon name="check" size={20} className="mt-0.5 shrink-0" />
             <div className="text-sm">
               <p className="font-bold">Oui, on livre à {result.city} ! 🎉</p>

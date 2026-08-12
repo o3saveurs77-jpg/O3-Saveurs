@@ -1,0 +1,4 @@
+[
+  "0 4 * * * curl -sS --fail-with-body -H \"Authorization: Bearer $CRON_SECRET\" \"$NEXTAUTH_URL/api/cron/retention\"",
+  "*/30 * * * * curl -sS --fail-with-body -H \"Authorization: Bearer $CRON_SECRET\" \"$NEXTAUTH_URL/api/cron/abandoned-carts\""
+]

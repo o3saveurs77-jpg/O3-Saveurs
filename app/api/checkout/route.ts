@@ -7,6 +7,7 @@ import { withUniqueRef } from "@/lib/ref";
 import { optionalUser, readJson, badRequest, conflict, serverError } from "@/lib/guard";
 import { getOpeningHours, getSlotConfig } from "@/lib/settings";
 import { isSlotAcceptable, nextService, WEEKDAY_LABEL } from "@/lib/hours";
+import { checkPreorderSchedule } from "@/lib/preorder";
 import { collect, email as vEmail, phone as vPhone, str, zip as vZip, oneOf } from "@/lib/validate";
 import { hit, clientKey, tooManyRequests, LIMITS } from "@/lib/rateLimit";
 import type { OrderMode } from "@/lib/types";
@@ -17,6 +18,11 @@ interface Body {
   lines: RawLine[];
   mode: OrderMode;
   slot: string;
+  /**
+   * Date de retrait « 2026-08-13 », exigée dès que le panier contient un plat
+   * sur commande. Ignorée sinon : une commande du jour part au créneau `slot`.
+   */
+  scheduledDate?: string;
   customer: {
     name: string;
     email: string;
@@ -31,7 +37,7 @@ interface Body {
   paymentMethod: string;
 }
 
-const PAYMENT_METHODS = ["Carte bancaire", "Apple Pay", "Google Pay", "Espèces sur place"] as const;
+const PAYMENT_METHODS = ["Carte bancaire", "Apple Pay", "Google Pay", "PayPal", "Espèces sur place"] as const;
 
 /**
  * POST /api/checkout — crée la commande puis la session Stripe Checkout.
@@ -79,27 +85,12 @@ export async function POST(req: Request) {
     return badRequest("Votre panier est vide");
   }
 
-  // ── Le restaurant est-il ouvert, et le créneau proposable ? ──
-  const [hours, slotConfig] = await Promise.all([getOpeningHours(), getSlotConfig()]);
-  if (!isSlotAcceptable(hours, slot, slotConfig)) {
-    const next = nextService(hours);
-    return conflict(
-      next
-        ? `Nous sommes fermés. Prochain service : ${WEEKDAY_LABEL[next.weekday]} à partir de ${next.opensAt}.`
-        : "Nous sommes fermés pour le moment.",
-    );
-  }
-
-  // `"next"` n'a de sens que côté client (proposer le prochain service quand
-  // rien n'est disponible aujourd'hui) : on le résout ici en un horaire lisible
-  // pour la cuisine et l'admin, plutôt que de stocker le mot-clé tel quel.
-  const resolvedSlot = ((): string => {
-    if (slot !== "next") return slot;
-    const next = nextService(hours);
-    return next ? `${WEEKDAY_LABEL[next.weekday]} ${next.opensAt}` : slot;
-  })();
-
   // ── Calcul serveur intégral ──
+  /* Le calcul passe **avant** le contrôle d'horaire, contrairement à la version
+   * précédente : lui seul dit si le panier contient un plat sur commande, et
+   * les deux cas ne se contrôlent pas de la même façon. Un gigot se commande
+   * très bien à 3 h du matin pour jeudi soir — refuser parce que le restaurant
+   * est fermé *maintenant* n'aurait aucun sens. */
   const session = await optionalUser();
   const priced = await computeOrder({
     lines: body.lines,
@@ -116,8 +107,52 @@ export async function POST(req: Request) {
   if (!priced.ok) return conflict(priced.error);
   const order = priced.value;
 
+  // ── Créneau : commande du jour, ou plat sur commande ? ──
+  const [hours, slotConfig] = await Promise.all([getOpeningHours(), getSlotConfig()]);
+  const preorder = order.leadTimeHours > 0;
+
+  let resolvedSlot: string;
+  let scheduledFor: Date | null = null;
+
+  if (preorder) {
+    const schedule = checkPreorderSchedule(hours, {
+      date: body.scheduledDate,
+      slot,
+      leadTimeHours: order.leadTimeHours,
+      stepMinutes: slotConfig.stepMinutes,
+    });
+    if (!schedule.ok) return conflict(schedule.error);
+    scheduledFor = schedule.at;
+    resolvedSlot = slot;
+  } else {
+    if (!isSlotAcceptable(hours, slot, slotConfig)) {
+      const next = nextService(hours);
+      return conflict(
+        next
+          ? `Nous sommes fermés. Prochain service : ${WEEKDAY_LABEL[next.weekday]} à partir de ${next.opensAt}.`
+          : "Nous sommes fermés pour le moment.",
+      );
+    }
+    // `"next"` n'a de sens que côté client (proposer le prochain service quand
+    // rien n'est disponible aujourd'hui) : on le résout ici en un horaire
+    // lisible pour la cuisine et l'admin, plutôt que de stocker le mot-clé.
+    const next = slot === "next" ? nextService(hours) : null;
+    resolvedSlot = next ? `${WEEKDAY_LABEL[next.weekday]} ${next.opensAt}` : slot;
+  }
+
   const cash = paymentMethod === "Espèces sur place";
   const stripeReady = isStripeConfigured();
+
+  /* Un plat sur commande engage un achat chez le boucher plusieurs jours à
+   * l'avance. Le laisser réserver sans rien encaisser, c'est risquer de sortir
+   * un agneau entier pour un client qui ne viendra pas — le paiement en ligne
+   * est précisément ce qui rend l'offre tenable. */
+  if (preorder && cash) {
+    return conflict(
+      "Les plats sur commande se règlent en ligne au moment de la réservation. " +
+        "Choisissez un paiement par carte.",
+    );
+  }
 
   // Le repli « pas de clé Stripe donc on marque payé » ne doit jamais exister en
   // production : une clé absente rendrait toutes les commandes gratuites.
@@ -145,6 +180,8 @@ export async function POST(req: Request) {
           mode,
           // Une commande n'entre en cuisine qu'une fois le paiement acquis.
           status: cash ? "confirmee" : "en_attente_paiement",
+          preorder,
+          scheduledFor,
           zoneIdx: order.zone?.idx ?? null,
           distanceKm: order.distanceKm,
           slot: resolvedSlot,
@@ -199,7 +236,14 @@ export async function POST(req: Request) {
   if (!stripeReady) {
     const updated = await prisma.order.update({
       where: { id: created.id },
-      data: { paid: true, paymentStatus: "paye", status: "confirmee", confirmedAt: new Date() },
+      data: {
+        paid: true,
+        paymentStatus: "paye",
+        // Même règle qu'en production : un plat sur commande attend l'accord du
+        // restaurant, il n'est pas confirmé par le seul fait d'être payé.
+        status: preorder ? "en_attente_validation" : "confirmee",
+        confirmedAt: preorder ? null : new Date(),
+      },
     });
     const { sendOrderConfirmation } = await import("@/lib/email");
     await sendOrderConfirmation(updated);

@@ -52,6 +52,31 @@ export function Footer() {
           <ul className="flex flex-col gap-2.5 text-sm opacity-90">
             <li><Link href="/" className="link-underline">Accueil</Link></li>
             <li><Link href="/carte" className="link-underline">La Carte</Link></li>
+            {/* Lien direct vers le PDF : accessible depuis n'importe quelle page,
+                sans passer par la carte en ligne. */}
+            <li>
+              <a
+                href="/carte-o3-saveurs.pdf"
+                download="Carte - O3 Saveurs.pdf"
+                className="link-underline inline-flex items-center gap-1.5"
+              >
+                <Icon name="download" size={14} />
+                La carte en PDF
+              </a>
+            </li>
+            {/* Les allergènes doivent rester consultables depuis n'importe où :
+                l'information est due au consommateur avant qu'il commande
+                (règlement INCO n° 1169/2011), pas une fois le plat servi. */}
+            <li>
+              <a
+                href="/tableau-allergenes-o3-saveurs.pdf"
+                download="Allergenes - O3 Saveurs.pdf"
+                className="link-underline inline-flex items-center gap-1.5"
+              >
+                <Icon name="download" size={14} />
+                Tableau des allergènes
+              </a>
+            </li>
             <li><Link href="/a-propos" className="link-underline">À propos</Link></li>
             <li><Link href="/contact" className="link-underline">Contact</Link></li>
             <li><Link href="/compte" className="link-underline">Mon compte</Link></li>

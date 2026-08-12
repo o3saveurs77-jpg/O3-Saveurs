@@ -4,7 +4,12 @@ import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 import { releaseStock } from "@/lib/stock";
 import { nextInvoiceNumber } from "@/lib/ref";
-import { sendPaymentReceived, sendInvoice } from "@/lib/email";
+import {
+  sendPaymentReceived,
+  sendInvoice,
+  sendPaymentFailed,
+  sendPreorderPending,
+} from "@/lib/email";
 import type { OrderLine } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -120,6 +125,13 @@ async function onCompleted(session: Stripe.Checkout.Session): Promise<void> {
 
   const invoiceNumber = order.invoiceNumber ?? (await nextInvoiceNumber());
 
+  /* Un plat sur commande est payé, mais pas accepté pour autant : le
+   * restaurant garde le droit de refuser une date qu'il ne peut pas tenir.
+   * Le paiement le fait donc entrer « à valider », et `confirmedAt` reste vide
+   * — c'est la validation humaine qui l'horodatera, et le tableau de bord
+   * mesure ainsi le vrai délai de réponse. */
+  const paidStatus = order.preorder ? "en_attente_validation" : "confirmee";
+
   // Écriture conditionnelle sur `paid: false` : deux webhooks simultanés ne
   // peuvent pas produire deux fois l'effet.
   const applied = await prisma.order.updateMany({
@@ -127,8 +139,8 @@ async function onCompleted(session: Stripe.Checkout.Session): Promise<void> {
     data: {
       paid: true,
       paymentStatus: "paye",
-      status: order.status === "en_attente_paiement" ? "confirmee" : order.status,
-      confirmedAt: order.confirmedAt ?? new Date(),
+      status: order.status === "en_attente_paiement" ? paidStatus : order.status,
+      confirmedAt: order.preorder ? order.confirmedAt : (order.confirmedAt ?? new Date()),
       stripePaymentIntentId: intentId(session),
       invoiceNumber,
     },
@@ -145,7 +157,10 @@ async function onCompleted(session: Stripe.Checkout.Session): Promise<void> {
   if (!fresh) return;
 
   const origin = process.env.NEXTAUTH_URL ?? "";
-  await sendPaymentReceived(fresh);
+  /* La facture part dans les deux cas : l'argent est encaissé, la pièce est
+   * due. Un refus ultérieur produira un avoir, pas l'effacement de la facture
+   * (art. 242 nonies A CGI). */
+  await (fresh.preorder ? sendPreorderPending(fresh) : sendPaymentReceived(fresh));
   await sendInvoice(fresh, `${origin}/facture/${fresh.id}`);
 }
 
@@ -169,6 +184,17 @@ async function onFailed(
   // Le stock réservé à la création est rendu, sinon un panier abandonné
   // immobiliserait des plats indéfiniment.
   await releaseStock(parseLines(order.lines), { orderId: order.id, reason: "correction" });
+
+  /* Le client doit l'apprendre. Sans cet email, sa commande disparaissait en
+   * silence : il attendait une livraison qui ne viendrait pas, ou recommandait
+   * sans comprendre ce qui s'était passé. */
+  const origin = process.env.NEXTAUTH_URL ?? "";
+  const fresh = await prisma.order.findUnique({ where: { id: order.id } });
+  if (fresh) {
+    await sendPaymentFailed(fresh, paymentStatus === "expire", `${origin}/carte`).catch((error) =>
+      console.error(`[stripe] email d'échec de paiement pour ${order.id} échoué:`, error),
+    );
+  }
 }
 
 // ─── Remboursement ─────────────────────────────────────────────
