@@ -37,6 +37,7 @@ function dish(over: Partial<Dish> = {}): Dish {
     costCents: null,
     position: 0,
     leadTimeHours: 0,
+    vatRateBp: 1000,
     ...over,
   };
 }

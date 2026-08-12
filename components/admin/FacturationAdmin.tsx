@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { fmtPrice } from "@/lib/menu";
-import { vatBreakdown, formatInvoiceNumber } from "@/lib/money";
+import { vatBreakdownByRate, formatInvoiceNumber } from "@/lib/money";
+import { vatPartsOf } from "@/lib/types";
 import { valid, fetchAllOrders, MAX_FETCHED_ORDERS } from "@/lib/analytics";
 import { Icon } from "@/components/Icon";
 import type { Order } from "@/lib/types";
@@ -66,7 +67,17 @@ export function FacturationAdmin() {
     // le format qu'attend un tableur, et la conversion se fait une seule fois,
     // ici, sans jamais réintroduire de flottant dans les calculs.
     const rows = invoices.map((o) => {
-      const vat = vatBreakdown(o.totalCents, o.vatRateBp);
+      /* HT et TVA cumulés sur tous les taux de la commande : ce tableau tient
+         une ligne par facture, la ventilation détaillée par taux vit dans
+         l'écran Compta. */
+      const buckets = vatBreakdownByRate(vatPartsOf(o), {
+        feeCents: o.feeCents,
+        discountCents: o.discountCents,
+      });
+      const vat = {
+        netCents: buckets.reduce((s, b) => s + b.netCents, 0),
+        vatCents: buckets.reduce((s, b) => s + b.vatCents, 0),
+      };
       return [
         formatInvoiceNumber(o.invoiceNumber, new Date(o.createdAt)),
         o.ref,

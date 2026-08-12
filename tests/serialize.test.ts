@@ -40,6 +40,7 @@ const dishRow = (over: Partial<DishRow> = {}): DishRow => ({
   costCents: null,
   position: 0,
   leadTimeHours: 0,
+  vatRateBp: 1000,
   createdAt: NOW,
   updatedAt: NOW,
   ...over,

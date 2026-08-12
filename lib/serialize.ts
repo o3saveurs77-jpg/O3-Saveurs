@@ -85,6 +85,7 @@ export function rowToDish(r: DishRow): Dish {
     costCents: r.costCents,
     position: r.position,
     leadTimeHours: r.leadTimeHours,
+    vatRateBp: r.vatRateBp,
   };
 }
 
@@ -109,6 +110,7 @@ export function dishToRow(d: Partial<Dish>) {
   if (d.costCents !== undefined) row.costCents = d.costCents;
   if (d.position !== undefined) row.position = d.position;
   if (d.leadTimeHours !== undefined) row.leadTimeHours = d.leadTimeHours;
+  if (d.vatRateBp !== undefined) row.vatRateBp = d.vatRateBp;
   return row;
 }
 

@@ -61,6 +61,15 @@ model Dish {
   /// JSON: Allergen[] — 14 allergènes réglementaires (INCO 1169/2011)
   allergens String @default("[]")
 
+  /// Taux de TVA du plat, en points de base (1000 = 10 %, 550 = 5,5 %).
+  ///
+  /// Le taux vit sur le plat et non sur la commande : la restauration à
+  /// consommer immédiatement relève de 10 % (art. 279 m CGI), mais une boisson
+  /// non alcoolisée vendue en contenant fermé relève de 5,5 % (art. 278-0 bis
+  /// A). Une formule « plat + boisson » mélange donc les deux, et un taux
+  /// unique par commande faisait déclarer les canettes à 10 %.
+  vatRateBp Int @default(1000)
+
   /// Délai de préparation, en **heures**. 0 = plat servi au créneau habituel.
   ///
   /// Au-delà de zéro, le plat est « sur commande » : un gigot, une paella pour

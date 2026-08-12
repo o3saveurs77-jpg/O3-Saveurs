@@ -55,11 +55,11 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/prisma";
 import { rowToOrder } from "@/lib/serialize";
-import { fmtCents, vatBreakdown, fmtVatRate, formatInvoiceNumber } from "@/lib/money";
+import { fmtCents, vatBreakdownByRate, fmtVatRate, formatInvoiceNumber } from "@/lib/money";
 import { formatCreditNoteNumber } from "@/lib/refunds";
 import { formatPreorderSchedule } from "@/lib/preorder";
 import { escapeHtml } from "@/lib/validate";
-import { STATUS_LABEL } from "@/lib/types";
+import { STATUS_LABEL, vatPartsOf } from "@/lib/types";
 import { getSettings } from "@/lib/settings";
 import { sellerFromSettings } from "@/lib/invoice";
 import { renderInvoicePdf, renderCreditNotePdf } from "@/lib/pdf/renderInvoicePdf";
@@ -535,16 +535,27 @@ export async function sendCancelDeclined(row: OrderRow, reason: string): Promise
  */
 export async function sendInvoice(row: OrderRow, invoiceUrl: string): Promise<void> {
   const order = rowToOrder(row);
-  const vat = vatBreakdown(order.totalCents, order.vatRateBp);
+  // Une ligne par taux, comme sur la facture jointe : les deux documents
+  // doivent porter exactement les mêmes montants.
+  const buckets = vatBreakdownByRate(vatPartsOf(order), {
+    feeCents: order.feeCents,
+    discountCents: order.discountCents,
+  });
+  const totalHT = buckets.reduce((s, b) => s + b.netCents, 0);
   const number = formatInvoiceNumber(order.invoiceNumber, new Date(order.createdAt));
 
   const html = layout(
     `Facture ${number}`,
     orderSummary(order) +
       `<table style="width:100%;font-size:13px;margin:0 0 14px">
-         <tr><td>Total HT</td><td style="text-align:right">${fmtCents(vat.netCents)}</td></tr>
-         <tr><td>TVA ${fmtVatRate(vat.rateBp)}</td><td style="text-align:right">${fmtCents(vat.vatCents)}</td></tr>
-         <tr><td style="font-weight:bold">Total TTC</td><td style="text-align:right;font-weight:bold">${fmtCents(vat.grossCents)}</td></tr>
+         <tr><td>Total HT</td><td style="text-align:right">${fmtCents(totalHT)}</td></tr>
+         ${buckets
+           .map(
+             (b) =>
+               `<tr><td>TVA ${fmtVatRate(b.rateBp)}</td><td style="text-align:right">${fmtCents(b.vatCents)}</td></tr>`,
+           )
+           .join("")}
+         <tr><td style="font-weight:bold">Total TTC</td><td style="text-align:right;font-weight:bold">${fmtCents(order.totalCents)}</td></tr>
        </table>
        <p style="margin:0">Votre facture est jointe à cet email, au format PDF.
        Vous pouvez aussi <a href="${escapeHtml(invoiceUrl)}" style="color:#e8732a;font-weight:bold">la consulter en ligne</a>.</p>`,

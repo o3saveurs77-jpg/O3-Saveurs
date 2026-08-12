@@ -685,6 +685,8 @@ interface DishForm {
   position: string;
   /** délai de préparation en heures ; « » ou « 0 » = plat servi au créneau du jour */
   leadTime: string;
+  /** taux de TVA en points de base : 1000 = 10 %, 550 = 5,5 % */
+  vatRateBp: number;
 }
 
 function toForm(dish: Dish | null, fallbackCat: string): DishForm {
@@ -708,6 +710,7 @@ function toForm(dish: Dish | null, fallbackCat: string): DishForm {
       stockAlert: "",
       position: "",
       leadTime: "",
+      vatRateBp: 1000,
     };
   }
   return {
@@ -736,6 +739,7 @@ function toForm(dish: Dish | null, fallbackCat: string): DishForm {
     stockAlert: dish.stockAlert === null ? "" : String(dish.stockAlert),
     position: String(dish.position),
     leadTime: dish.leadTimeHours ? String(dish.leadTimeHours) : "",
+    vatRateBp: dish.vatRateBp,
   };
 }
 
@@ -876,6 +880,7 @@ function DishEditor({
         // ce que fait déjà `POST /api/dishes`.
         position: position ?? 0,
         leadTimeHours: leadTime ?? 0,
+        vatRateBp: f.vatRateBp,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Enregistrement impossible.");
@@ -1333,6 +1338,47 @@ function DishEditor({
                 />
               </div>
             </div>
+          </Section>
+
+          {/* ── TVA ── */}
+          <Section title="TVA">
+            <p className="text-xs text-ink-2">
+              Les prix saisis sont <strong>TTC</strong> : c&apos;est ce que le client paie. Le taux
+              sert à ventiler la taxe sur la facture et dans l&apos;export comptable, il ne change
+              pas le prix affiché. Un plat préparé relève de 10 % ; une boisson non alcoolisée
+              vendue en contenant fermé — canette, bouteille — de 5,5 %.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { bp: 1000, label: "10 % — plat, restauration" },
+                { bp: 550, label: "5,5 % — boisson en contenant fermé" },
+                { bp: 2000, label: "20 % — alcool" },
+              ].map((t) => (
+                <button
+                  key={t.bp}
+                  type="button"
+                  onClick={() => patch({ vatRateBp: t.bp })}
+                  aria-pressed={f.vatRateBp === t.bp}
+                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                    f.vatRateBp === t.bp
+                      ? "border-primary bg-primary text-white"
+                      : "border-line hover:border-primary/40"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {/* Une boisson servie dans un gobelet ouvert relève de 10 %, pas de
+                5,5 % : le taux réduit tient au contenant fermé, pas à la
+                nature du produit. La distinction ne s'invente pas depuis le
+                code, elle se choisit ici. */}
+            {f.vatRateBp === 550 && (
+              <p className="rounded-xl bg-gold/15 p-3 text-xs text-[#7a5f00]">
+                Le taux de 5,5 % suppose une vente en contenant fermé. Une boisson servie au
+                gobelet, à consommer sur place ou immédiatement, reste à 10 %.
+              </p>
+            )}
           </Section>
 
           {/* ── Plat sur commande ── */}

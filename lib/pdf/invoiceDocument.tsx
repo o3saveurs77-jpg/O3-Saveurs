@@ -9,7 +9,8 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { Order } from "@/lib/types";
 import type { InvoiceSeller } from "@/lib/invoice";
-import { fmtCents, fmtVatRate, vatBreakdown, formatInvoiceNumber } from "@/lib/money";
+import { fmtCents, fmtVatRate, vatBreakdownByRate, formatInvoiceNumber } from "@/lib/money";
+import { vatPartsOf } from "@/lib/types";
 
 const COLOR = {
   ink: "#2c1d11",
@@ -146,7 +147,14 @@ export function InvoiceDocument({
   creditNote?: CreditNote;
 }) {
   const createdAt = new Date(order.createdAt);
-  const vat = vatBreakdown(order.totalCents, order.vatRateBp);
+  /* Ventilation par taux — voir `InvoiceClient`, qui rend le même document à
+     l'écran. Les deux doivent afficher exactement les mêmes montants : le PDF
+     est la pièce que le client archive. */
+  const buckets = vatBreakdownByRate(vatPartsOf(order), {
+    feeCents: order.feeCents,
+    discountCents: order.discountCents,
+  });
+  const totalHT = buckets.reduce((s, b) => s + b.netCents, 0);
   const number = formatInvoiceNumber(order.invoiceNumber, createdAt);
   const paidAt = order.timeline.confirmedAt ?? order.createdAt;
 
@@ -272,15 +280,23 @@ export function InvoiceDocument({
               <Text style={styles.totalValue}>{fmtCents(order.feeCents)}</Text>
             </View>
           ) : null}
+          {/* Une ligne de TVA **par taux** : c'est ce qu'exige l'art. 242
+              nonies A, et une commande peut en porter deux — 10 % sur les
+              plats, 5,5 % sur une boisson en contenant fermé. */}
           <View style={styles.vatBlock}>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>Total HT</Text>
-              <Text style={styles.totalValue}>{fmtCents(vat.netCents)}</Text>
+              <Text style={styles.totalValue}>{fmtCents(totalHT)}</Text>
             </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>TVA {fmtVatRate(order.vatRateBp)}</Text>
-              <Text style={styles.totalValue}>{fmtCents(vat.vatCents)}</Text>
-            </View>
+            {buckets.map((b) => (
+              <View style={styles.totalRow} key={b.rateBp}>
+                <Text style={styles.totalLabel}>
+                  TVA {fmtVatRate(b.rateBp)}
+                  {buckets.length > 1 ? ` sur ${fmtCents(b.netCents)} HT` : ""}
+                </Text>
+                <Text style={styles.totalValue}>{fmtCents(b.vatCents)}</Text>
+              </View>
+            ))}
           </View>
           <View style={styles.grandRow}>
             <Text style={styles.grandLabel}>Total TTC</Text>
@@ -315,8 +331,8 @@ export function InvoiceDocument({
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Montants en euros. TVA au taux de {fmtVatRate(order.vatRateBp)} applicable à la vente de
-            produits alimentaires à emporter ou livrés (art. 279 m du CGI).
+            Montants en euros. Restauration à emporter ou livrée : TVA à 10 % (art. 279 m du CGI).
+            Boissons non alcoolisées en contenant fermé : 5,5 % (art. 278-0 bis A).
           </Text>
           <Text style={styles.footerText}>
             {creditNote

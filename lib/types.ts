@@ -68,6 +68,53 @@ export interface OrderLine {
   opts: Record<string, string>;
   formule: string | null;
   note: string;
+  /**
+   * Ventilation TTC de la ligne par taux de TVA : `[[rateBp, centimes], …]`,
+   * dont la somme vaut exactement `lineTotalCents`.
+   *
+   * Une liste et non un taux unique, parce qu'une formule « plat + boisson »
+   * relève de deux taux à la fois : 10 % sur le plat, 5,5 % sur la canette.
+   * Figée à la commande comme les prix — une facture émise ne se recalcule pas
+   * quand la carte ou un taux change.
+   *
+   * Absente sur les commandes antérieures à la ventilation multi-taux : les
+   * lecteurs retombent alors sur `Order.vatRateBp`, qui valait 10 % pour tout.
+   */
+  vatSplit?: [rateBp: number, grossCents: number][];
+}
+
+/**
+ * Ventilation d'une commande par taux, en retombant sur l'ancien modèle pour
+ * les commandes qui n'en portent pas.
+ *
+ * Vit ici et non dans `lib/money.ts` pour que ce dernier reste ignorant de la
+ * forme d'une commande : il ne sait que ventiler des montants.
+ */
+export function vatPartsOf(order: {
+  lines: OrderLine[];
+  vatRateBp: number;
+  totalCents: number;
+  feeCents: number;
+  discountCents: number;
+}): [number, number][] {
+  const parts: [number, number][] = [];
+  let ventile = false;
+
+  for (const l of order.lines) {
+    if (l.vatSplit?.length) {
+      ventile = true;
+      for (const [rateBp, cents] of l.vatSplit) parts.push([rateBp, cents]);
+    } else {
+      parts.push([order.vatRateBp, l.lineTotalCents]);
+    }
+  }
+
+  /* Commande d'avant la ventilation : le total facturé fait foi, et non la
+   * somme des lignes — une remise ou des frais de livraison s'y ajoutaient
+   * sans jamais toucher les lignes. */
+  if (!ventile) return [[order.vatRateBp, order.totalCents]];
+
+  return parts;
 }
 
 /** Vrai si la ligne est une formule composée et non un plat à la carte. */

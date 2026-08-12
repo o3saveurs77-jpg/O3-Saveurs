@@ -13,8 +13,9 @@
 import { useMemo, useState } from "react";
 import { useOrders } from "@/components/providers/OrdersContext";
 import { invoiced, inRange, modeSplit, netCollectedCents } from "@/lib/analytics";
-import { vatBreakdown, fmtVatRate, formatInvoiceNumber } from "@/lib/money";
+import { vatBreakdownByRate, fmtVatRate, formatInvoiceNumber } from "@/lib/money";
 import { formatCreditNoteNumber } from "@/lib/refunds";
+import { vatPartsOf } from "@/lib/types";
 import { fmtPrice } from "@/lib/menu";
 import { Icon } from "@/components/Icon";
 import type { Order } from "@/lib/types";
@@ -84,13 +85,37 @@ export function ComptaAdmin() {
   const parTaux = useMemo(() => {
     const map = new Map<number, { rateBp: number; netCents: number; vatCents: number; grossCents: number; n: number }>();
     for (const o of facturees) {
-      const vat = vatBreakdown(netCollectedCents(o), o.vatRateBp);
-      const e = map.get(o.vatRateBp) ?? { rateBp: o.vatRateBp, netCents: 0, vatCents: 0, grossCents: 0, n: 0 };
-      e.netCents += vat.netCents;
-      e.vatCents += vat.vatCents;
-      e.grossCents += vat.grossCents;
-      e.n += 1;
-      map.set(o.vatRateBp, e);
+      /* Le remboursement se retranche **avant** la ventilation, au prorata des
+         taux de la commande : rendre l'argent d'une formule rend aussi bien la
+         TVA à 10 % du plat que celle à 5,5 % de la boisson. */
+      const restant = netCollectedCents(o);
+      const parts = vatPartsOf(o);
+      const ratio = o.totalCents > 0 ? restant / o.totalCents : 0;
+      const buckets = vatBreakdownByRate(
+        parts.map(([rateBp, cents]) => [rateBp, Math.round(cents * ratio)] as const),
+        {
+          feeCents: Math.round(o.feeCents * ratio),
+          discountCents: Math.round(o.discountCents * ratio),
+        },
+      );
+
+      for (const b of buckets) {
+        const e = map.get(b.rateBp) ?? { rateBp: b.rateBp, netCents: 0, vatCents: 0, grossCents: 0, n: 0 };
+        e.netCents += b.netCents;
+        e.vatCents += b.vatCents;
+        e.grossCents += b.grossCents;
+        map.set(b.rateBp, e);
+      }
+      // Une commande se compte une fois, sur son taux principal : la sommer sur
+      // chaque taux ferait apparaître plus de factures qu'il n'en existe.
+      const principal = buckets.reduce(
+        (a, b) => (a && a.grossCents >= b.grossCents ? a : b),
+        buckets[0],
+      );
+      if (principal) {
+        const e = map.get(principal.rateBp);
+        if (e) e.n += 1;
+      }
     }
     return [...map.values()].sort((a, b) => a.rateBp - b.rateBp);
   }, [facturees]);
@@ -141,7 +166,12 @@ export function ComptaAdmin() {
           l.qty,
           euros(l.unitPriceCents),
           euros(l.lineTotalCents),
-          fmtVatRate(o.vatRateBp),
+          // Le taux de la ligne, et non celui de la commande : une formule en
+          // porte deux. « 10 % + 5,5 % » se lit, un taux global mentirait.
+          (l.vatSplit?.length
+            ? l.vatSplit.map(([rateBp]) => fmtVatRate(rateBp))
+            : [fmtVatRate(o.vatRateBp)]
+          ).join(" + "),
           o.refundedCents > 0
             ? formatCreditNoteNumber(o.creditNoteNumber, new Date(o.refundedAt ?? o.createdAt))
             : "",
@@ -162,11 +192,19 @@ export function ComptaAdmin() {
 
       /* La vente est enregistrée pour son montant **facturé**, pas pour son
          montant net : c'est ce que dit la facture, et une facture ne se
-         réécrit pas. Le remboursement vient ensuite, en pièce séparée. */
-      const vat = vatBreakdown(o.totalCents, o.vatRateBp);
+         réécrit pas. Le remboursement vient ensuite, en pièce séparée.
+         Une écriture 707/44571 par taux — le compte de TVA collectée doit
+         pouvoir se rapprocher taux par taux de la déclaration. */
+      const buckets = vatBreakdownByRate(vatPartsOf(o), {
+        feeCents: o.feeCents,
+        discountCents: o.discountCents,
+      });
       rows.push([date, piece, "411", `${libelle} — client`, euros(o.totalCents), ""]);
-      rows.push([date, piece, "707", `${libelle} — vente HT`, "", euros(vat.netCents)]);
-      rows.push([date, piece, "44571", `${libelle} — TVA collectée`, "", euros(vat.vatCents)]);
+      for (const b of buckets) {
+        const taux = fmtVatRate(b.rateBp);
+        rows.push([date, piece, "707", `${libelle} — vente HT ${taux}`, "", euros(b.netCents)]);
+        rows.push([date, piece, "44571", `${libelle} — TVA collectée ${taux}`, "", euros(b.vatCents)]);
+      }
       rows.push([date, piece, compteEncaissement(o), `${libelle} — encaissement`, euros(o.totalCents), ""]);
       rows.push([date, piece, "411", `${libelle} — solde client`, "", euros(o.totalCents)]);
 
@@ -180,10 +218,24 @@ export function ComptaAdmin() {
           o.creditNoteNumber,
           new Date(o.refundedAt ?? o.createdAt),
         );
-        const rembourse = vatBreakdown(o.refundedCents, o.vatRateBp);
         const lib = `Avoir ${o.ref}`;
-        rows.push([dateAvoir, avoir, "707", `${lib} — annulation vente HT`, euros(rembourse.netCents), ""]);
-        rows.push([dateAvoir, avoir, "44571", `${lib} — TVA à régulariser`, euros(rembourse.vatCents), ""]);
+        /* Le remboursement se ventile au prorata des taux de la commande :
+           rendre l'argent d'une formule rend la TVA à 10 % du plat comme celle
+           à 5,5 % de la boisson. Tout imputer au taux normal régulariserait
+           trop, et la déclaration serait fausse dans l'autre sens. */
+        const ratio = o.totalCents > 0 ? o.refundedCents / o.totalCents : 0;
+        const rendus = vatBreakdownByRate(
+          vatPartsOf(o).map(([rateBp, cents]) => [rateBp, Math.round(cents * ratio)] as const),
+          {
+            feeCents: Math.round(o.feeCents * ratio),
+            discountCents: Math.round(o.discountCents * ratio),
+          },
+        );
+        for (const b of rendus) {
+          const taux = fmtVatRate(b.rateBp);
+          rows.push([dateAvoir, avoir, "707", `${lib} — annulation vente HT ${taux}`, euros(b.netCents), ""]);
+          rows.push([dateAvoir, avoir, "44571", `${lib} — TVA à régulariser ${taux}`, euros(b.vatCents), ""]);
+        }
         rows.push([dateAvoir, avoir, "411", `${lib} — client`, "", euros(o.refundedCents)]);
         rows.push([dateAvoir, avoir, "411", `${lib} — remboursement`, euros(o.refundedCents), ""]);
         rows.push([dateAvoir, avoir, compteEncaissement(o), `${lib} — sortie`, "", euros(o.refundedCents)]);

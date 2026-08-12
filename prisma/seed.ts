@@ -102,7 +102,13 @@ async function seedDishes() {
        * être réécrasés. Le délai figure quand même à la création, sans quoi un
        * agneau entier naîtrait à zéro heure de délai — commandable pour le soir
        * même, ce qui est exactement ce que la réservation évite. */
-      create: { id: d.id, ...data, available: d.available, leadTimeHours: d.leadTimeHours ?? 0 },
+      create: {
+        id: d.id,
+        ...data,
+        available: d.available,
+        leadTimeHours: d.leadTimeHours ?? 0,
+        vatRateBp: d.vatRateBp ?? 1000,
+      },
       update: data,
     });
   }

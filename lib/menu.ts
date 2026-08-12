@@ -62,6 +62,8 @@ export interface Dish {
    * plat est « sur commande » (voir `lib/preorder.ts`).
    */
   leadTimeHours: number;
+  /** Taux de TVA en points de base : 1000 = 10 %, 550 = 5,5 % (boissons). */
+  vatRateBp: number;
 }
 
 /** Vrai si le plat peut être commandé maintenant (dispo, prix connu, stock). */
@@ -146,6 +148,8 @@ export interface SeedDish {
   allergens?: Allergen[];
   /** délai de préparation en heures ; absent ou 0 = plat servi au créneau du jour */
   leadTimeHours?: number;
+  /** taux de TVA en points de base ; absent = 1000 (10 %, restauration) */
+  vatRateBp?: number;
 }
 
 export interface SeedDishOption {
@@ -355,13 +359,19 @@ export const items: SeedDish[] = [
   D({ cat: "accompagnements", name: "Sauce Ô3 Piquante", desc: "La signature maison — ça pique juste ce qu'il faut.", price: 1, photo: "/photos/sauce-piquante.jpg", tags: ["Pot", "Piquant"] }),
   D({ cat: "accompagnements", name: "Piment frais", desc: "Piment frais haché maison.", price: 0.5, photo: "/photos/piment-frais.jpg", tags: ["Pot", "Piquant"] }),
 
-  // BOISSONS
-  D({ cat: "boissons", name: "Jus de Gingembre", desc: "Gingembre frais pressé maison, vif et tonifiant.", price: 3.5, photo: photo(2), tags: ["Pressé maison", "50 cl"], popular: true }),
-  D({ cat: "boissons", name: "Jus de Bissap", desc: "Infusion d'hibiscus pressée maison, fraîche et légèrement acidulée.", price: 3.5, photo: photo(26), tags: ["Infusion maison", "50 cl"] }),
-  D({ cat: "boissons", name: "Cocktail Maison", desc: "Cocktail de fruits sans alcool, frais et de saison — selon arrivage.", price: 3.5, photo: photo(20), tags: ["Selon saison", "25 cl"] }),
-  D({ cat: "boissons", name: "Jus d'Avocat", desc: "Jus d'avocat onctueux, préparé à la commande.", price: 4, photo: null, tags: ["À la commande", "25 cl"] }),
-  D({ cat: "boissons", name: "Jus d'Orange", desc: "Oranges fraîchement pressées, pur jus du jour.", price: 3.5, photo: null, tags: ["Pressé du jour", "25 cl"] }),
-  D({ cat: "boissons", name: "Canette 33 cl", desc: "Coca, Sprite, Fanta, Ice Tea, Orangina, Tropico — et eau minérale.", price: 2, photo: null, tags: ["33 cl", "Bien frais"] }),
+  /* BOISSONS — TVA à 5,5 %.
+   *
+   * Le taux réduit de l'art. 278-0 bis A vaut pour les boissons non alcoolisées
+   * vendues en **contenant fermé** : bouteille, canette. C'est le cas ici, la
+   * vente se faisant à emporter ou en livraison. Servie au gobelet, la même
+   * boisson relèverait de 10 % — le taux se règle alors plat par plat depuis
+   * l'écran Plats, sans toucher au code. */
+  D({ cat: "boissons", name: "Jus de Gingembre", desc: "Gingembre frais pressé maison, vif et tonifiant.", price: 3.5, photo: photo(2), tags: ["Pressé maison", "50 cl"], popular: true, vatRateBp: 550 }),
+  D({ cat: "boissons", name: "Jus de Bissap", desc: "Infusion d'hibiscus pressée maison, fraîche et légèrement acidulée.", price: 3.5, photo: photo(26), tags: ["Infusion maison", "50 cl"], vatRateBp: 550 }),
+  D({ cat: "boissons", name: "Cocktail Maison", desc: "Cocktail de fruits sans alcool, frais et de saison — selon arrivage.", price: 3.5, photo: photo(20), tags: ["Selon saison", "25 cl"], vatRateBp: 550 }),
+  D({ cat: "boissons", name: "Jus d'Avocat", desc: "Jus d'avocat onctueux, préparé à la commande.", price: 4, photo: null, tags: ["À la commande", "25 cl"], vatRateBp: 550 }),
+  D({ cat: "boissons", name: "Jus d'Orange", desc: "Oranges fraîchement pressées, pur jus du jour.", price: 3.5, photo: null, tags: ["Pressé du jour", "25 cl"], vatRateBp: 550 }),
+  D({ cat: "boissons", name: "Canette 33 cl", desc: "Coca, Sprite, Fanta, Ice Tea, Orangina, Tropico — et eau minérale.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
 
   // DESSERTS
   D({ cat: "desserts", name: "Ananas frais", desc: "Ananas frais, coupé minute — léger et sucré.", price: 2.5, photo: photo(13), tags: ["Frais"] }),
