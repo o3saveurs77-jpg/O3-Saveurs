@@ -26,10 +26,16 @@ import type { OrderStatus, PaymentStatus } from "@/lib/types";
  * Statuts où le client annule seul, sans passer par personne.
  *
  * `en_attente_paiement` : rien n'a été encaissé ni cuisiné, l'annulation est
- * sans conséquence. `confirmee` : la commande est enregistrée mais la cuisine
- * ne l'a pas prise en charge.
+ * sans conséquence. `en_attente_validation` : le restaurant lui-même n'a pas
+ * encore accepté la commande, rien n'est engagé de part ni d'autre.
+ * `confirmee` : la commande est enregistrée mais la cuisine ne l'a pas prise
+ * en charge.
  */
-export const SELF_CANCELLABLE: readonly OrderStatus[] = ["en_attente_paiement", "confirmee"];
+export const SELF_CANCELLABLE: readonly OrderStatus[] = [
+  "en_attente_paiement",
+  "en_attente_validation",
+  "confirmee",
+];
 
 /** Statuts où une annulation reste concevable, mais sur décision humaine. */
 export const REQUESTABLE: readonly OrderStatus[] = ["cuisine", "route"];

@@ -28,9 +28,15 @@
  *   annulation refusée ........... sendCancelDeclined      (décision du restaurant)
  *   panier abandonné ............. sendAbandonedCartReminder (tâche planifiée)
  *
+ * Plat sur commande (gigot, agneau entier…), côté client :
+ *   payée, en attente d'accord ... sendPreorderPending     (remplace sendPaymentReceived)
+ *   acceptée ..................... sendPreorderAccepted
+ *   refusée ...................... sendPreorderRefused     (+ avoir, sendCreditNote)
+ *
  * Commande, côté restaurant (RESTAURANT_NOTIFY_EMAIL) :
  *   nouvelle commande ............ sendOrderConfirmation
  *   paiement encaissé ............ sendPaymentReceived
+ *   commande à valider ........... sendPreorderPending
  *   annulation demandée .......... sendCancelRequest
  *   incident de livraison ........ sendDriverIncident      (signalé depuis la rue)
  *
@@ -51,6 +57,7 @@ import { prisma } from "@/lib/prisma";
 import { rowToOrder } from "@/lib/serialize";
 import { fmtCents, vatBreakdown, fmtVatRate, formatInvoiceNumber } from "@/lib/money";
 import { formatCreditNoteNumber } from "@/lib/refunds";
+import { formatPreorderSchedule } from "@/lib/preorder";
 import { escapeHtml } from "@/lib/validate";
 import { STATUS_LABEL } from "@/lib/types";
 import { getSettings } from "@/lib/settings";
@@ -193,7 +200,13 @@ function linesTable(order: ReturnType<typeof rowToOrder>): string {
 
 function orderSummary(order: ReturnType<typeof rowToOrder>): string {
   const mode = order.mode === "livraison" ? "Livraison" : "À emporter";
-  const slot = order.slot === "asap" ? "Dès que possible" : order.slot;
+  /* Une commande sur commande porte une date, pas une heure : « 19:30 » tout
+   * seul laisserait croire à ce soir, alors que le gigot est pour jeudi. */
+  const slot = order.scheduledFor
+    ? formatPreorderSchedule(new Date(order.scheduledFor))
+    : order.slot === "asap"
+      ? "Dès que possible"
+      : order.slot;
   const addr =
     order.mode === "livraison" && order.customer.address
       ? `<p style="margin:4px 0;color:#856a50;font-size:13px">${escapeHtml(order.customer.address)}, ${escapeHtml(order.customer.zip ?? "")} ${escapeHtml(order.customer.city ?? "")}</p>`
@@ -280,6 +293,127 @@ export async function sendPaymentReceived(row: OrderRow): Promise<void> {
       dedupeKey: `paiement-resto:${order.id}`,
     });
   }
+}
+
+// ─── Plats sur commande ────────────────────────────────────────
+
+/**
+ * Commande sur commande payée, en attente de l'accord du restaurant.
+ *
+ * Remplace `sendPaymentReceived` pour ces commandes-là : annoncer « votre
+ * commande part en cuisine » alors qu'elle peut encore être refusée serait un
+ * mensonge, et le client se présenterait le jeudi pour un gigot que personne
+ * n'a lancé.
+ */
+export async function sendPreorderPending(row: OrderRow): Promise<void> {
+  const order = rowToOrder(row);
+  const quand = row.scheduledFor ? formatPreorderSchedule(row.scheduledFor) : "la date demandée";
+
+  await send({
+    to: order.customer.email,
+    subject: `Votre réservation ${order.ref} nous est bien parvenue — Ô 3 Saveurs`,
+    html: layout(
+      "Nous avons reçu votre réservation",
+      `<p style="margin:0 0 12px">
+         Votre paiement de <strong>${fmtCents(order.totalCents)}</strong> est bien enregistré pour
+         le <strong>${escapeHtml(quand)}</strong>.
+       </p>
+       <p style="margin:0 0 12px;padding:12px;background:#fce4cf;border-radius:8px;font-size:13px">
+         Ces plats se préparent à l'avance et sur mesure : nous vous confirmons la commande
+         par email dès que la cuisine a validé la date. Si nous ne pouvions pas l'honorer,
+         vous seriez intégralement remboursé.
+       </p>
+       ${orderSummary(order)}`,
+    ),
+    kind: "confirmation",
+    orderId: order.id,
+    dedupeKey: `precommande-attente:${order.id}`,
+  });
+
+  if (NOTIFY) {
+    await send({
+      to: NOTIFY,
+      subject: `⏳ À VALIDER — ${order.ref} pour le ${quand} · ${fmtCents(order.totalCents)}`,
+      html: layout(
+        `Commande à valider — ${order.customer.name}`,
+        `<p style="margin:0 0 12px">
+           Payée et en attente de votre accord pour le <strong>${escapeHtml(quand)}</strong>.
+           Tant qu'elle n'est pas validée, elle n'apparaît pas dans le plan de cuisine.
+         </p>
+         ${orderSummary(order)}
+         <p style="margin:0;font-size:13px">Téléphone : ${escapeHtml(order.customer.phone)}</p>`,
+      ),
+      kind: "confirmation",
+      orderId: order.id,
+      dedupeKey: `precommande-attente-resto:${order.id}`,
+    });
+  }
+}
+
+/** Le restaurant accepte : la date est tenue, la commande est ferme. */
+export async function sendPreorderAccepted(row: OrderRow): Promise<void> {
+  const order = rowToOrder(row);
+  const quand = row.scheduledFor ? formatPreorderSchedule(row.scheduledFor) : "la date convenue";
+  const retrait =
+    order.mode === "livraison" ? "Nous vous livrons" : "Vous pourrez venir la chercher";
+
+  await send({
+    to: order.customer.email,
+    subject: `C'est confirmé : ${order.ref} pour le ${quand} — Ô 3 Saveurs`,
+    html: layout(
+      "Votre commande est confirmée",
+      `<p style="margin:0 0 12px">
+         Bonne nouvelle : nous préparons votre commande pour le
+         <strong>${escapeHtml(quand)}</strong>. ${retrait} à cette heure-là.
+       </p>
+       ${orderSummary(order)}`,
+    ),
+    kind: "statut",
+    orderId: order.id,
+    dedupeKey: `precommande-acceptee:${order.id}`,
+  });
+}
+
+/**
+ * Le restaurant refuse. L'email part **avant** l'avoir : le client doit
+ * comprendre pourquoi son argent revient, sinon un remboursement sans
+ * explication passe pour une erreur de banque.
+ */
+export async function sendPreorderRefused(row: OrderRow, reason: string): Promise<void> {
+  const order = rowToOrder(row);
+  const quand = row.scheduledFor ? formatPreorderSchedule(row.scheduledFor) : "la date demandée";
+  const motif = reason.trim();
+
+  await send({
+    to: order.customer.email,
+    subject: `Nous ne pouvons pas honorer la commande ${order.ref} — Ô 3 Saveurs`,
+    html: layout(
+      "Votre commande n'a pas pu être retenue",
+      `<p style="margin:0 0 12px">
+         Nous sommes désolés : nous ne pouvons pas préparer votre commande pour le
+         <strong>${escapeHtml(quand)}</strong>.
+       </p>
+       ${
+         motif
+           ? `<p style="margin:0 0 12px;padding:12px;background:#fce4cf;border-radius:8px;font-size:13px">
+                ${escapeHtml(motif)}
+              </p>`
+           : ""
+       }
+       <p style="margin:0 0 12px">
+         <strong>${fmtCents(order.totalCents)}</strong> vous sont intégralement remboursés —
+         comptez quelques jours pour que votre banque les affiche. Un avoir vous parvient
+         séparément.
+       </p>
+       <p style="margin:0;font-size:13px;color:#856a50">
+         Appelez-nous si vous souhaitez décaler la date : nous trouverons une solution.
+       </p>
+       ${orderSummary(order)}`,
+    ),
+    kind: "annulation",
+    orderId: order.id,
+    dedupeKey: `precommande-refusee:${order.id}`,
+  });
 }
 
 /** Changement d'étape (en cuisine, en route, livrée, annulée). */

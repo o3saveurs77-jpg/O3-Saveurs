@@ -38,6 +38,12 @@ export interface CartLine {
   opts: Record<string, string>;
   formule: string | null;
   note: string;
+  /**
+   * Délai de préparation du plat, en heures. **Indicatif seulement**, comme le
+   * prix : il sert au tunnel à afficher le sélecteur de date, et le serveur le
+   * relit en base avant d'accepter la commande.
+   */
+  leadTimeHours: number;
 }
 
 /** Ligne de commande figée par le serveur, telle qu'archivée dans `Order.lines`. */
@@ -77,6 +83,15 @@ export type OrderMode = "livraison" | "emporter";
  */
 export type OrderStatus =
   | "en_attente_paiement"
+  /**
+   * Commande sur commande payée, en attente de l'accord du restaurant.
+   *
+   * Un gigot ou un agneau entier engagent un achat chez le boucher : la
+   * cliente garde le droit de refuser une date qu'elle ne peut pas tenir. Rien
+   * n'entre en cuisine tant qu'elle n'a pas tranché, et un refus rend
+   * l'intégralité de la somme.
+   */
+  | "en_attente_validation"
   | "confirmee"
   | "cuisine"
   | "route"
@@ -85,6 +100,7 @@ export type OrderStatus =
 
 export const ORDER_STATUSES: readonly OrderStatus[] = [
   "en_attente_paiement",
+  "en_attente_validation",
   "confirmee",
   "cuisine",
   "route",
@@ -104,6 +120,7 @@ export type FlowStatus = (typeof STATUS_FLOW)[number];
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   en_attente_paiement: "En attente de paiement",
+  en_attente_validation: "À valider",
   confirmee: "Confirmée",
   cuisine: "En cuisine",
   route: "En route",
@@ -113,7 +130,10 @@ export const STATUS_LABEL: Record<OrderStatus, string> = {
 
 /** Transitions autorisées depuis l'administration. */
 export const STATUS_NEXT: Record<OrderStatus, OrderStatus[]> = {
-  en_attente_paiement: ["confirmee", "annulee"],
+  // Le paiement d'une commande sur commande la fait passer « à valider », pas
+  // « confirmée » : c'est le webhook Stripe qui choisit selon `preorder`.
+  en_attente_paiement: ["en_attente_validation", "confirmee", "annulee"],
+  en_attente_validation: ["confirmee", "annulee"],
   confirmee: ["cuisine", "annulee"],
   cuisine: ["route", "livree", "annulee"],
   route: ["livree", "annulee"],
@@ -166,6 +186,12 @@ export interface Order {
   zoneIdx: number | null;
   /** "asap" ou heure "19:30" */
   slot: "asap" | string;
+  /** La commande porte au moins un plat sur commande. */
+  preorder: boolean;
+  /** Retrait/livraison demandés, en ms — null pour une commande du jour. */
+  scheduledFor: number | null;
+  /** Ce que le restaurant a répondu en refusant une commande sur commande. */
+  refusalReason: string;
   customer: OrderCustomer;
   subtotalCents: number;
   discountCents: number;

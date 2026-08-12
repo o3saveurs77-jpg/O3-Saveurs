@@ -683,6 +683,8 @@ interface DishForm {
   stock: string;
   stockAlert: string;
   position: string;
+  /** délai de préparation en heures ; « » ou « 0 » = plat servi au créneau du jour */
+  leadTime: string;
 }
 
 function toForm(dish: Dish | null, fallbackCat: string): DishForm {
@@ -705,6 +707,7 @@ function toForm(dish: Dish | null, fallbackCat: string): DishForm {
       stock: "",
       stockAlert: "",
       position: "",
+      leadTime: "",
     };
   }
   return {
@@ -732,6 +735,7 @@ function toForm(dish: Dish | null, fallbackCat: string): DishForm {
     stock: dish.stock === null ? "" : String(dish.stock),
     stockAlert: dish.stockAlert === null ? "" : String(dish.stockAlert),
     position: String(dish.position),
+    leadTime: dish.leadTimeHours ? String(dish.leadTimeHours) : "",
   };
 }
 
@@ -804,6 +808,14 @@ function DishEditor({
     if (stock === undefined) return setError("Le stock doit être un nombre entier positif (vide = illimité).");
     const stockAlert = optionalInt(f.stockAlert);
     if (stockAlert === undefined) return setError("Le seuil d'alerte doit être un nombre entier positif.");
+
+    const leadTime = optionalInt(f.leadTime);
+    if (leadTime === undefined) {
+      return setError("Le délai de préparation doit être un nombre d'heures entier.");
+    }
+    if (leadTime !== null && leadTime > 24 * 30) {
+      return setError("Le délai de préparation ne peut pas dépasser 30 jours (720 h).");
+    }
     const position = optionalInt(f.position);
     if (position === undefined) return setError("La position doit être un nombre entier positif.");
 
@@ -863,6 +875,7 @@ function DishEditor({
         // Un nouveau plat sans position explicite se place en fin de catégorie,
         // ce que fait déjà `POST /api/dishes`.
         position: position ?? 0,
+        leadTimeHours: leadTime ?? 0,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Enregistrement impossible.");
@@ -1318,6 +1331,35 @@ function DishEditor({
                   onChange={(e) => patch({ stockAlert: e.target.value })}
                   placeholder="Aucune alerte"
                 />
+              </div>
+            </div>
+          </Section>
+
+          {/* ── Plat sur commande ── */}
+          <Section title="Sur commande">
+            <p className="text-xs text-ink-2">
+              Laissez vide pour un plat servi au créneau habituel. Un délai en heures fait passer
+              le plat <strong>sur commande</strong> : le client doit choisir une date de retrait au
+              moins aussi éloignée, il règle en ligne, et la commande n&apos;entre en cuisine
+              qu&apos;une fois que vous l&apos;avez validée dans l&apos;écran Commandes. Un refus
+              de votre part rembourse le client intégralement.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor={fid("leadTime")} className={LABEL}>
+                  Délai de préparation (heures)
+                </label>
+                <input
+                  id={fid("leadTime")}
+                  className={INPUT}
+                  inputMode="numeric"
+                  value={f.leadTime}
+                  onChange={(e) => patch({ leadTime: e.target.value })}
+                  placeholder="Aucun — plat du jour"
+                />
+                <p className="mt-1 text-xs text-ink-2">
+                  48 = deux jours, 72 = trois jours.
+                </p>
               </div>
             </div>
           </Section>

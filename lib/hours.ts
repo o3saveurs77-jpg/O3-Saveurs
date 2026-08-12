@@ -77,15 +77,19 @@ export function parisNow(at: Date = new Date()): { weekday: number; minutes: num
   return { weekday: weekday < 0 ? at.getDay() : weekday, minutes, hhmm: fromMinutes(minutes) };
 }
 
-/** Minuit à Paris pour la date donnée — clé de regroupement des tournées et des KPIs. */
-export function parisStartOfDay(at: Date = new Date()): Date {
-  const ymd = new Intl.DateTimeFormat("en-CA", {
+/** Date civile à Paris, « 2026-08-13 ». */
+export function parisYmd(at: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
     timeZone: PARIS_TZ,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(at);
-  return new Date(`${ymd}T00:00:00.000Z`);
+}
+
+/** Minuit à Paris pour la date donnée — clé de regroupement des tournées et des KPIs. */
+export function parisStartOfDay(at: Date = new Date()): Date {
+  return new Date(`${parisYmd(at)}T00:00:00.000Z`);
 }
 
 interface Service {

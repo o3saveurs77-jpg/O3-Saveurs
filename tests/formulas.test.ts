@@ -30,6 +30,7 @@ function dish(over: Partial<Dish> = {}): Dish {
     stockAlert: null,
     costCents: null,
     position: 0,
+    leadTimeHours: 0,
     ...over,
   };
 }

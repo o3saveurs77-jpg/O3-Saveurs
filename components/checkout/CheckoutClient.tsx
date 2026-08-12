@@ -7,6 +7,7 @@ import { useAuth } from "@/components/providers/AuthContext";
 import { fmtPrice, info } from "@/lib/menu";
 import type { Zone } from "@/lib/menu";
 import { resolveZone } from "@/lib/zones";
+import { formatLeadTime } from "@/lib/preorder";
 import { formatKm } from "@/lib/delivery";
 import { Icon } from "@/components/Icon";
 import { AddressAutocomplete } from "./AddressAutocomplete";
@@ -48,6 +49,12 @@ interface SlotsResponse {
   nextService: { weekday: number; weekdayLabel: string; label: string; opensAt: string } | null;
 }
 
+/** Dates de retrait d'un panier contenant un plat sur commande. */
+interface PreorderSlotsResponse {
+  leadTimeHours: number;
+  days: { date: string; label: string; weekdayLabel: string; slots: string[] }[];
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i;
 
 export function CheckoutClient() {
@@ -67,6 +74,18 @@ export function CheckoutClient() {
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [slots, setSlots] = useState<SlotsResponse | null>(null);
   const [freeDeliveryThresholdCents, setFreeDeliveryThresholdCents] = useState<number | null>(null);
+
+  /* Plats sur commande : le panier porte le délai de chaque plat, et c'est le
+   * plus long qui commande — un gigot à 48 h et des pastels partent ensemble,
+   * donc au rythme du gigot. Ce délai n'est qu'un affichage : le serveur relit
+   * les vrais délais en base avant d'accepter la date. */
+  const cartLeadTimeHours = useMemo(
+    () => lines.reduce((max, l) => Math.max(max, l.leadTimeHours || 0), 0),
+    [lines],
+  );
+  const isPreorder = cartLeadTimeHours > 0;
+  const [preorderSlots, setPreorderSlots] = useState<PreorderSlotsResponse | null>(null);
+  const [scheduledDate, setScheduledDate] = useState("");
 
   /* Une panne de `/api/zones` ou `/api/slots` était présentée au client comme
    * un refus du restaurant : zones à `[]` faisait afficher « hors zone de
@@ -200,6 +219,48 @@ export function CheckoutClient() {
     };
   }, [reloadKey]);
 
+  /* Dates de retrait d'un plat sur commande. Rechargé quand le délai du panier
+   * change — retirer le gigot ramène le tunnel aux créneaux du jour. Pas de
+   * rafraîchissement périodique ici : à 48 h d'échéance, une date ne devient
+   * pas caduque pendant que le client remplit son adresse. */
+  useEffect(() => {
+    if (!isPreorder) {
+      setPreorderSlots(null);
+      return;
+    }
+    let alive = true;
+    fetch(`/api/preorder-slots?hours=${cartLeadTimeHours}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("preorder-slots"))))
+      .then((data: PreorderSlotsResponse) => {
+        if (!alive) return;
+        setPreorderSlots(data);
+        setSlotsError(false);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setPreorderSlots(null);
+        setSlotsError(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isPreorder, cartLeadTimeHours, reloadKey]);
+
+  /* Première date proposable retenue d'office : le client n'a rien à faire
+   * s'il veut au plus tôt, et le tunnel n'est jamais dans un état où aucune
+   * date n'est choisie. */
+  useEffect(() => {
+    if (!isPreorder || !preorderSlots) return;
+    const days = preorderSlots.days;
+    const current = days.find((d) => d.date === scheduledDate);
+    if (!current) {
+      setScheduledDate(days[0]?.date ?? "");
+      setSlot(days[0]?.slots[0] ?? "");
+    } else if (!current.slots.includes(slot)) {
+      setSlot(current.slots[0] ?? "");
+    }
+  }, [isPreorder, preorderSlots, scheduledDate, slot]);
+
   /* Zone déduite du code postal, comme le fera le serveur. C'est un affichage :
    * la zone facturée est celle que `computeOrder()` recalcule. */
   const zoneMatch = useMemo(() => {
@@ -306,12 +367,35 @@ export function CheckoutClient() {
   // avertissement (voir plus bas) plutôt qu'un blocage silencieux.
   const canPreOrderNext = !!slots && slotOptions.length === 0 && !!slots.nextService;
 
-  // Un créneau devenu indisponible (service terminé pendant la saisie) est réajusté.
+  // Un créneau devenu indisponible (service terminé pendant la saisie) est
+  // réajusté. Sans la garde, cet effet et celui des dates de réservation se
+  // disputeraient `slot` : « 19:30 » de jeudi serait ramené au premier créneau
+  // d'aujourd'hui, à chaque render.
   useEffect(() => {
-    if (!slots) return;
+    if (isPreorder || !slots) return;
     if (slotOptions.length > 0 && !slotOptions.includes(slot)) setSlot(slotOptions[0]);
     else if (slotOptions.length === 0 && canPreOrderNext && slot !== "next") setSlot("next");
-  }, [slots, slotOptions, slot, canPreOrderNext]);
+  }, [isPreorder, slots, slotOptions, slot, canPreOrderNext]);
+
+  /** Jour retenu pour un plat sur commande, avec ses heures de retrait. */
+  const preorderDay = useMemo(
+    () => preorderSlots?.days.find((d) => d.date === scheduledDate) ?? null,
+    [preorderSlots, scheduledDate],
+  );
+
+  /* Un plat sur commande engage un achat chez le boucher plusieurs jours à
+   * l'avance : le régler en espèces au retrait laisserait la cliente avec un
+   * agneau entier sur les bras si personne ne vient. Le serveur refuse cette
+   * combinaison ; on retire l'option plutôt que de laisser le client la choisir
+   * pour se la voir refuser au dernier écran. */
+  const paymentOptions = useMemo(
+    () => (isPreorder ? PAYMENTS.filter((p) => p !== "Espèces sur place") : [...PAYMENTS]),
+    [isPreorder],
+  );
+
+  useEffect(() => {
+    if (isPreorder && payment === "Espèces sur place") setPayment(PAYMENTS[0]);
+  }, [isPreorder, payment]);
 
   /**
    * Ce qui empêche encore de valider, énoncé en clair.
@@ -328,16 +412,31 @@ export function CheckoutClient() {
   const blockers = useMemo(() => {
     const out: string[] = [];
 
-    const slotOk =
-      slotOptions.length > 0 ? slotOptions.includes(slot) : canPreOrderNext && slot === "next";
-    if (!slotOk) {
-      out.push(
-        !slots
-          ? "Chargement des créneaux en cours…"
-          : slotOptions.length === 0 && !canPreOrderNext
-            ? "Aucun créneau n'est disponible pour le moment."
-            : "Choisissez un créneau à l'étape 2.",
-      );
+    if (isPreorder) {
+      /* Une réservation ne se contrôle pas comme une commande du jour : il ne
+         s'agit pas de savoir si le restaurant est ouvert *maintenant*, mais si
+         la date choisie est servable. */
+      if (!preorderSlots) out.push("Chargement des dates disponibles…");
+      else if (preorderSlots.days.length === 0) {
+        out.push(`Aucune date n'est disponible pour ces plats. Appelez-nous au ${info.phone}.`);
+      } else if (!preorderDay) out.push("Choisissez une date de retrait à l'étape 2.");
+      else if (!preorderDay.slots.includes(slot)) out.push("Choisissez une heure à l'étape 2.");
+
+      if (payment === "Espèces sur place") {
+        out.push("Les plats sur commande se règlent en ligne : choisissez un paiement par carte.");
+      }
+    } else {
+      const slotOk =
+        slotOptions.length > 0 ? slotOptions.includes(slot) : canPreOrderNext && slot === "next";
+      if (!slotOk) {
+        out.push(
+          !slots
+            ? "Chargement des créneaux en cours…"
+            : slotOptions.length === 0 && !canPreOrderNext
+              ? "Aucun créneau n'est disponible pour le moment."
+              : "Choisissez un créneau à l'étape 2.",
+        );
+      }
     }
 
     if (form.name.trim().length < 2) out.push("Indiquez votre nom complet (étape 3).");
@@ -368,6 +467,10 @@ export function CheckoutClient() {
     slot,
     slotOptions,
     canPreOrderNext,
+    isPreorder,
+    preorderSlots,
+    preorderDay,
+    payment,
     form,
     mode,
     outOfZone,
@@ -413,6 +516,8 @@ export function CheckoutClient() {
       ),
       mode,
       slot,
+      // Ignorée par le serveur si le panier ne contient aucun plat sur commande.
+      ...(isPreorder ? { scheduledDate } : {}),
       customer: {
         name: form.name.trim(),
         email: form.email.trim(),
@@ -468,7 +573,21 @@ export function CheckoutClient() {
       setError("Le paiement est momentanément indisponible. Réessayez dans un instant.");
       setPlacing(false);
     }
-  }, [valid, placing, lines, mode, slot, form, placeId, promoCode, payment, user, wantsAccount]);
+  }, [
+    valid,
+    placing,
+    lines,
+    mode,
+    slot,
+    isPreorder,
+    scheduledDate,
+    form,
+    placeId,
+    promoCode,
+    payment,
+    user,
+    wantsAccount,
+  ]);
 
   if (lines.length === 0) {
     return (
@@ -502,7 +621,9 @@ export function CheckoutClient() {
   const minimumAffiche = quote?.minimumCents ?? zone?.minimumCents ?? 0;
   // `closed` n'est vrai que sur une réponse réellement reçue : sans cette
   // garde, une panne de `/api/slots` afficherait « Nous sommes fermés ».
-  const closed = !!slots && slotOptions.length === 0;
+  // Sans effet sur une réservation : on commande très bien un gigot à minuit
+  // pour jeudi soir, l'horaire d'aujourd'hui n'y change rien.
+  const closed = !isPreorder && !!slots && slotOptions.length === 0;
 
   return (
     <div className="wrap grid gap-8 py-10 lg:grid-cols-[1.4fr_1fr]">
@@ -644,7 +765,78 @@ export function CheckoutClient() {
           )}
         </section>
 
-        {/* créneau */}
+        {/* créneau — réservation sur commande, ou créneau du jour */}
+        {isPreorder ? (
+          <section className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
+            <h2 className="mb-1 text-lg">2 · Date de retrait</h2>
+            <p className="mb-3 text-xs text-ink-2">
+              Votre panier contient un plat préparé sur commande : comptez{" "}
+              <strong className="text-ink">{formatLeadTime(cartLeadTimeHours)}</strong> de
+              préparation.
+            </p>
+
+            <p className="mb-4 flex items-start gap-2 rounded-xl bg-primary-soft p-3 text-sm text-brick">
+              <Icon name="clock" size={18} className="mt-0.5 shrink-0" />
+              <span>
+                Ces plats se préparent à l&apos;avance. Votre paiement réserve la date, et nous
+                vous confirmons la commande par email sous 24 h. Si nous ne pouvions pas
+                l&apos;honorer, vous seriez <strong>intégralement remboursé</strong>.
+              </span>
+            </p>
+
+            {!preorderSlots ? (
+              <p className="text-sm text-ink-2">Chargement des dates disponibles…</p>
+            ) : preorderSlots.days.length === 0 ? (
+              <p className="text-sm text-ink-2">
+                Aucune date n&apos;est disponible pour ces plats en ce moment. Appelez-nous au{" "}
+                {info.phone}.
+              </p>
+            ) : (
+              <>
+                <p className={labelCls}>Jour</p>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {preorderSlots.days.map((d) => (
+                    <button
+                      key={d.date}
+                      type="button"
+                      onClick={() => {
+                        setScheduledDate(d.date);
+                        setSlot(d.slots[0] ?? "");
+                      }}
+                      aria-pressed={scheduledDate === d.date}
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                        scheduledDate === d.date
+                          ? "border-primary bg-primary text-white"
+                          : "border-line hover:border-primary/40"
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+
+                <p className={labelCls}>Heure</p>
+                <div className="flex flex-wrap gap-2">
+                  {(preorderDay?.slots ?? []).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSlot(s)}
+                      aria-pressed={slot === s}
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                        slot === s
+                          ? "border-primary bg-primary text-white"
+                          : "border-line hover:border-primary/40"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        ) : (
         <section className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
           <h2 className="mb-1 text-lg">2 · Créneau</h2>
           <p className="mb-3 text-xs text-ink-2">
@@ -700,6 +892,7 @@ export function CheckoutClient() {
             </p>
           )}
         </section>
+        )}
 
         {/* coordonnées */}
         <section className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
@@ -842,7 +1035,7 @@ export function CheckoutClient() {
             bancaires.
           </p>
           <div className="space-y-2">
-            {PAYMENTS.map((p) => (
+            {paymentOptions.map((p) => (
               <button
                 key={p}
                 type="button"

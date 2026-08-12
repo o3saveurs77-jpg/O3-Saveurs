@@ -57,6 +57,11 @@ export interface Dish {
   stockAlert: number | null;
   costCents: number | null;
   position: number;
+  /**
+   * Délai de préparation en heures. 0 = servi au créneau habituel ; au-delà, le
+   * plat est « sur commande » (voir `lib/preorder.ts`).
+   */
+  leadTimeHours: number;
 }
 
 /** Vrai si le plat peut être commandé maintenant (dispo, prix connu, stock). */
@@ -139,6 +144,8 @@ export interface SeedDish {
   popular: boolean;
   available: boolean;
   allergens?: Allergen[];
+  /** délai de préparation en heures ; absent ou 0 = plat servi au créneau du jour */
+  leadTimeHours?: number;
 }
 
 export interface SeedDishOption {
@@ -227,6 +234,11 @@ export const cats: Category[] = [
   { id: "accompagnements", label: "Accompagnements", script: "Accompagnements" },
   { id: "boissons", label: "Boissons", script: "Boissons" },
   { id: "desserts", label: "Desserts", script: "Desserts" },
+  /* Grosses pièces et plats de fête, préparés sur réservation. Une catégorie
+     à part et non un badge dans les grillades : le client qui cherche à dîner
+     ce soir ne doit pas tomber sur un agneau entier à 48 h de délai au milieu
+     des brochettes. */
+  { id: "sur-commande", label: "Sur commande", script: "Sur commande" },
 ];
 
 /* Sauces proposées avec les sandwichs. La liste précédente — « Sauce Niamey »,
@@ -274,9 +286,9 @@ const D = (o: DishInput): SeedDish => ({
  */
 export const items: SeedDish[] = [
   // ENTRÉES
-  D({ cat: "entrees", name: "Pastels Thon", desc: "Feuilletés croustillants au thon relevé — dorés et craquants.", price: 6, tags: ["6 pièces", "Croustillant"], photo: null }),
-  D({ cat: "entrees", name: "Pastels Viande hachée", desc: "Bœuf haché épicé en pâte dorée et croustillante.", price: 7, tags: ["6 pièces", "Épicé"], photo: null }),
-  D({ cat: "entrees", name: "Pastels Poulet", desc: "Effiloché de poulet aux épices douces, pâte dorée.", price: 7, tags: ["6 pièces", "Fait maison"], photo: null }),
+  D({ cat: "entrees", name: "Pastels Thon", desc: "Feuilletés croustillants au thon relevé — dorés et craquants.", price: 6, tags: ["6 pièces", "Croustillant"], photo: "/photos/pastel-thon.jpg" }),
+  D({ cat: "entrees", name: "Pastels Viande hachée", desc: "Bœuf haché épicé en pâte dorée et croustillante.", price: 7, tags: ["6 pièces", "Épicé"], photo: "/photos/pastel-boeuf.jpg" }),
+  D({ cat: "entrees", name: "Pastels Poulet", desc: "Effiloché de poulet aux épices douces, pâte dorée.", price: 7, tags: ["6 pièces", "Fait maison"], photo: "/photos/pastel-poulet.jpg" }),
   D({ cat: "entrees", name: "Salade composée", desc: "Salade fraîche, tomates cerises, vinaigrette huile d'olive.", price: 4, photo: photo(21), tags: ["Végé", "Frais"] }),
   D({ cat: "entrees", name: "Patates fourrées au fromage", desc: "Pommes de terre garnies au fromage fondant, panées maison.", price: 4, tags: ["6 pièces", "Fromage"], photo: null }),
 
@@ -339,9 +351,9 @@ export const items: SeedDish[] = [
   D({ cat: "accompagnements", name: "Frites Maison", desc: "Pommes de terre fraîches, coupées et frites maison — dorées et croustillantes.", price: 4, photo: photo(27), tags: ["Croustillant", "Fait maison"] }),
   D({ cat: "accompagnements", name: "Salade Composée", desc: "Salade fraîche, tomates cerises, vinaigrette huile d'olive & balsamique.", price: 4, photo: photo(21), tags: ["Frais", "Végétarien"] }),
   D({ cat: "accompagnements", name: "Patate fourrée au fromage", desc: "Pommes de terre garnies au fromage fondant, panées maison.", price: 4, photo: null, tags: ["6 pièces", "Fromage"] }),
-  D({ cat: "accompagnements", name: "Sauce Ô3 Verte", desc: "Sauce aux herbes maison, fraîche et relevée.", price: 1, photo: null, tags: ["Pot", "Maison"] }),
-  D({ cat: "accompagnements", name: "Sauce Ô3 Piquante", desc: "La signature maison — ça pique juste ce qu'il faut.", price: 1, photo: null, tags: ["Pot", "Piquant"] }),
-  D({ cat: "accompagnements", name: "Piment frais", desc: "Piment frais haché maison.", price: 0.5, photo: null, tags: ["Pot", "Piquant"] }),
+  D({ cat: "accompagnements", name: "Sauce Ô3 Verte", desc: "Sauce aux herbes maison, fraîche et relevée.", price: 1, photo: "/photos/sauce-verte.jpg", tags: ["Pot", "Maison"] }),
+  D({ cat: "accompagnements", name: "Sauce Ô3 Piquante", desc: "La signature maison — ça pique juste ce qu'il faut.", price: 1, photo: "/photos/sauce-piquante.jpg", tags: ["Pot", "Piquant"] }),
+  D({ cat: "accompagnements", name: "Piment frais", desc: "Piment frais haché maison.", price: 0.5, photo: "/photos/piment-frais.jpg", tags: ["Pot", "Piquant"] }),
 
   // BOISSONS
   D({ cat: "boissons", name: "Jus de Gingembre", desc: "Gingembre frais pressé maison, vif et tonifiant.", price: 3.5, photo: photo(2), tags: ["Pressé maison", "50 cl"], popular: true }),
@@ -357,6 +369,31 @@ export const items: SeedDish[] = [
   D({ cat: "desserts", name: "Fondant Chocolat", desc: "Cœur coulant au chocolat noir, servi tiède.", price: 3, photo: null, tags: ["Fait maison"] }),
   D({ cat: "desserts", name: "Mousse au Chocolat", desc: "Mousse au chocolat onctueuse, faite maison.", price: 3, photo: null, tags: ["Fait maison"] }),
   D({ cat: "desserts", name: "Tarte du jour", desc: "Tarte pâtissière du jour — demandez la saveur du moment.", price: 3, photo: null, tags: ["Fait maison"] }),
+
+  /* SUR COMMANDE — grosses pièces et plats de fête.
+   *
+   * Prix laissés à `null` (« Bientôt » sur la carte) tant que la cliente ne les
+   * a pas arrêtés : `unitPriceOf` refuse une ligne sans prix, ces plats ne
+   * peuvent donc pas être commandés à zéro euro par accident. Ils se
+   * renseignent depuis l'écran Plats, sans toucher au code.
+   *
+   * Les délais suivent la charge réelle : un gigot ou un couscous se lancent la
+   * veille pour le surlendemain (48 h), une bête entière demande un passage
+   * chez le boucher et une journée de four de plus (72 h).
+   *
+   * Identifiants **explicites**, et non le `dN` automatique. La numérotation
+   * suit le rang dans cette liste, alors que la base contient deux plats de
+   * l'ancienne carte (Panna Cotta, Mousse au Chocolat) qui occupent déjà d54 et
+   * d55 sans y figurer — voir `RECONCILIATION-CARTE.md`. Un seed rejoué aurait
+   * renommé ces deux desserts en gigot et en épaule, et comme le délai n'est
+   * posé qu'à la création, le gigot serait ressorti commandable pour le soir
+   * même. Un identifiant qui décrit le plat ne peut pas dériver ainsi. */
+  D({ id: "sc-gigot", cat: "sur-commande", name: "Gigot d'agneau", desc: "Gigot d'agneau rôti lentement aux épices, tendre à se défaire à la cuillère.", price: null, photo: null, tags: ["Sur commande", "Pièce entière"], leadTimeHours: 48 }),
+  D({ id: "sc-epaule", cat: "sur-commande", name: "Épaule d'agneau", desc: "Épaule d'agneau confite au four, fondante et parfumée.", price: null, photo: null, tags: ["Sur commande", "Pièce entière"], leadTimeHours: 48 }),
+  D({ id: "sc-couscous", cat: "sur-commande", name: "Couscous marocain", desc: "Couscous royal aux sept légumes, semoule roulée maison — pour la tablée.", price: null, photo: null, tags: ["Sur commande", "À partager"], leadTimeHours: 48 }),
+  D({ id: "sc-paella", cat: "sur-commande", name: "Paella", desc: "Paella généreuse aux fruits de mer et au poulet, safran et poivrons.", price: null, photo: null, tags: ["Sur commande", "À partager"], leadTimeHours: 48 }),
+  D({ id: "sc-demi-agneau", cat: "sur-commande", name: "Demi-agneau", desc: "Demi-agneau préparé et rôti entier — pour vos grandes occasions.", price: null, photo: null, tags: ["Sur commande", "Grande réception"], leadTimeHours: 72 }),
+  D({ id: "sc-agneau-entier", cat: "sur-commande", name: "Agneau entier", desc: "Agneau entier rôti à la braise, préparé sur mesure pour vos fêtes.", price: null, photo: null, tags: ["Sur commande", "Grande réception"], leadTimeHours: 72 }),
 ];
 
 /* Options communes aux sandwichs : la sauce au choix et le supplément cheddar,

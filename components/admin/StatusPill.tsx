@@ -2,16 +2,17 @@ import { STATUS_LABEL } from "@/lib/types";
 import type { OrderStatus } from "@/lib/types";
 
 /**
- * Une couleur par statut — les six clés de `OrderStatus` sont obligatoires, le
- * `Record` complet garantit qu'un nouveau statut ne peut pas être oublié ici.
+ * Une couleur par statut — toutes les clés de `OrderStatus` sont obligatoires,
+ * le `Record` complet garantit qu'un nouveau statut ne peut pas être oublié.
  *
- * `en_attente_paiement` est volontairement le seul statut **non rempli**, avec
- * un contour en pointillés : c'est le seul qui ne doit pas entrer en cuisine.
- * Rendu comme « Confirmée » (fond doré plein), il faisait préparer des
- * commandes jamais payées.
+ * Les deux statuts d'attente sont volontairement les seuls **non remplis**,
+ * avec un contour en pointillés : ce sont les seuls qui ne doivent pas entrer
+ * en cuisine. Rendus comme « Confirmée » (fond doré plein), ils faisaient
+ * préparer des commandes jamais payées — ou jamais acceptées.
  */
 const COLOR: Record<OrderStatus, string> = {
   en_attente_paiement: "border border-dashed border-brick/60 bg-brick/5 text-brick",
+  en_attente_validation: "border border-dashed border-[#8a6d00]/60 bg-gold/10 text-[#8a6d00]",
   confirmee: "bg-gold/20 text-[#8a6d00]",
   cuisine: "bg-primary-soft text-primary",
   route: "bg-teal/15 text-teal",

@@ -101,6 +101,13 @@ function reviveLine(raw: unknown): CartLine | null {
   const formule = typeof l.formule === "string" ? l.formule : null;
   const note = typeof l.note === "string" ? l.note.slice(0, 300) : "";
 
+  /* Panier enregistré avant l'arrivée des plats sur commande : pas de délai,
+   * donc commande du jour. Le serveur relit de toute façon le vrai délai en
+   * base — au pire le tunnel n'affiche pas le sélecteur de date et le checkout
+   * refuse, ce qui est le bon sens de l'erreur. */
+  const lead = Number(l.leadTimeHours);
+  const leadTimeHours = Number.isInteger(lead) && lead > 0 && lead <= 24 * 60 ? lead : 0;
+
   return {
     key:
       typeof l.key === "string" && l.key
@@ -118,6 +125,7 @@ function reviveLine(raw: unknown): CartLine | null {
     opts,
     formule,
     note,
+    leadTimeHours,
   };
 }
 
@@ -223,6 +231,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           opts,
           formule,
           note,
+          leadTimeHours: dish.leadTimeHours ?? 0,
         },
       ];
     });
@@ -251,6 +260,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           opts,
           formule: code,
           note,
+          /* Une formule est composée de plats de la carte du jour : aucun plat
+             sur commande n'y figure, et une formule ne se réserve pas. */
+          leadTimeHours: 0,
         },
       ];
     });

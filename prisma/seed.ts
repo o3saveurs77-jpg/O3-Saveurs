@@ -97,9 +97,12 @@ async function seedDishes() {
 
     await prisma.dish.upsert({
       where: { id: d.id },
-      // `available`, `stock` et `costCents` sont laissés à la base : ils sont
-      // pilotés au quotidien depuis l'admin et ne doivent pas être réécrasés.
-      create: { id: d.id, ...data, available: d.available },
+      /* `available`, `stock`, `costCents` et `leadTimeHours` sont laissés à la
+       * base : ils sont pilotés au quotidien depuis l'admin et ne doivent pas
+       * être réécrasés. Le délai figure quand même à la création, sans quoi un
+       * agneau entier naîtrait à zéro heure de délai — commandable pour le soir
+       * même, ce qui est exactement ce que la réservation évite. */
+      create: { id: d.id, ...data, available: d.available, leadTimeHours: d.leadTimeHours ?? 0 },
       update: data,
     });
   }

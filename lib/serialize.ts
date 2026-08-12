@@ -84,6 +84,7 @@ export function rowToDish(r: DishRow): Dish {
     stockAlert: r.stockAlert,
     costCents: r.costCents,
     position: r.position,
+    leadTimeHours: r.leadTimeHours,
   };
 }
 
@@ -107,6 +108,7 @@ export function dishToRow(d: Partial<Dish>) {
   if (d.stockAlert !== undefined) row.stockAlert = d.stockAlert;
   if (d.costCents !== undefined) row.costCents = d.costCents;
   if (d.position !== undefined) row.position = d.position;
+  if (d.leadTimeHours !== undefined) row.leadTimeHours = d.leadTimeHours;
   return row;
 }
 
@@ -136,6 +138,9 @@ export function rowToOrder(r: OrderRow, driverName: string | null = null): Order
     mode: r.mode as OrderMode,
     zoneIdx: r.zoneIdx,
     slot: r.slot,
+    preorder: r.preorder,
+    scheduledFor: ms(r.scheduledFor),
+    refusalReason: r.refusalReason,
     customer: {
       name: r.customerName,
       email: r.customerEmail,

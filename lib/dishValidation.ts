@@ -58,6 +58,15 @@ export function validateDishFields(body: Partial<Dish>): Result<Partial<Dish>> {
     out.position = v.value;
   }
 
+  /* Délai de préparation. Le plafond de 30 jours n'est pas décoratif : c'est
+   * l'horizon que `preorderDays` explore pour proposer des dates. Au-delà, la
+   * cliente enregistrerait un plat qu'aucune date ne pourrait plus servir. */
+  if (body.leadTimeHours !== undefined) {
+    const v = int(body.leadTimeHours, "Le délai de préparation", { min: 0, max: 24 * 30 });
+    if (!v.ok) return v;
+    out.leadTimeHours = v.value;
+  }
+
   if (body.tags !== undefined) {
     const v = stringArray(body.tags, "Les tags", { maxItems: 12, maxLen: 40 });
     if (!v.ok) return v;

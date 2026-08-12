@@ -61,6 +61,15 @@ model Dish {
   /// JSON: Allergen[] — 14 allergènes réglementaires (INCO 1169/2011)
   allergens String @default("[]")
 
+  /// Délai de préparation, en **heures**. 0 = plat servi au créneau habituel.
+  ///
+  /// Au-delà de zéro, le plat est « sur commande » : un gigot, une paella pour
+  /// vingt ou un agneau entier ne se lancent pas à réception, il faut acheter
+  /// la viande et occuper le four. Le tunnel refuse alors toute date de retrait
+  /// plus proche que ce délai, et la commande n'entre pas en cuisine tant que
+  /// le restaurant ne l'a pas acceptée — voir `en_attente_validation`.
+  leadTimeHours Int @default(0)
+
   /// null = stock illimité (plat toujours disponible)
   stock      Int?
   /// seuil d'alerte de réapprovisionnement
@@ -366,8 +375,22 @@ model Order {
 
   /// livraison | emporter
   mode   String
-  /// en_attente_paiement | confirmee | cuisine | route | livree | annulee
+  /// en_attente_paiement | en_attente_validation | confirmee | cuisine | route | livree | annulee
   status String @default("en_attente_paiement")
+
+  /// La commande porte au moins un plat sur commande (`Dish.leadTimeHours > 0`).
+  ///
+  /// Figé à la commande : le délai du plat peut changer ensuite, la commande
+  /// déjà passée reste une commande à valider. C'est aussi ce qui alimente le
+  /// filtre « À valider » du back-office.
+  preorder Boolean @default(false)
+  /// Date et heure de retrait/livraison demandées, pour une commande sur
+  /// commande. `null` pour une commande du jour, servie au créneau `slot`.
+  scheduledFor DateTime?
+  /// Ce que le restaurant a répondu en refusant une commande sur commande.
+  /// Repris tel quel dans l'email au client — c'est la seule explication qu'il
+  /// recevra d'un refus.
+  refusalReason String @default("")
 
   /// Index de zone **ou** de palier de distance selon le mode de tarification
   /// en vigueur au moment de la commande (voir `delivery.mode`).
@@ -467,6 +490,8 @@ model Order {
   @@index([stripeSessionId])
   @@index([paid, createdAt])
   @@index([deliveryRunId, runPosition])
+  /// Planning des plats sur commande : « qu'est-ce qu'on doit lancer demain ? »
+  @@index([preorder, scheduledFor])
 }
 
 // ─── Newsletter ───────────────────────────────────────────────

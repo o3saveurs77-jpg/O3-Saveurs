@@ -21,6 +21,7 @@ import { formatKm, maxDeliveryKm, tierForDistance } from "@/lib/delivery";
 import { isGeoConfigured, roadDistanceKm } from "@/lib/geo";
 import { deliveryOrigin, getDeliveryTiers, getSetting } from "@/lib/settings";
 import { priceFormula, rowToFormula, type RawPick } from "@/lib/formulas";
+import { cartLeadTimeHours } from "@/lib/preorder";
 import type { Dish, Formula, Zone } from "@/lib/menu";
 import type { OrderLine, OrderMode, PromotionKind } from "@/lib/types";
 import { err, ok, type Result } from "@/lib/validate";
@@ -85,6 +86,14 @@ export interface PricedOrder {
   /** Distance routière retenue, quand la tarification s'est faite à la distance. */
   distanceKm: number | null;
   promotion: AppliedPromotion | null;
+  /**
+   * Délai de préparation du panier, en heures : le plus long de ses plats.
+   *
+   * Zéro pour une commande du jour. Au-delà, le tunnel exige une date de
+   * retrait et la commande passera par l'accord du restaurant — voir
+   * `lib/preorder.ts`.
+   */
+  leadTimeHours: number;
 }
 
 const MAX_QTY_PER_LINE = 50;
@@ -424,6 +433,10 @@ export async function computeOrder(input: ComputeInput): Promise<Result<PricedOr
     zone,
     distanceKm,
     promotion,
+    /* `dishes` ne contient que les plats réellement au panier — ceux commandés
+     * à la carte comme ceux retenus dans les créneaux d'une formule. Le délai
+     * du panier est donc bien celui du plat le plus lent qu'il contient. */
+    leadTimeHours: cartLeadTimeHours(dishes),
   });
 }
 
