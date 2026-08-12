@@ -46,9 +46,13 @@ export function Logo({ size = 1 }: { size?: number }) {
         >
           Ô 3 Saveurs
         </span>
-        {/* sous-titre masqué sur très petits écrans pour éviter tout débordement */}
+        {/* Sous-titre masqué sur très petits écrans pour éviter tout
+            débordement — et de nouveau entre 1024 et 1280 px : c'est là que la
+            barre est la plus chargée (six liens de navigation + trois actions),
+            et cette ligne, la plus large du logo, s'y faisait couper en plein
+            mot (« …CUISINE DU MON… »). Mieux vaut l'omettre que la mutiler. */}
         <span
-          className="hidden truncate font-bold uppercase text-primary min-[400px]:block"
+          className="hidden truncate font-bold uppercase text-primary min-[400px]:block lg:hidden xl:block"
           style={{ fontSize: 9.5 * size, letterSpacing: "0.18em" }}
         >
           Chez Laila · Cuisine du monde

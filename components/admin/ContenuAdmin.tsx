@@ -689,7 +689,7 @@ function SectionEditor({
           label="Photos"
           hint={
             section.kind === "hero"
-              ? "La première sert de fond au bandeau, la seconde de vignette à droite."
+              ? "La première sert de fond au bandeau. La vitrine de droite fait défiler les plats photographiés de la carte ; les photos suivantes ne servent de repli que si aucun plat n'a de photo."
               : undefined
           }
         >

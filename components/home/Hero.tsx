@@ -1,10 +1,11 @@
 import Link from "next/link";
 import Image from "next/image";
-import { info, cats, photo } from "@/lib/menu";
+import { info, cats, photo, type Dish } from "@/lib/menu";
 import { Icon, type IconName } from "@/components/Icon";
 import { ZoneCheck } from "@/components/ZoneCheck";
 import { Emblem } from "@/components/Brand";
 import { Accent } from "@/components/sections/Shell";
+import { HeroCarousel, type HeroSlide } from "@/components/home/HeroCarousel";
 import type { SectionContent } from "@/lib/pageSections";
 
 // Les trois univers culinaires du restaurant, tels que déclarés dans le
@@ -16,17 +17,37 @@ const SAVEUR_IDS: { id: string; icon: IconName }[] = [
 ];
 
 /**
+ * Ce que fait défiler la vitrine, par ordre de préférence.
+ *
+ * Les plats de la carte d'abord : ils sont photographiés, ils portent un nom, et
+ * ils disparaissent d'eux-mêmes du bandeau quand la cuisine les retire. À
+ * défaut — base injoignable, aucune photo de plat renseignée — les photos de la
+ * section prennent le relais, puis les visuels du catalogue : le bandeau ne doit
+ * jamais se retrouver avec un cadre vide.
+ */
+function buildSlides(content: SectionContent, dishes: Dish[]): HeroSlide[] {
+  const fromDishes = dishes
+    .filter((d) => d.photo)
+    .map((d) => ({ src: d.photo as string, label: d.name }));
+  if (fromDishes.length > 1) return fromDishes;
+
+  const fromContent = content.photos.slice(1);
+  const fallback = fromContent.length ? fromContent : info.heroSpreads.slice(1);
+  return fallback.map((src) => ({ src, label: "" }));
+}
+
+/**
  * Bandeau d'ouverture de l'accueil.
  *
- * Son accroche, son titre, ses deux photos, ses pastilles et ses boutons
+ * Son accroche, son titre, sa photo de fond, ses pastilles et ses boutons
  * viennent du back-office (`PageSection` de type `hero`) : la cliente change
  * son message d'accueil sans déploiement. La mise en page, elle, reste ici.
  */
-export function Hero({ content }: { content: SectionContent }) {
+export function Hero({ content, dishes = [] }: { content: SectionContent; dishes?: Dish[] }) {
   // Repli sur les visuels du catalogue si aucune photo n'a été choisie : un
   // hero sans image serait un aplat noir en haut de l'accueil.
   const background = content.photos[0] ?? photo(3);
-  const showcase = content.photos[1] ?? null;
+  const slides = buildSlides(content, dishes);
   const saveurs = SAVEUR_IDS.map(({ id, icon }) => ({
     icon,
     label: cats.find((c) => c.id === id)?.label ?? id,
@@ -128,42 +149,32 @@ export function Hero({ content }: { content: SectionContent }) {
 
         {/* Vitrine « carte » — visuel de deuxième plan sur desktop, masqué en
             mobile pour ne pas alourdir l'écran où le bloc recherche prime. */}
-        {showcase && (
-          <div className="relative hidden aspect-[4/5] w-full max-w-md justify-self-center overflow-hidden rounded-[28px] border-4 border-white/20 shadow-[var(--shadow-lg)] lg:block lg:justify-self-end">
-            <Image
-              src={showcase}
-              alt={`${info.name} — spécialité de la maison`}
-              fill
-              sizes="(min-width: 1024px) 38vw, 90vw"
-              className="object-cover"
-            />
-            <div
-              className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"
-              aria-hidden="true"
-            />
-
-            <div className="absolute inset-x-4 bottom-4 rounded-2xl bg-panel/95 p-4 text-ink shadow-[var(--shadow-soft)] backdrop-blur-sm">
-              <div className="flex items-center gap-2.5">
-                <Emblem size={38} />
-                <div className="leading-tight">
-                  <p className="font-display text-sm text-ink">{info.name}</p>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
-                    La carte
-                  </p>
+        {slides.length > 0 && (
+          <div className="hidden w-full max-w-md justify-self-center lg:block lg:justify-self-end">
+            <HeroCarousel slides={slides}>
+              <div className="rounded-2xl bg-panel/95 p-4 text-ink shadow-[var(--shadow-soft)] backdrop-blur-sm">
+                <div className="flex items-center gap-2.5">
+                  <Emblem size={38} />
+                  <div className="leading-tight">
+                    <p className="font-display text-sm text-ink">{info.name}</p>
+                    <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-primary">
+                      La carte
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {saveurs.map((s) => (
+                    <span
+                      key={s.label}
+                      className="inline-flex items-center gap-1 rounded-full border border-line bg-panel-2 px-2.5 py-1 text-xs font-semibold text-ink-2"
+                    >
+                      <Icon name={s.icon} size={13} className="text-primary" />
+                      {s.label}
+                    </span>
+                  ))}
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {saveurs.map((s) => (
-                  <span
-                    key={s.label}
-                    className="inline-flex items-center gap-1 rounded-full border border-line bg-panel-2 px-2.5 py-1 text-xs font-semibold text-ink-2"
-                  >
-                    <Icon name={s.icon} size={13} className="text-primary" />
-                    {s.label}
-                  </span>
-                ))}
-              </div>
-            </div>
+            </HeroCarousel>
           </div>
         )}
       </div>

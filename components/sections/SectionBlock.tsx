@@ -40,7 +40,7 @@ export function SectionBlock({
 
   switch (kind) {
     case "hero":
-      return <Hero content={content} />;
+      return <Hero content={content} dishes={ctx.heroDishes} />;
     case "entete":
       return <EnteteBlock content={content} />;
     case "cartes":

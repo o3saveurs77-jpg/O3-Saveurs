@@ -147,6 +147,13 @@ export async function loadSections(page: PageSlug): Promise<PageSectionView[]> {
 
 // ─── Données des blocs dynamiques ─────────────────────────────
 
+/* Six visuels au carrousel du bandeau : au rythme d'une image toutes les
+ * 4,5 secondes, le tour complet dure une demi-minute — assez pour donner une
+ * idée de la carte, assez court pour que le premier plat revienne avant que le
+ * visiteur ne quitte l'écran. Au-delà, on ne ferait que charger des photos que
+ * personne ne verra. */
+const HERO_SLIDES = 6;
+
 export interface PracticalInfo {
   address: string;
   phone: string;
@@ -157,6 +164,8 @@ export interface PracticalInfo {
 
 export interface SectionContext {
   populaires: Dish[];
+  /** Plats photographiés qui défilent dans la vitrine du bandeau d'ouverture. */
+  heroDishes: Dish[];
   platToday: PlatDuJourView | null;
   zones: Zone[];
   freeDeliveryThresholdCents: number | null;
@@ -166,6 +175,7 @@ export interface SectionContext {
 
 export const EMPTY_CONTEXT: SectionContext = {
   populaires: [],
+  heroDishes: [],
   platToday: null,
   zones: [],
   freeDeliveryThresholdCents: null,
@@ -180,6 +190,50 @@ async function loadPopulaires(limit: number): Promise<Dish[]> {
     take: limit,
   });
   return rows.map(rowToDish);
+}
+
+/**
+ * Alterne les univers culinaires plutôt que de suivre l'ordre du catalogue.
+ *
+ * Les plats sont rangés par famille : pris dans l'ordre, les six premiers
+ * photographiés sont six entrées, ou six tajines. Le carrousel montrerait alors
+ * une cuisine bien plus étroite qu'elle ne l'est — on prend donc un plat par
+ * famille avant d'en reprendre un second dans chacune.
+ */
+function spreadByCategory(dishes: Dish[], limit: number): Dish[] {
+  const byCat = new Map<string, Dish[]>();
+  for (const dish of dishes) {
+    const list = byCat.get(dish.cat);
+    if (list) list.push(dish);
+    else byCat.set(dish.cat, [dish]);
+  }
+
+  const out: Dish[] = [];
+  for (let round = 0; out.length < limit; round++) {
+    const slice = [...byCat.values()]
+      .map((list) => list[round])
+      .filter((dish): dish is Dish => dish !== undefined);
+    if (!slice.length) break; // toutes les familles épuisées
+    out.push(...slice.slice(0, limit - out.length));
+  }
+  return out;
+}
+
+/**
+ * Plats photographiés de la vitrine du bandeau d'ouverture.
+ *
+ * Le carrousel puise dans le catalogue plutôt que dans une liste de fichiers
+ * recopiée à la main : un plat retiré de la carte ou rendu indisponible
+ * disparaît du bandeau, et la légende porte le nom exact du plat.
+ */
+async function loadHeroDishes(limit: number): Promise<Dish[]> {
+  const rows = await prisma.dish.findMany({
+    where: { available: true, photo: { not: null } },
+    // Les plats mis en avant d'abord : ce sont ceux que la maison veut montrer.
+    orderBy: [{ popular: "desc" }, { position: "asc" }, { name: "asc" }],
+    take: limit * 6,
+  });
+  return spreadByCategory(rows.map(rowToDish), limit);
 }
 
 async function loadZones(): Promise<{ zones: Zone[]; freeDeliveryThresholdCents: number | null }> {
@@ -274,6 +328,15 @@ export async function loadSectionContext(sections: PageSectionView[]): Promise<S
         ctx.populaires = rows;
       }),
       "plats mis en avant",
+    );
+  }
+
+  if (kinds.has("hero")) {
+    guard(
+      loadHeroDishes(HERO_SLIDES).then((rows) => {
+        ctx.heroDishes = rows;
+      }),
+      "vitrine du bandeau",
     );
   }
 
