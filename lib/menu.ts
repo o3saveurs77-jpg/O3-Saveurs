@@ -237,6 +237,14 @@ export const cats: Category[] = [
   { id: "sandwichs", label: "Sandwichs", script: "Sandwichs" },
   { id: "accompagnements", label: "Accompagnements", script: "Accompagnements" },
   { id: "boissons", label: "Boissons", script: "Boissons" },
+  /* Les canettes et l'eau sont revendues telles quelles : ni la même marge, ni
+     le même travail, ni le même inventaire que les jus pressés maison. Les
+     réunir sous « Boissons » obligeait à les vendre comme un plat unique
+     « Canette 33 cl » — le client ne choisissait pas sa boisson, la cuisine ne
+     savait pas laquelle sortir, et le stock d'un Coca était impossible à
+     distinguer de celui d'un Tropico. Une famille à part, une référence par
+     canette. */
+  { id: "canettes", label: "Canettes & Eaux", script: "Canettes & Eaux" },
   { id: "desserts", label: "Desserts", script: "Desserts" },
   /* Grosses pièces et plats de fête, préparés sur réservation. Une catégorie
      à part et non un badge dans les grillades : le client qui cherche à dîner
@@ -269,19 +277,29 @@ const D = (o: DishInput): SeedDish => ({
 });
 
 /*
- * Transcription de la carte officielle remise par la cliente le 2026-08-06
- * (`O3-Saveurs Carte-mise-a-jour.pdf`, 53 plats numérotés) — c'est elle qui
+ * Transcription de la carte officielle remise par la cliente le 2026-08-12
+ * (`O3-Saveurs Carte-FINALE-corrigee.pdf`, 53 plats numérotés) — c'est elle qui
  * fait foi, et non les maquettes HTML antérieures.
  *
- * Deux corrections par rapport à la transcription du 2026-08-05, qui s'appuyait
- * sur ces maquettes :
- *  · les plats sénégalais s'appellent **Tcheb**, pas « Thiéboudiène ». Le
- *    renommage précédent contredisait la carte imprimée, et surtout il
- *    désaccordait la clé de `FORMULA_SUPPLEMENTS` du nom réel du plat : le
- *    supplément de 4 € du Tcheb Poisson n'était plus jamais appliqué, et la
- *    formule partait à perte ;
- *  · « Saveur Méditerranéenne » ne figure pas parmi les familles ouvertes au
- *    créneau « plat » des formules (voir `PLAT_CATS`).
+ * Elle confirme la transcription du 2026-08-06 sur tous les prix et toutes les
+ * familles, et n'en renverse qu'un point :
+ *  · les plats sénégalais s'appellent **Thiéboudiène**. La carte du 6 août
+ *    disait « Tcheb » ; la carte finale écrit « Thiéboudiène » partout, jusque
+ *    dans la mention de supplément au bas de la page des formules.
+ *
+ *    ⚠️ Ce nom est aussi la clé de `FORMULA_SUPPLEMENTS`, que `prisma/seed.ts`
+ *    apparie **par le nom** du plat. Les deux doivent donc être renommés d'un
+ *    seul geste, ici : les désaccorder ferait écrire un supplément de 0 € au
+ *    prochain seed, et le Thiéboudiène Poisson à 13 € entrerait dans une
+ *    formule à 10,90 € sans que rien ne le signale. La panne s'est déjà
+ *    produite. À l'exécution, en revanche, le supplément est lu en base
+ *    (`FormulaChoice.supplementCents`) : renommer un plat ne l'efface pas.
+ *
+ *    La base, elle, ne suit pas ce fichier — c'est elle que le site affiche.
+ *    Le renommage s'y applique par `npm run db:thieboudiene`.
+ *
+ * Inchangé : « Saveur Méditerranéenne » ne figure pas parmi les familles
+ * ouvertes au créneau « plat » des formules (voir `PLAT_CATS`).
  *
  * Les plats de l'ancienne carte absents du PDF (Yassa Bœuf, Mafé Poulet,
  * Athiéké Poisson, Bowl Quinoa, Banh Mì, Loc Lac Bœuf, Bo Bun, Nouilles
@@ -326,9 +344,9 @@ export const items: SeedDish[] = [
   D({ cat: "medit", name: "Sardines Frites", desc: "Sardines fraîches, sel & citron — juste saisies, croustillantes.", price: 8, photo: null, tags: ["Poisson frais", "Citronné"] }),
 
   // SAVEUR D'AFRIQUE DE L'OUEST
-  D({ cat: "africaine", name: "Tcheb Poulet", desc: "Riz au gras façon thiéboudiène, poulet mijoté et légumes confits.", price: 8.5, photo: photo(4), options: [rizOpt], popular: true, tags: ["Mijoté"] }),
-  D({ cat: "africaine", name: "Tcheb Bœuf", desc: "Riz au gras tomaté, bœuf fondant mijoté et légumes confits.", price: 9.5, photo: photo(24), options: [rizOpt], popular: true, tags: ["Mijoté"] }),
-  D({ cat: "africaine", name: "Tcheb Poisson", desc: "Riz au gras, poisson frit, légumes fondants et sauce maison.", price: 13, photo: photo(28), options: [rizOpt], popular: true, tags: ["Poisson frais"] }),
+  D({ cat: "africaine", name: "Thiéboudiène Poulet", desc: "Riz au gras façon Thiéboudiène, poulet mijoté et légumes confits.", price: 8.5, photo: photo(4), options: [rizOpt], popular: true, tags: ["Mijoté"] }),
+  D({ cat: "africaine", name: "Thiéboudiène Bœuf", desc: "Riz au gras tomaté, bœuf fondant mijoté et légumes confits — la générosité du Thiéboudiène.", price: 9.5, photo: photo(24), options: [rizOpt], popular: true, tags: ["Mijoté"] }),
+  D({ cat: "africaine", name: "Thiéboudiène Poisson", desc: "Riz au gras, poisson frit entier, légumes fondants et sauce maison.", price: 13, photo: photo(28), options: [rizOpt], popular: true, tags: ["Poisson frais"] }),
   D({ cat: "africaine", name: "Yassa Poulet", desc: "Poulet braisé, sauce oignon-citron, olives et riz blanc parfumé.", price: 8.5, photo: photo(30), popular: true, tags: ["Citronné"] }),
   D({ cat: "africaine", name: "Mafé Bœuf", desc: "Bœuf mijoté dans une sauce arachide onctueuse, servi sur riz blanc parfumé.", price: 9.5, photo: photo(1), popular: true, tags: ["Sauce arachide"] }),
 
@@ -351,7 +369,7 @@ export const items: SeedDish[] = [
   D({ cat: "accompagnements", name: "Riz Blanc", desc: "Riz parfumé nature, cuit maison — l'accompagnement classique.", price: 2.5, photo: photo(18), tags: ["Nature", "Sans gluten"] }),
   D({ cat: "accompagnements", name: "Alloco", desc: "Bananes plantain bien mûres, frites et caramélisées.", price: 4, photo: photo(9), popular: true, tags: ["Caramélisé"] }),
   D({ cat: "accompagnements", name: "Riz Rouge", desc: "Riz au gras tomaté — parfumé, généreux et coloré.", price: 4, photo: photo(15), tags: ["Tomaté", "Fait maison"] }),
-  D({ cat: "accompagnements", name: "Tcheb blanc", desc: "Riz au gras blanc, parfumé — façon sénégalaise.", price: 4, photo: photo(18), tags: ["Au gras", "Parfumé"] }),
+  D({ cat: "accompagnements", name: "Thiéboudiène blanc", desc: "Riz au gras blanc, parfumé — façon sénégalaise.", price: 4, photo: photo(18), tags: ["Au gras", "Parfumé"] }),
   D({ cat: "accompagnements", name: "Frites Maison", desc: "Pommes de terre fraîches, coupées et frites maison — dorées et croustillantes.", price: 4, photo: photo(27), tags: ["Croustillant", "Fait maison"] }),
   D({ cat: "accompagnements", name: "Salade Composée", desc: "Salade fraîche, tomates cerises, vinaigrette huile d'olive & balsamique.", price: 4, photo: photo(21), tags: ["Frais", "Végétarien"] }),
   D({ cat: "accompagnements", name: "Patate fourrée au fromage", desc: "Pommes de terre garnies au fromage fondant, panées maison.", price: 4, photo: null, tags: ["6 pièces", "Fromage"] }),
@@ -371,14 +389,43 @@ export const items: SeedDish[] = [
   D({ cat: "boissons", name: "Cocktail Maison", desc: "Cocktail de fruits sans alcool, frais et de saison — selon arrivage.", price: 3.5, photo: photo(20), tags: ["Selon saison", "25 cl"], vatRateBp: 550 }),
   D({ cat: "boissons", name: "Jus d'Avocat", desc: "Jus d'avocat onctueux, préparé à la commande.", price: 4, photo: null, tags: ["À la commande", "25 cl"], vatRateBp: 550 }),
   D({ cat: "boissons", name: "Jus d'Orange", desc: "Oranges fraîchement pressées, pur jus du jour.", price: 3.5, photo: null, tags: ["Pressé du jour", "25 cl"], vatRateBp: 550 }),
-  D({ cat: "boissons", name: "Canette 33 cl", desc: "Coca, Sprite, Fanta, Ice Tea, Orangina, Tropico — et eau minérale.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
 
-  // DESSERTS
-  D({ cat: "desserts", name: "Ananas frais", desc: "Ananas frais, coupé minute — léger et sucré.", price: 2.5, photo: photo(13), tags: ["Frais"] }),
-  D({ cat: "desserts", name: "Tiramisu", desc: "Tiramisu maison, café & mascarpone.", price: 2.5, photo: null, tags: ["Fait maison"] }),
-  D({ cat: "desserts", name: "Fondant Chocolat", desc: "Cœur coulant au chocolat noir, servi tiède.", price: 3, photo: null, tags: ["Fait maison"] }),
-  D({ cat: "desserts", name: "Mousse au Chocolat", desc: "Mousse au chocolat onctueuse, faite maison.", price: 3, photo: null, tags: ["Fait maison"] }),
-  D({ cat: "desserts", name: "Tarte du jour", desc: "Tarte pâtissière du jour — demandez la saveur du moment.", price: 3, photo: null, tags: ["Fait maison"] }),
+  /* CANETTES & EAUX — une ligne par référence.
+   *
+   * Il n'y avait qu'un plat, « Canette 33 cl », dont la description énumérait
+   * six marques. Trois conséquences, toutes payées au comptoir : le client
+   * commandait « une canette » sans dire laquelle ; le bon de préparation
+   * n'indiquait pas quoi sortir du frigo ; et le stock était un compteur unique
+   * pour six produits — impossible de savoir qu'il ne restait plus de Coca tant
+   * qu'il restait du Tropico. Le créneau boisson des formules devait de surcroît
+   * écarter ce plat par son nom, faute de pouvoir écarter une famille.
+   *
+   * Ce sont les six marques de la carte officielle, plus l'eau. La cliente
+   * ajoute ou retire une référence depuis l'écran Plats — c'est bien l'intérêt
+   * d'en faire des plats.
+   *
+   * Identifiants explicites : la numérotation `dN` suit le rang dans cette
+   * liste, une insertion ici renommerait tout ce qui suit lors d'un seed
+   * rejoué. Voir la même précaution sur « sur commande » plus bas. */
+  D({ id: "can-coca", cat: "canettes", name: "Coca-Cola 33 cl", desc: "Canette de Coca-Cola, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-sprite", cat: "canettes", name: "Sprite 33 cl", desc: "Canette de Sprite, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-fanta", cat: "canettes", name: "Fanta 33 cl", desc: "Canette de Fanta, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-ice-tea", cat: "canettes", name: "Ice Tea 33 cl", desc: "Canette d'Ice Tea, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-orangina", cat: "canettes", name: "Orangina 33 cl", desc: "Canette d'Orangina, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-tropico", cat: "canettes", name: "Tropico 33 cl", desc: "Canette de Tropico, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-eau", cat: "canettes", name: "Eau minérale 50 cl", desc: "Bouteille d'eau minérale, 50 cl.", price: 2, photo: null, tags: ["50 cl", "Bien frais"], vatRateBp: 550 }),
+
+  /* DESSERTS — identifiants figés à leur valeur d'origine (d49 à d53).
+   *
+   * Ils étaient numérotés par leur rang : les sept canettes ajoutées juste
+   * au-dessus les auraient décalés de d49-d53 à d55-d59, et un seed rejoué
+   * aurait réécrit six plats existants sous le nom du voisin. Un identifiant
+   * ne doit pas dépendre de ce qui le précède dans un fichier. */
+  D({ id: "d49", cat: "desserts", name: "Ananas frais", desc: "Ananas frais, coupé minute — léger et sucré.", price: 2.5, photo: photo(13), tags: ["Frais"] }),
+  D({ id: "d50", cat: "desserts", name: "Tiramisu", desc: "Tiramisu maison, café & mascarpone.", price: 2.5, photo: null, tags: ["Fait maison"] }),
+  D({ id: "d51", cat: "desserts", name: "Fondant Chocolat", desc: "Cœur coulant au chocolat noir, servi tiède.", price: 3, photo: null, tags: ["Fait maison"] }),
+  D({ id: "d52", cat: "desserts", name: "Mousse au Chocolat", desc: "Mousse au chocolat onctueuse, faite maison.", price: 3, photo: null, tags: ["Fait maison"] }),
+  D({ id: "d53", cat: "desserts", name: "Tarte du jour", desc: "Tarte pâtissière du jour — demandez la saveur du moment.", price: 3, photo: null, tags: ["Fait maison"] }),
 
   /* SUR COMMANDE — grosses pièces et plats de fête.
    *
@@ -430,8 +477,6 @@ export interface SeedFormulaSlot {
   required?: boolean;
   /** catégories dont les plats alimentent ce créneau */
   cats: string[];
-  /** plats écartés de ce créneau, par nom */
-  exclude?: string[];
 }
 
 export interface SeedFormula {
@@ -450,7 +495,7 @@ export interface SeedFormula {
  * formule — les servir sans supplément vendrait la formule à perte.
  */
 export const FORMULA_SUPPLEMENTS: Record<string, number> = {
-  "Tcheb Poisson": 4,
+  "Thiéboudiène Poisson": 4,
   "Poisson Entier Grillé": 9,
 };
 
@@ -462,11 +507,20 @@ export const FORMULA_SUPPLEMENTS: Record<string, number> = {
  */
 const PLAT_CATS = ["salades", "maghreb", "africaine", "grillades"];
 
-/** Boissons maison : la formule exclut les canettes revendues telles quelles. */
+/**
+ * Boissons maison uniquement : les canettes, revendues telles quelles, ont leur
+ * propre famille et n'entrent donc plus dans ce créneau.
+ *
+ * L'exclusion se faisait auparavant en écartant un plat par son nom — une
+ * chaîne à retaper à l'identique, qu'un simple renommage depuis
+ * l'administration suffisait à rendre inopérante : la canette serait alors
+ * rentrée dans toutes les formules sans que personne ne le décide. Le mécanisme
+ * a été retiré avec son dernier usage ; une famille, elle, ne dépend pas d'un
+ * libellé.
+ */
 const BOISSON_SLOT: SeedFormulaSlot = {
   label: "Votre boisson",
   cats: ["boissons"],
-  exclude: ["Canette 33 cl"],
 };
 
 export const seedFormulas: SeedFormula[] = [

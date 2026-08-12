@@ -209,9 +209,7 @@ async function seedFormulas() {
     if (formula._count.slots > 0) continue;
 
     for (const [j, slot] of f.slots.entries()) {
-      const eligibles = dishes.filter(
-        (d) => slot.cats.includes(d.cat) && !(slot.exclude ?? []).includes(d.name),
-      );
+      const eligibles = dishes.filter((d) => slot.cats.includes(d.cat));
 
       await prisma.formulaSlot.create({
         data: {
