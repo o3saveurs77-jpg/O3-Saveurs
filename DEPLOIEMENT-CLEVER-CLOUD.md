@@ -168,8 +168,21 @@ clever scale --build-flavor M
 > puis s'arrête sur `Could not find a production build in the '.next'
 > directory`. Le site ne démarre pas du tout.
 
-> **Si on saute la machine dédiée :** le build s'interrompt en cours de route
-> sur un `JavaScript heap out of memory`, sans autre explication.
+> **Si on saute la machine dédiée** (constaté le 2026-08-13) **:** le build
+> démarre, affiche `Creating an optimized production build`, puis meurt au bout
+> de deux minutes sur :
+>
+> ```
+> Next.js build worker exited with code: null and signal: SIGKILL
+> ```
+>
+> Pas de `JavaScript heap out of memory`, pas de trace : c'est le noyau qui tue
+> le processus, et il ne laisse rien derrière lui. Le message ressemble à un
+> plantage de Next.js — il n'en est pas un.
+>
+> Ne pas tenter de relever `NODE_OPTIONS` à la place. Les 644 Mo sont dérivés de
+> la mémoire physique de l'instance : autoriser un tas plus grand que la machine
+> ne fait qu'avancer le moment où le noyau intervient.
 
 ---
 

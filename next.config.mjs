@@ -54,6 +54,29 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
 
+  /* Compilation sur une machine d'un gigaoctet.
+   *
+   * Clever Cloud impose `--max-old-space-size=644` sur l'instance de
+   * production, et `next build` s'y faisait tuer par le noyau au bout de deux
+   * minutes — « Next.js build worker exited with code: null and signal:
+   * SIGKILL », sans autre trace, ce qui ressemble à un plantage de Next.js
+   * sans en être un.
+   *
+   * Next répartit la compilation sur un worker par cœur : c'est leur somme qui
+   * dépasse la mémoire disponible, pas un seul d'entre eux. On revient donc à
+   * un worker unique, dans le processus principal, et on active la variante
+   * économe de webpack. Le build est plus lent — il n'a plus rien à
+   * paralléliser — mais il tient dans la machine.
+   *
+   * À retirer le jour où une machine de compilation dédiée sera activée
+   * (`clever scale --build-flavor M`) : la parallélisation redeviendra
+   * gratuite. */
+  experimental: {
+    webpackMemoryOptimizations: true,
+    cpus: 1,
+    workerThreads: false,
+  },
+
   images: {
     remotePatterns: storageHost
       ? [
