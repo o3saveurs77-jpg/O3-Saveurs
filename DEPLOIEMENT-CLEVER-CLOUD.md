@@ -108,6 +108,23 @@ navigateur, qui ne voit pas les variables serveur.
 > cadres vides, sans erreur nulle part. `npm run verif:prod` refuse de partir
 > dans ce cas.
 
+### Verser les photos livrées
+
+```bash
+npm run db:photos-cellar
+```
+
+Les photos de la livraison initiale vivaient dans `public/photos/`, servies par
+Next ; celles téléversées depuis l'administration allaient sur Cellar. Deux
+origines pour une même chose. Ce script verse les premières sur Cellar et
+repointe la base — plats et sections de page.
+
+`public/photos/` **reste dans le dépôt** : six commandes déjà passées y
+référencent leurs plats, et une facture doit rester lisible telle qu'elle a été
+émise. Le seed, lui, écrit toujours des chemins locaux, pour qu'une installation
+neuve fonctionne sans stockage objet — relancer ce script après tout
+`npm run db:seed`.
+
 ---
 
 ## 3. Variables d'environnement

@@ -18,6 +18,7 @@
     "db:seed:demo": "tsx prisma/seed-demo.ts",
     "db:canettes": "tsx scripts/eclater-canettes.ts",
     "db:thieboudiene": "tsx scripts/renommer-thieboudiene.ts",
+    "db:photos-cellar": "tsx scripts/photos-vers-cellar.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
     "auth0:setup": "tsx auth0/setup-m2m.ts",
