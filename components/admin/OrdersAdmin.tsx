@@ -5,12 +5,16 @@ import { useOrders } from "@/components/providers/OrdersContext";
 import { STATUS_LABEL, STATUS_NEXT, PAYMENT_STATUS_LABEL } from "@/lib/types";
 import type { Order, OrderLine, OrderStatus } from "@/lib/types";
 import { fmtPrice } from "@/lib/menu";
+import { formatPreorderSchedule } from "@/lib/preorder";
 import { Icon } from "@/components/Icon";
 import { StatusPill } from "./StatusPill";
 import { RefundOrder } from "./RefundOrder";
 
 const FILTERS: { k: OrderStatus | "all" | "actives" | "impayees"; label: string }[] = [
   { k: "actives", label: "En cours" },
+  // Placé haut : une commande sur commande non validée est de l'argent encaissé
+  // sur une promesse que personne n'a encore tenue.
+  { k: "en_attente_validation", label: "À valider" },
   { k: "impayees", label: "Non payées" },
   { k: "all", label: "Toutes" },
   { k: "en_attente_paiement", label: "Attente paiement" },
@@ -21,7 +25,10 @@ const FILTERS: { k: OrderStatus | "all" | "actives" | "impayees"; label: string 
   { k: "annulee", label: "Annulées" },
 ];
 
-const ACTIVE: OrderStatus[] = ["confirmee", "cuisine", "route"];
+/* « En cours » inclut les commandes à valider : ce sont précisément celles qui
+ * demandent une action, et les enterrer sous « Toutes » revenait à ne les voir
+ * que si on pensait à les chercher. */
+const ACTIVE: OrderStatus[] = ["en_attente_validation", "confirmee", "cuisine", "route"];
 
 /** Les lignes de commande n'ont pas de `key` : elle est dérivée du contenu. */
 const lineKey = (l: OrderLine) => `${l.dishId}-${l.formule ?? ""}-${JSON.stringify(l.opts)}`;
@@ -82,9 +89,42 @@ export function OrdersAdmin() {
     }
   };
 
+  /* Décision sur une commande sur commande. Route dédiée : refuser enchaîne
+     remboursement, remise en stock, annulation et email — un `PATCH status`
+     ne ferait que la dernière étape, et laisserait l'argent du client chez
+     nous. Voir `app/api/orders/[id]/preorder/route.ts`. */
+  const decide = async (id: string, decision: "accepter" | "refuser", reason: string) => {
+    setBusyId(id);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/orders/${id}/preorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, reason }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { error?: string; refundedCents?: number }
+        | null;
+      if (!res.ok) throw new Error(data?.error ?? "Décision refusée");
+
+      setNotice(
+        decision === "accepter"
+          ? "Commande validée — le client a reçu la confirmation."
+          : `Commande refusée. ${fmtPrice(data?.refundedCents ?? 0)} remboursés, avoir envoyé au client.`,
+      );
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Décision impossible.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   if (!ready) return <p className="py-20 text-center text-ink-2">Chargement…</p>;
 
   const unpaid = orders.filter((o) => !o.paid && o.status !== "annulee").length;
+  const toValidate = orders.filter((o) => o.status === "en_attente_validation").length;
 
   return (
     <div className="space-y-5 print:hidden">
@@ -98,6 +138,14 @@ export function OrdersAdmin() {
               {" · "}
               <strong className="text-brick">
                 {unpaid} non payée{unpaid > 1 ? "s" : ""}
+              </strong>
+            </>
+          )}
+          {toValidate > 0 && (
+            <>
+              {" · "}
+              <strong className="text-[#7a5f00]">
+                {toValidate} à valider
               </strong>
             </>
           )}
@@ -145,6 +193,7 @@ export function OrdersAdmin() {
             onStatus={(status) => patch(o.id, { status })}
             onCollect={() => patch(o.id, { paid: true })}
             onDeclineCancel={() => patch(o.id, { declineCancel: true })}
+            onDecide={(decision, reason) => decide(o.id, decision, reason)}
             /* Le remboursement passe par sa propre route : on recharge la liste
                pour que le montant restant affiché soit celui de la base. */
             onRefunded={(message) => {
@@ -172,6 +221,7 @@ function OrderRow({
   onCollect,
   onRefunded,
   onDeclineCancel,
+  onDecide,
 }: {
   order: Order;
   open: boolean;
@@ -181,10 +231,18 @@ function OrderRow({
   onCollect: () => void;
   onRefunded: (message: string) => void;
   onDeclineCancel: () => void;
+  onDecide: (decision: "accepter" | "refuser", reason: string) => void;
 }) {
-  // Seules les transitions déclarées sont proposées, et la première est mise en
-  // avant comme action principale.
-  const allowed = STATUS_NEXT[order.status] ?? [];
+  const [refusalReason, setRefusalReason] = useState("");
+
+  const toValidate = order.status === "en_attente_validation";
+
+  /* Seules les transitions déclarées sont proposées, et la première est mise en
+   * avant comme action principale. Une commande à valider est retirée de ce jeu
+   * de boutons : accepter et refuser passent par le panneau dédié, qui rembourse
+   * et prévient le client — deux gestes qu'un simple changement de statut ne
+   * ferait pas. */
+  const allowed = toValidate ? [] : STATUS_NEXT[order.status] ?? [];
   const forward = allowed.filter((s) => s !== "annulee");
   const canCancel = allowed.includes("annulee");
 
@@ -220,6 +278,13 @@ function OrderRow({
             {order.refundedCents > 0 && (
               <span className="rounded-full bg-teal/10 px-2.5 py-0.5 text-xs font-bold text-teal">
                 {PAYMENT_STATUS_LABEL[order.paymentStatus]} · {fmtPrice(order.refundedCents)}
+              </span>
+            )}
+            {/* La date d'un plat sur commande vaut plus que l'heure de la
+                commande : c'est elle qui dit quand la viande doit être là. */}
+            {order.scheduledFor !== null && (
+              <span className="rounded-full bg-panel-2 px-2.5 py-0.5 text-xs font-bold text-brick">
+                Pour le {formatPreorderSchedule(new Date(order.scheduledFor))}
               </span>
             )}
             {/* Une demande d'annulation attend une réponse humaine : elle doit
@@ -295,7 +360,16 @@ function OrderRow({
                 </p>
               )}
               <p className="mt-1 text-sm text-ink-2">
-                Créneau : {order.slot === "asap" ? "dès que possible" : order.slot}
+                {order.scheduledFor !== null ? (
+                  <>
+                    Retrait :{" "}
+                    <strong className="text-ink">
+                      {formatPreorderSchedule(new Date(order.scheduledFor))}
+                    </strong>
+                  </>
+                ) : (
+                  <>Créneau : {order.slot === "asap" ? "dès que possible" : order.slot}</>
+                )}
               </p>
               <p className="text-sm text-ink-2">
                 Paiement : {order.paymentMethod} —{" "}
@@ -354,6 +428,60 @@ function OrderRow({
               </button>
             )}
           </div>
+
+          {/* Décision sur une commande sur commande.
+              Le client a déjà payé : accepter engage la cuisine sur la date,
+              refuser lui rend l'intégralité de la somme et lui explique
+              pourquoi. Aucune des deux ne se fait en silence. */}
+          {toValidate && (
+            <div className="mt-4 rounded-xl border border-[#7a5f00]/30 bg-gold/15 p-4 text-sm print:hidden">
+              <p className="font-bold text-[#7a5f00]">
+                Plat sur commande — votre accord est attendu
+              </p>
+              <p className="mt-1 text-ink-2">
+                {fmtPrice(order.totalCents)} déjà encaissés pour le{" "}
+                <strong className="text-ink">
+                  {order.scheduledFor !== null
+                    ? formatPreorderSchedule(new Date(order.scheduledFor))
+                    : order.slot}
+                </strong>
+                . Tant que vous n&apos;avez pas répondu, la commande n&apos;apparaît pas dans le
+                plan de cuisine.
+              </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => onDecide("accepter", "")}
+                  disabled={busy}
+                  className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white transition hover:brightness-105 disabled:opacity-50"
+                >
+                  <Icon name="check" size={16} /> Accepter cette date
+                </button>
+                <button
+                  onClick={() => onDecide("refuser", refusalReason.trim())}
+                  disabled={busy}
+                  className="inline-flex items-center gap-2 rounded-full border border-brick px-5 py-2.5 text-sm font-bold text-brick transition hover:bg-brick/10 disabled:opacity-50"
+                >
+                  <Icon name="x" size={16} /> Refuser et rembourser {fmtPrice(order.totalCents)}
+                </button>
+              </div>
+
+              {/* Facultatif, mais c'est la seule explication que le client
+                  recevra. « Nous sommes complets ce jour-là » évite un litige
+                  qu'un remboursement muet provoque presque à coup sûr. */}
+              <label htmlFor={`refus-${order.id}`} className="mt-3 block text-xs font-semibold text-ink-2">
+                Motif du refus, repris dans l&apos;email au client (facultatif)
+              </label>
+              <input
+                id={`refus-${order.id}`}
+                value={refusalReason}
+                onChange={(e) => setRefusalReason(e.target.value)}
+                maxLength={500}
+                placeholder="Nous sommes complets ce jour-là — rappelez-nous pour décaler."
+                className="mt-1 w-full rounded-[var(--radius-soft)] border border-line bg-page px-3 py-2 text-sm outline-none focus:border-primary"
+              />
+            </div>
+          )}
 
           {/* Ce que le client a écrit en demandant l'annulation : la décision
               revient au restaurant, encore faut-il lui donner le motif. */}

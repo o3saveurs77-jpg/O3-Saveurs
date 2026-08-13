@@ -58,6 +58,27 @@ export function validateDishFields(body: Partial<Dish>): Result<Partial<Dish>> {
     out.position = v.value;
   }
 
+  /* Taux de TVA. Liste fermée plutôt qu'un entier libre : les taux français
+   * sont au nombre de trois pour ce commerce, et un taux inventé produirait
+   * une facture fausse et une déclaration à corriger. */
+  if (body.vatRateBp !== undefined) {
+    const v = int(body.vatRateBp, "Le taux de TVA", { min: 0, max: 2000 });
+    if (!v.ok) return v;
+    if (![550, 1000, 2000].includes(v.value)) {
+      return { ok: false, error: "Taux de TVA non reconnu : attendu 5,5 %, 10 % ou 20 %." };
+    }
+    out.vatRateBp = v.value;
+  }
+
+  /* Délai de préparation. Le plafond de 30 jours n'est pas décoratif : c'est
+   * l'horizon que `preorderDays` explore pour proposer des dates. Au-delà, la
+   * cliente enregistrerait un plat qu'aucune date ne pourrait plus servir. */
+  if (body.leadTimeHours !== undefined) {
+    const v = int(body.leadTimeHours, "Le délai de préparation", { min: 0, max: 24 * 30 });
+    if (!v.ok) return v;
+    out.leadTimeHours = v.value;
+  }
+
   if (body.tags !== undefined) {
     const v = stringArray(body.tags, "Les tags", { maxItems: 12, maxLen: 40 });
     if (!v.ok) return v;

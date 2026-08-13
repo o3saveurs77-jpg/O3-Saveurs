@@ -123,7 +123,7 @@ clever env set AUTH0_ISSUER "https://…auth0.com"
 clever env set AUTH0_M2M_CLIENT_ID "…"
 clever env set AUTH0_M2M_CLIENT_SECRET "…"
 clever env set STRIPE_SECRET_KEY "…"
-clever env set STRIPE_WEBHOOK_SECRET "…"      # à régénérer, voir §6
+clever env set STRIPE_WEBHOOK_SECRET "…"      # à régénérer, voir §7
 clever env set RESEND_API_KEY "…"
 clever env set RESEND_FROM_EMAIL "commandes@o3saveurs.fr"
 clever env set RESTAURANT_NOTIFY_EMAIL "…"
@@ -142,20 +142,65 @@ Il énumère ce qui manque **et ce que chaque manque casse concrètement**.
 
 ---
 
-## 4. Premier déploiement
+## 4. Compilation
+
+**Clever Cloud ne compile pas tout seul.** Contrairement à Vercel, qui
+reconnaissait Next.js et lançait le build de lui-même, un applicatif Node
+enchaîne ici `npm install` puis `npm start` — et rien entre les deux. Il faut
+donc réclamer la compilation explicitement :
+
+```bash
+clever env set CC_POST_BUILD_HOOK "npm run build"
+```
+
+Le crochet tourne après l'installation des dépendances et avant la mise en
+cache, ce qui évite de recompiler à chaque redémarrage.
+
+Prévoyez aussi une machine de compilation dédiée. L'instance de production est
+petite : Clever Cloud y impose `--max-old-space-size=644`, et `next build`
+dépasse ce plafond sur un projet de cette taille.
+
+```bash
+clever scale --build-flavor M
+```
+
+> **Si on saute le crochet :** le déploiement paraît réussir jusqu'au bout,
+> puis s'arrête sur `Could not find a production build in the '.next'
+> directory`. Le site ne démarre pas du tout.
+
+> **Si on saute la machine dédiée** (constaté le 2026-08-13) **:** le build
+> démarre, affiche `Creating an optimized production build`, puis meurt au bout
+> de deux minutes sur :
+>
+> ```
+> Next.js build worker exited with code: null and signal: SIGKILL
+> ```
+>
+> Pas de `JavaScript heap out of memory`, pas de trace : c'est le noyau qui tue
+> le processus, et il ne laisse rien derrière lui. Le message ressemble à un
+> plantage de Next.js — il n'en est pas un.
+>
+> Ne pas tenter de relever `NODE_OPTIONS` à la place. Les 644 Mo sont dérivés de
+> la mémoire physique de l'instance : autoriser un tas plus grand que la machine
+> ne fait qu'avancer le moment où le noyau intervient.
+
+---
+
+## 5. Premier déploiement
 
 ```bash
 git push clever main
 clever logs --follow
 ```
 
-Le `build` exécute `prisma generate && next build`. Ouvrez ensuite l'URL
-temporaire fournie par Clever Cloud et vérifiez que la carte s'affiche : c'est
-le signe que la base répond.
+Vous devez voir passer `Creating an optimized production build` : c'est la
+preuve que le crochet de compilation est bien pris en compte. Ouvrez ensuite
+l'URL temporaire fournie par Clever Cloud et vérifiez que la carte s'affiche :
+c'est le signe que la base répond.
 
 ---
 
-## 5. Domaine chez IONOS
+## 6. Domaine chez IONOS
 
 Dans Clever Cloud : *Domain names* → ajouter `o3saveurs.fr` et `www.o3saveurs.fr`.
 
@@ -175,7 +220,7 @@ Le certificat HTTPS est engendré automatiquement une fois la propagation faite
 
 ---
 
-## 6. Reconfigurer les services externes
+## 7. Reconfigurer les services externes
 
 Ces trois-là pointent encore sur Vercel. **Tant qu'ils ne sont pas repointés,
 le site est en ligne mais ne fonctionne pas vraiment.**
@@ -216,7 +261,7 @@ partent en indésirables, quand ils partent.
 
 ---
 
-## 7. Tâches planifiées
+## 8. Tâches planifiées
 
 `clevercloud/cron.json` est déjà dans le dépôt. Clever Cloud le lit au
 déploiement — rien à faire, mais vérifiez qu'elles tournent :
@@ -238,7 +283,7 @@ Deux tâches :
 
 ---
 
-## 8. Contrôle final
+## 9. Contrôle final
 
 Dans l'ordre, sur le domaine définitif :
 

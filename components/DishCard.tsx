@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import type { Dish } from "@/lib/menu";
 import { fmtPrice, isOrderable } from "@/lib/menu";
+import { formatLeadTime, isPreorderDish } from "@/lib/preorder";
 import { ALLERGEN_LABEL } from "@/lib/types";
 import { Icon } from "./Icon";
 import { DishBadge } from "./DishBadge";
@@ -29,6 +30,8 @@ export function DishCard({ dish, priority = false }: { dish: Dish; priority?: bo
   const lowStockThreshold = dish.stockAlert ?? LOW_STOCK_DEFAULT;
   const lowStock =
     !blocked && dish.stock !== null && dish.stock > 0 && dish.stock <= lowStockThreshold;
+
+  const surCommande = isPreorderDish(dish);
 
   const onAdd = () => {
     if (blocked) return;
@@ -71,6 +74,9 @@ export function DishCard({ dish, priority = false }: { dish: Dish; priority?: bo
           <div className="absolute left-2.5 top-2.5 flex flex-wrap gap-1.5">
             {dish.popular && <DishBadge kind="Populaire" />}
             {dish.badge && <DishBadge kind={dish.badge} />}
+            {/* Un gigot ne s'emporte pas dans l'heure : le dire sur la vignette
+                évite qu'on l'ajoute au panier en croyant dîner ce soir. */}
+            {surCommande && <DishBadge kind="Sur commande" />}
           </div>
 
           {/* favori (connecté uniquement) */}
@@ -120,6 +126,15 @@ export function DishCard({ dish, priority = false }: { dish: Dish; priority?: bo
 
           {lowStock && (
             <p className="mt-2 text-xs font-bold text-brick">Plus que {dish.stock}</p>
+          )}
+
+          {/* Le délai chiffré, pas seulement le badge : « sur commande » ne dit
+              pas s'il faut s'y prendre deux jours ou deux semaines à l'avance. */}
+          {surCommande && (
+            <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-brick">
+              <Icon name="clock" size={13} />À commander {formatLeadTime(dish.leadTimeHours)} à
+              l&apos;avance
+            </p>
           )}
 
           {/* Prix + ajout.

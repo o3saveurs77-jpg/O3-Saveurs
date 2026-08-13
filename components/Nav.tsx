@@ -92,8 +92,21 @@ export function Nav() {
             <Logo />
           </Link>
 
-          {/* nav desktop */}
-          <nav className="hidden items-center gap-1 md:flex" aria-label="Navigation principale">
+          {/* nav desktop
+              `shrink-0` + `whitespace-nowrap` : les six liens sont des éléments
+              flex, donc compressibles jusqu'à leur plus long mot. Faute de
+              place entre le logo et les boutons d'action, « La Carte » et
+              « À propos » se repliaient sur deux lignes et déformaient la barre.
+              Le logo tronque déjà : c'est à lui de céder la place, pas aux liens.
+
+              La barre ne tient réellement qu'à partir de 1024 px (six liens +
+              « Commander » + « Compte » + panier). Sous ce seuil, le burger —
+              qui porte exactement les mêmes liens — prend le relais ; entre
+              1024 et 1280 px les pastilles sont resserrées d'un cran. */}
+          <nav
+            className="hidden shrink-0 items-center gap-0.5 lg:flex xl:gap-1"
+            aria-label="Navigation principale"
+          >
             {LINKS.map((l) => {
               const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
               return (
@@ -101,7 +114,7 @@ export function Nav() {
                   key={l.href}
                   href={l.href}
                   aria-current={active ? "page" : undefined}
-                  className={`rounded-full px-4 py-2 text-[15px] font-semibold transition ${
+                  className={`whitespace-nowrap rounded-full px-2.5 py-2 text-[14px] font-semibold transition xl:px-4 xl:text-[15px] ${
                     // `text-primary` sur `bg-primary-soft` plafonne à 2,48:1, sous
                     // le seuil WCAG AA. `text-brick` sur le même fond passe.
                     active ? "bg-primary-soft text-brick" : "text-ink hover:bg-panel-2"
@@ -220,7 +233,7 @@ export function Nav() {
             {/* burger mobile */}
             <button
               onClick={() => setMobile((v) => !v)}
-              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel md:hidden"
+              className="grid h-10 w-10 place-items-center rounded-full border border-line bg-panel lg:hidden"
               aria-label="Menu"
               aria-expanded={mobile}
               aria-controls="nav-mobile"
@@ -234,7 +247,7 @@ export function Nav() {
         {mobile && (
           <nav
             id="nav-mobile"
-            className="border-t border-line bg-page px-4 py-3 md:hidden"
+            className="border-t border-line bg-page px-4 py-3 lg:hidden"
             aria-label="Navigation principale"
           >
             {LINKS.map((l) => (

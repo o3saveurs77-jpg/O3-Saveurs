@@ -110,10 +110,11 @@ export default async function CgvPage() {
 
         <LegalSection id="prix" title="4. Prix">
           <p>
-            Les prix sont indiqués en euros, <strong>toutes taxes comprises</strong>, au taux de TVA
-            en vigueur pour la restauration à emporter et livrée, soit {fmtVatRate(vatRateBp)}. Les
-            frais de livraison sont indiqués séparément avant la validation de la commande et
-            s&apos;ajoutent au montant des plats.
+            Les prix sont indiqués en euros, <strong>toutes taxes comprises</strong>. Le taux de TVA
+            dépend du produit : {fmtVatRate(vatRateBp)} pour la restauration à emporter et livrée,{" "}
+            {fmtVatRate(550)} pour les boissons non alcoolisées vendues en contenant fermé. Le détail
+            par taux figure sur la facture. Les frais de livraison sont indiqués séparément avant la
+            validation de la commande et s&apos;ajoutent au montant des plats.
           </p>
           <p>
             Le restaurant peut modifier ses prix à tout moment. Le prix applicable est celui affiché
@@ -204,7 +205,7 @@ export default async function CgvPage() {
           <p>
             Une facture numérotée est émise pour chaque commande réglée et reste consultable depuis
             l&apos;espace client. Elle mentionne le détail des articles, le montant hors taxes, la
-            TVA au taux de {fmtVatRate(vatRateBp)} et le total toutes taxes comprises.
+            TVA ventilée par taux applicable et le total toutes taxes comprises.
           </p>
         </LegalSection>
 

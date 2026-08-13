@@ -21,6 +21,7 @@ import { formatKm, maxDeliveryKm, tierForDistance } from "@/lib/delivery";
 import { isGeoConfigured, roadDistanceKm } from "@/lib/geo";
 import { deliveryOrigin, getDeliveryTiers, getSetting } from "@/lib/settings";
 import { priceFormula, rowToFormula, type RawPick } from "@/lib/formulas";
+import { cartLeadTimeHours } from "@/lib/preorder";
 import type { Dish, Formula, Zone } from "@/lib/menu";
 import type { OrderLine, OrderMode, PromotionKind } from "@/lib/types";
 import { err, ok, type Result } from "@/lib/validate";
@@ -85,6 +86,14 @@ export interface PricedOrder {
   /** Distance routière retenue, quand la tarification s'est faite à la distance. */
   distanceKm: number | null;
   promotion: AppliedPromotion | null;
+  /**
+   * Délai de préparation du panier, en heures : le plus long de ses plats.
+   *
+   * Zéro pour une commande du jour. Au-delà, le tunnel exige une date de
+   * retrait et la commande passera par l'accord du restaurant — voir
+   * `lib/preorder.ts`.
+   */
+  leadTimeHours: number;
 }
 
 const MAX_QTY_PER_LINE = 50;
@@ -191,6 +200,8 @@ export function priceLines(
       const photo =
         priced.value.picks.map((p) => byId.get(p.dishId)?.photo).find((p) => p) ?? null;
 
+      const lineTotalCents = priced.value.unitPriceCents * line.qty;
+
       lines.push({
         dishId: "",
         formulaId: formula.id,
@@ -199,10 +210,11 @@ export function priceLines(
         photo,
         unitPriceCents: priced.value.unitPriceCents,
         qty: line.qty,
-        lineTotalCents: priced.value.unitPriceCents * line.qty,
+        lineTotalCents,
         opts: priced.value.opts,
         formule: formula.code,
         note,
+        vatSplit: formulaVatSplit(priced.value.picks, lineTotalCents, byId),
       });
       continue;
     }
@@ -212,20 +224,75 @@ export function priceLines(
     const unit = unitPriceOf(dish, line);
     if (!unit.ok) return unit;
 
+    const lineTotalCents = unit.value * line.qty;
+
     lines.push({
       dishId: dish.id,
       name: dish.name,
       photo: dish.photo,
       unitPriceCents: unit.value,
       qty: line.qty,
-      lineTotalCents: unit.value * line.qty,
+      lineTotalCents,
       opts: line.opts ?? {},
       formule: line.formule ?? null,
       note,
+      // Un plat à la carte relève d'un seul taux : un seau, tout le montant.
+      vatSplit: [[dish.vatRateBp, lineTotalCents]],
     });
   }
 
   return ok(lines);
+}
+
+/**
+ * Ventilation TVA d'une formule, au prorata de la valeur des plats retenus.
+ *
+ * Une formule « plat + boisson » à 10,90 € n'a pas de taux propre : elle vend
+ * un plat à 10 % et une canette à 5,5 % sous un prix unique. Le fisc demande
+ * de ventiler ce prix entre les taux au prorata des valeurs respectives des
+ * produits ; c'est ce que fait cette fonction, sur la base du prix de carte de
+ * chaque plat retenu, supplément compris.
+ *
+ * Le prix de la formule étant inférieur à la somme des prix de carte, la remise
+ * implicite se répartit ainsi proportionnellement — elle ne se loge pas
+ * arbitrairement sur le taux qui arrangerait.
+ */
+function formulaVatSplit(
+  picks: { dishId: string; supplementCents: number }[],
+  lineTotalCents: number,
+  byId: Map<string, Dish>,
+): [number, number][] {
+  const valeur = new Map<number, number>();
+  let base = 0;
+
+  for (const pick of picks) {
+    const dish = byId.get(pick.dishId);
+    if (!dish) continue;
+    const v = (dish.priceCents ?? 0) + pick.supplementCents;
+    if (v <= 0) continue;
+    base += v;
+    valeur.set(dish.vatRateBp, (valeur.get(dish.vatRateBp) ?? 0) + v);
+  }
+
+  /* Aucune valeur de référence — plats sans prix, ou composition vide : on ne
+   * devine pas, la formule part au taux normal de la restauration. */
+  if (base === 0 || valeur.size === 0) return [[VAT_RATE_BP, lineTotalCents]];
+
+  const rates = [...valeur.keys()].sort((a, b) => a - b);
+  const split = new Map<number, number>();
+  for (const r of rates) {
+    split.set(r, Math.round(((valeur.get(r) ?? 0) * lineTotalCents) / base));
+  }
+
+  // La somme doit valoir le total de la ligne au centime près : l'écart
+  // d'arrondi va au seau principal.
+  const somme = rates.reduce((s, r) => s + (split.get(r) ?? 0), 0);
+  if (somme !== lineTotalCents) {
+    const principal = rates.reduce((a, b) => ((split.get(a) ?? 0) >= (split.get(b) ?? 0) ? a : b));
+    split.set(principal, (split.get(principal) ?? 0) + (lineTotalCents - somme));
+  }
+
+  return rates.map((r) => [r, split.get(r) ?? 0] as [number, number]).filter(([, c]) => c !== 0);
 }
 
 
@@ -424,6 +491,10 @@ export async function computeOrder(input: ComputeInput): Promise<Result<PricedOr
     zone,
     distanceKm,
     promotion,
+    /* `dishes` ne contient que les plats réellement au panier — ceux commandés
+     * à la carte comme ceux retenus dans les créneaux d'une formule. Le délai
+     * du panier est donc bien celui du plat le plus lent qu'il contient. */
+    leadTimeHours: cartLeadTimeHours(dishes),
   });
 }
 

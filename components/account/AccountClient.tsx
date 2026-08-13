@@ -15,6 +15,7 @@ import { Icon, type IconName } from "@/components/Icon";
 // `text-teal` à 2,46:1, tous deux sous le seuil WCAG AA de 4,5:1.
 const STATUS_COLOR: Record<OrderStatus, string> = {
   en_attente_paiement: "bg-brick/10 text-brick",
+  en_attente_validation: "bg-gold/15 text-[#7a5f00]",
   confirmee: "bg-gold/20 text-[#7a5f00]",
   cuisine: "bg-primary-soft text-brick",
   route: "bg-teal/15 text-[#0f6b5e]",

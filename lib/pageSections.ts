@@ -625,7 +625,7 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
         it(
           "africaine",
           "Afrique de l'Ouest",
-          "Tcheb, yassa, mafé, athiéké — riz au gras et sauces mijotées.",
+          "Thiéboudiène, yassa, mafé, attiéké — riz au gras et sauces mijotées.",
           { photo: photo(4), href: "/carte" },
         ),
         it(

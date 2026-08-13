@@ -134,6 +134,33 @@ export const valid = (orders: Order[]): Order[] => orders.filter((o) => o.status
 /** Commandes réellement encaissées (et non annulées). */
 export const collected = (orders: Order[]): Order[] => valid(orders).filter((o) => o.paid);
 
+/**
+ * Commandes qui existent **pour la comptabilité** : celles qui ont donné lieu à
+ * une facture.
+ *
+ * Le critère n'est pas « non annulée » mais « facturée », et la différence
+ * n'est pas théorique. Une facture émise ne se modifie ni ne s'efface (art. 242
+ * nonies A CGI) : rembourser produit un avoir, une pièce distincte, pas la
+ * disparition de la vente. Une commande annulée après facturation — un plat sur
+ * commande refusé par le restaurant, typiquement — doit donc rester au journal,
+ * compensée par son avoir. L'écarter creuserait dans la numérotation un trou
+ * que rien n'expliquerait devant un contrôle.
+ *
+ * `collected` reste le bon filtre pour le pilotage (« qu'ai-je vendu ? ») ;
+ * celui-ci est le bon pour la déclaration (« qu'ai-je facturé ? »).
+ */
+export const invoiced = (orders: Order[]): Order[] =>
+  orders.filter((o) => o.paid && o.invoiceNumber !== null);
+
+/**
+ * Montant réellement acquis sur une commande : facturé moins ce qui a été rendu.
+ *
+ * C'est cette base-là qui porte la TVA collectée. La ventiler sur `totalCents`
+ * fait déclarer — et payer — la taxe sur des sommes rendues au client.
+ */
+export const netCollectedCents = (o: Order): number =>
+  Math.max(0, o.totalCents - o.refundedCents);
+
 /** Commandes créées dans `[start, end)`. */
 export const inRange = (orders: Order[], start: number, end: number): Order[] =>
   orders.filter((o) => o.createdAt >= start && o.createdAt < end);

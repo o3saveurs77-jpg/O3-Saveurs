@@ -38,6 +38,12 @@ export interface CartLine {
   opts: Record<string, string>;
   formule: string | null;
   note: string;
+  /**
+   * Délai de préparation du plat, en heures. **Indicatif seulement**, comme le
+   * prix : il sert au tunnel à afficher le sélecteur de date, et le serveur le
+   * relit en base avant d'accepter la commande.
+   */
+  leadTimeHours: number;
 }
 
 /** Ligne de commande figée par le serveur, telle qu'archivée dans `Order.lines`. */
@@ -62,6 +68,53 @@ export interface OrderLine {
   opts: Record<string, string>;
   formule: string | null;
   note: string;
+  /**
+   * Ventilation TTC de la ligne par taux de TVA : `[[rateBp, centimes], …]`,
+   * dont la somme vaut exactement `lineTotalCents`.
+   *
+   * Une liste et non un taux unique, parce qu'une formule « plat + boisson »
+   * relève de deux taux à la fois : 10 % sur le plat, 5,5 % sur la canette.
+   * Figée à la commande comme les prix — une facture émise ne se recalcule pas
+   * quand la carte ou un taux change.
+   *
+   * Absente sur les commandes antérieures à la ventilation multi-taux : les
+   * lecteurs retombent alors sur `Order.vatRateBp`, qui valait 10 % pour tout.
+   */
+  vatSplit?: [rateBp: number, grossCents: number][];
+}
+
+/**
+ * Ventilation d'une commande par taux, en retombant sur l'ancien modèle pour
+ * les commandes qui n'en portent pas.
+ *
+ * Vit ici et non dans `lib/money.ts` pour que ce dernier reste ignorant de la
+ * forme d'une commande : il ne sait que ventiler des montants.
+ */
+export function vatPartsOf(order: {
+  lines: OrderLine[];
+  vatRateBp: number;
+  totalCents: number;
+  feeCents: number;
+  discountCents: number;
+}): [number, number][] {
+  const parts: [number, number][] = [];
+  let ventile = false;
+
+  for (const l of order.lines) {
+    if (l.vatSplit?.length) {
+      ventile = true;
+      for (const [rateBp, cents] of l.vatSplit) parts.push([rateBp, cents]);
+    } else {
+      parts.push([order.vatRateBp, l.lineTotalCents]);
+    }
+  }
+
+  /* Commande d'avant la ventilation : le total facturé fait foi, et non la
+   * somme des lignes — une remise ou des frais de livraison s'y ajoutaient
+   * sans jamais toucher les lignes. */
+  if (!ventile) return [[order.vatRateBp, order.totalCents]];
+
+  return parts;
 }
 
 /** Vrai si la ligne est une formule composée et non un plat à la carte. */
@@ -77,6 +130,15 @@ export type OrderMode = "livraison" | "emporter";
  */
 export type OrderStatus =
   | "en_attente_paiement"
+  /**
+   * Commande sur commande payée, en attente de l'accord du restaurant.
+   *
+   * Un gigot ou un agneau entier engagent un achat chez le boucher : la
+   * cliente garde le droit de refuser une date qu'elle ne peut pas tenir. Rien
+   * n'entre en cuisine tant qu'elle n'a pas tranché, et un refus rend
+   * l'intégralité de la somme.
+   */
+  | "en_attente_validation"
   | "confirmee"
   | "cuisine"
   | "route"
@@ -85,6 +147,7 @@ export type OrderStatus =
 
 export const ORDER_STATUSES: readonly OrderStatus[] = [
   "en_attente_paiement",
+  "en_attente_validation",
   "confirmee",
   "cuisine",
   "route",
@@ -104,6 +167,7 @@ export type FlowStatus = (typeof STATUS_FLOW)[number];
 
 export const STATUS_LABEL: Record<OrderStatus, string> = {
   en_attente_paiement: "En attente de paiement",
+  en_attente_validation: "À valider",
   confirmee: "Confirmée",
   cuisine: "En cuisine",
   route: "En route",
@@ -113,7 +177,10 @@ export const STATUS_LABEL: Record<OrderStatus, string> = {
 
 /** Transitions autorisées depuis l'administration. */
 export const STATUS_NEXT: Record<OrderStatus, OrderStatus[]> = {
-  en_attente_paiement: ["confirmee", "annulee"],
+  // Le paiement d'une commande sur commande la fait passer « à valider », pas
+  // « confirmée » : c'est le webhook Stripe qui choisit selon `preorder`.
+  en_attente_paiement: ["en_attente_validation", "confirmee", "annulee"],
+  en_attente_validation: ["confirmee", "annulee"],
   confirmee: ["cuisine", "annulee"],
   cuisine: ["route", "livree", "annulee"],
   route: ["livree", "annulee"],
@@ -166,6 +233,12 @@ export interface Order {
   zoneIdx: number | null;
   /** "asap" ou heure "19:30" */
   slot: "asap" | string;
+  /** La commande porte au moins un plat sur commande. */
+  preorder: boolean;
+  /** Retrait/livraison demandés, en ms — null pour une commande du jour. */
+  scheduledFor: number | null;
+  /** Ce que le restaurant a répondu en refusant une commande sur commande. */
+  refusalReason: string;
   customer: OrderCustomer;
   subtotalCents: number;
   discountCents: number;
@@ -181,6 +254,8 @@ export interface Order {
   refundedCents: number;
   /** Numéro d'avoir séquentiel, une fois le premier remboursement émis. */
   creditNoteNumber: number | null;
+  /** Date d'émission de l'avoir, en ms — la pièce porte sa propre date. */
+  refundedAt: number | null;
   refundReason: string;
   /** Annulation demandée par le client sur une commande déjà engagée. */
   cancelRequestedAt: number | null;
