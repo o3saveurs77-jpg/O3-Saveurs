@@ -56,25 +56,31 @@ const nextConfig = {
 
   /* Compilation sur une machine d'un gigaoctet.
    *
-   * Clever Cloud impose `--max-old-space-size=644` sur l'instance de
-   * production, et `next build` s'y faisait tuer par le noyau au bout de deux
-   * minutes — « Next.js build worker exited with code: null and signal:
-   * SIGKILL », sans autre trace, ce qui ressemble à un plantage de Next.js
-   * sans en être un.
+   * Clever Cloud impose `--max-old-space-size=644` — et cette limite vaut pour
+   * **chaque** processus Node, pas pour la machine. Next compile par défaut
+   * dans un worker distinct du processus principal : deux tas de 644 Mo pour
+   * un gigaoctet de mémoire réelle, et le noyau en tue un. D'où le
+   * « Next.js build worker exited with code: null and signal: SIGKILL », sec,
+   * sans trace, qui ressemble à un plantage de Next.js sans en être un — une
+   * erreur de tas V8 laisse un message, le tueur du noyau non.
    *
-   * Next répartit la compilation sur un worker par cœur : c'est leur somme qui
-   * dépasse la mémoire disponible, pas un seul d'entre eux. On revient donc à
-   * un worker unique, dans le processus principal, et on active la variante
-   * économe de webpack. Le build est plus lent — il n'a plus rien à
-   * paralléliser — mais il tient dans la machine.
+   * Tout tient donc dans un seul processus :
+   *  · `webpackBuildWorker: false` — compiler dans le processus principal,
+   *    plutôt que d'ouvrir un second tas à côté ;
+   *  · `workerThreads: true` — la génération statique passe par des fils
+   *    d'exécution et non des processus enfants, qui auraient chacun le leur ;
+   *  · `cpus: 1` — un seul ouvrier, la parallélisation étant précisément ce
+   *    qu'on ne peut pas se payer ;
+   *  · `webpackMemoryOptimizations` — la variante économe de webpack.
    *
-   * À retirer le jour où une machine de compilation dédiée sera activée
-   * (`clever scale --build-flavor M`) : la parallélisation redeviendra
-   * gratuite. */
+   * Le build est plus lent : il n'a plus rien à paralléliser. À retirer le jour
+   * où une machine de compilation dédiée sera activée
+   * (`clever scale --build-flavor M`). */
   experimental: {
     webpackMemoryOptimizations: true,
+    webpackBuildWorker: false,
+    workerThreads: true,
     cpus: 1,
-    workerThreads: false,
   },
 
   images: {
