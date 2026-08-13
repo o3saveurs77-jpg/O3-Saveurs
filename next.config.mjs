@@ -73,30 +73,30 @@ const nextConfig = {
 
   /* Compilation sur une machine d'un gigaoctet.
    *
-   * Clever Cloud impose `--max-old-space-size=644` — et cette limite vaut pour
-   * **chaque** processus Node, pas pour la machine. Next compile par défaut
-   * dans un worker distinct du processus principal : deux tas de 644 Mo pour
-   * un gigaoctet de mémoire réelle, et le noyau en tue un. D'où le
+   * Clever Cloud impose un `--max-old-space-size` dérivé de l'instance, et
+   * cette limite vaut pour **chaque** processus Node, pas pour la machine. Next
+   * compile par défaut dans un worker distinct du processus principal : deux
+   * tas pour une seule mémoire physique, et le noyau en tue un. D'où le
    * « Next.js build worker exited with code: null and signal: SIGKILL », sec,
-   * sans trace, qui ressemble à un plantage de Next.js sans en être un — une
-   * erreur de tas V8 laisse un message, le tueur du noyau non.
+   * sans trace — une erreur de tas V8 laisse un message, le tueur du noyau non.
    *
-   * Tout tient donc dans un seul processus :
    *  · `webpackBuildWorker: false` — compiler dans le processus principal,
    *    plutôt que d'ouvrir un second tas à côté ;
-   *  · `workerThreads: true` — la génération statique passe par des fils
-   *    d'exécution et non des processus enfants, qui auraient chacun le leur ;
-   *  · `cpus: 1` — un seul ouvrier, la parallélisation étant précisément ce
-   *    qu'on ne peut pas se payer ;
+   *  · `cpus: 1` — un seul ouvrier pour la génération statique ;
    *  · `webpackMemoryOptimizations` — la variante économe de webpack.
    *
-   * Le build est plus lent : il n'a plus rien à paralléliser. À retirer le jour
-   * où une machine de compilation dédiée sera activée
-   * (`clever scale --build-flavor M`). */
+   * ⚠️ Ne pas ajouter `workerThreads: true` en croyant économiser un processus.
+   * Next transmet alors la configuration aux ouvriers par clonage structuré, et
+   * le `headers()` ci-dessous — une fonction — ne se clone pas : la génération
+   * statique s'arrête sur « DataCloneError: ()=>null could not be cloned », qui
+   * ne dit rien de sa cause. Les processus enfants, par défaut, sérialisent
+   * autrement et n'ont pas ce défaut.
+   *
+   * Le build est plus lent, faute de parallélisme. À reconsidérer si une
+   * machine de compilation dédiée est un jour activée. */
   experimental: {
     webpackMemoryOptimizations: true,
     webpackBuildWorker: false,
-    workerThreads: true,
     cpus: 1,
   },
 
