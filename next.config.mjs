@@ -54,6 +54,23 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
 
+  /* Types et lint : vérifiés en intégration continue, pas au déploiement.
+   *
+   * Une fois la compilation webpack tenue dans la mémoire de l'instance, c'est
+   * l'étape « Linting and checking validity of types » qui se faisait tuer, au
+   * bout de quatre minutes : `tsc` sur l'ensemble du projet coûte plus cher que
+   * la compilation elle-même.
+   *
+   * On peut s'en passer ici parce qu'on ne s'en passe pas ailleurs :
+   * `.github/workflows/ci.yml` lance `typecheck`, `lint`, les tests **et** un
+   * build à chaque poussée sur `main` et à chaque pull request — sur le commit
+   * exact qui part en production.
+   *
+   * ⚠️ Le filet est là, pas ici. Retirer ou laisser rouge cette CI, et une
+   * erreur de types partirait en production sans que rien ne l'arrête. */
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: true },
+
   /* Compilation sur une machine d'un gigaoctet.
    *
    * Clever Cloud impose `--max-old-space-size=644` — et cette limite vaut pour
