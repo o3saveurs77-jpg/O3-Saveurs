@@ -31,9 +31,10 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Conditions générales de vente · Ô 3 Saveurs — Chez Laila",
+  title: "Conditions générales de vente",
   description:
     "Conditions de commande, prix, livraison, paiement, réclamations et droit de rétractation.",
+  alternates: { canonical: "/cgv" },
 };
 
 async function readZones(): Promise<Zone[]> {

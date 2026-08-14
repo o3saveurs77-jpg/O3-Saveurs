@@ -23,9 +23,10 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Politique de confidentialité · Ô 3 Saveurs — Chez Laila",
+  title: "Politique de confidentialité",
   description:
     "Quelles données nous collectons, pourquoi, combien de temps nous les conservons, et comment exercer vos droits.",
+  alternates: { canonical: "/confidentialite" },
 };
 
 /** Un tableau vaut mieux qu'un paragraphe pour l'art. 13 : chaque finalité a sa base légale. */

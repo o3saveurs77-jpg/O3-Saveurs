@@ -22,9 +22,10 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Mentions légales · Ô 3 Saveurs — Chez Laila",
+  title: "Mentions légales",
   description:
     "Éditeur du site, informations légales de l'entreprise, hébergeur et responsable de la publication.",
+  alternates: { canonical: "/mentions-legales" },
 };
 
 export default async function MentionsLegalesPage() {
