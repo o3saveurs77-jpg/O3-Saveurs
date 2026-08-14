@@ -23,6 +23,8 @@
     "db:reset": "prisma migrate reset --force",
     "auth0:setup": "tsx auth0/setup-m2m.ts",
     "auth0:check": "tsx auth0/diagnose.ts",
+    "auth0:urls": "tsx auth0/set-urls.ts",
+    "stripe:webhook": "tsx scripts/stripe-webhook.ts",
     "verif:prod": "tsx scripts/verif-prod.ts"
   },
   "prisma": {
