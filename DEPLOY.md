@@ -1,4 +1,13 @@
-# Déploiement — Ô 3 Saveurs (Neon + Vercel)
+# Déploiement — Ô 3 Saveurs (Neon + Vercel) — **document historique**
+
+> **⚠ Ce guide décrit l'hébergement précédent : Vercel et Neon.**
+> Pour la mise en ligne sur `o3saveurs.fr`, suivre
+> [DEPLOIEMENT-CLEVER-CLOUD.md](DEPLOIEMENT-CLEVER-CLOUD.md), qui fait foi :
+> hébergement Clever Cloud, base et stockage Clever Cloud, domaine chez OVH.
+>
+> Ce qui reste valable ici : la création des comptes Auth0, Stripe et Resend, et
+> le détail de ce que chaque variable pilote. Ce qui ne l'est plus : tout ce qui
+> touche à Vercel, à Vercel Blob et à Neon.
 
 Guide pas à pas pour mettre le site en production. Le code est déjà branché sur
 tous ces services ; il ne reste qu'à créer les comptes et renseigner les clés.
@@ -43,17 +52,21 @@ géré par l'application elle-même.
      ex. `https://xxx.eu.auth0.com`)
    - **Client ID** → `AUTH0_CLIENT_ID`
    - **Client Secret** → `AUTH0_CLIENT_SECRET`
-4. Toujours dans les réglages de l'application, **Application URIs** :
+4. Toujours dans les réglages de l'application, **Application URIs**. Ces trois
+   champs ne se remplissent plus à la main : `npm run auth0:urls -- --appliquer`
+   les dérive de `NEXTAUTH_URL` et garde `localhost`. Pour mémoire, sur
+   `o3saveurs.fr` :
    - **Allowed Callback URLs** :
-     `https://VOTRE-DOMAINE/api/auth/callback/auth0,http://localhost:3000/api/auth/callback/auth0`
-   - **Allowed Logout URLs** : `https://VOTRE-DOMAINE,http://localhost:3000`
-   - **Allowed Web Origins** : `https://VOTRE-DOMAINE,http://localhost:3000`
-   - **Allowed Origins (CORS)** : la même liste que Web Origins
+     `https://o3saveurs.fr/api/auth/callback/auth0,http://localhost:3000/api/auth/callback/auth0`
+   - **Allowed Logout URLs** : `https://o3saveurs.fr,http://localhost:3000`
+   - **Allowed Web Origins** : `https://o3saveurs.fr,http://localhost:3000`
+   - **Allowed Origins (CORS)** : laisser vide — le site n'appelle Auth0 que
+     depuis le serveur.
 5. `ADMIN_EMAIL` : l'adresse qui doit se connecter (via Auth0) pour obtenir le
    rôle `ADMIN`. Le seed (`npm run db:seed`) crée/maintient ce compte avec ce
    rôle ; toute autre adresse qui se connecte via Auth0 est créée en `CLIENT`.
-6. `NEXTAUTH_URL` : l'URL publique en prod (Vercel la fournit automatiquement,
-   mais on peut la fixer, ex. `https://o3saveurs.vercel.app`).
+6. `NEXTAUTH_URL` : l'URL publique en prod — `https://o3saveurs.fr`. Sur Clever
+   Cloud, rien ne la fournit : elle doit être posée explicitement.
 7. Le back-office `/admin` est protégé par le middleware : seul un compte de rôle
    `ADMIN` y accède ; les autres sont redirigés vers `/compte`.
 
@@ -68,8 +81,10 @@ géré par l'application elle-même.
    - `sk_test_…` → `STRIPE_SECRET_KEY`
    - Aucune clé publique n'est nécessaire : le paiement passe par Stripe Checkout
      **hébergé**, le client est redirigé vers une page Stripe.
-2. Webhook (après le 1er déploiement Vercel) : **Developers → Webhooks → Add endpoint**
-   - URL : `https://VOTRE-DOMAINE/api/webhooks/stripe`
+2. Webhook. Il se déclare désormais depuis le dépôt —
+   `npm run stripe:webhook -- --appliquer` — ce qui évite d'oublier un
+   événement. À la main : **Developers → Webhooks → Add endpoint**
+   - URL : `https://o3saveurs.fr/api/webhooks/stripe`
    - Événements à cocher — **les cinq**, pas seulement le premier :
      - `checkout.session.completed`
      - `checkout.session.async_payment_succeeded`
@@ -148,17 +163,22 @@ La planification passe donc par GitHub Actions
 `GET /api/cron/abandoned-carts` toutes les 10 minutes :
 
 1. Générer un secret : `openssl rand -base64 32` → `CRON_SECRET`.
-2. L'ajouter aux variables d'environnement Vercel (**Settings → Environment
-   Variables**).
+2. L'ajouter aux variables d'environnement de l'hébergeur.
 3. Sur GitHub : **Settings → Secrets and variables → Actions**, créer deux
    secrets de dépôt :
    - `CRON_SECRET` — la même valeur qu'à l'étape 1.
-   - `SITE_URL` — l'URL de production (ex. `https://o3saveurs.vercel.app`).
-4. Le workflow tourne dès qu'il est poussé sur `main`. Vérifier dans l'onglet
-   **Actions** du dépôt qu'il s'exécute et renvoie un code 200.
+   - `SITE_URL` — l'URL de production, `https://o3saveurs.fr`.
+4. Vérifier dans l'onglet **Actions** du dépôt que le déclenchement manuel
+   renvoie un code 200.
 
-À savoir : GitHub désactive automatiquement les workflows planifiés après
-60 jours sans commit sur le dépôt — un commit (même mineur) les réactive.
+> **Depuis le passage à Clever Cloud, la planification n'est plus ici.** Les
+> horaires vivent dans `clevercloud/cron.json`, exécutés par l'instance. Les
+> deux workflows GitHub ne gardent que `workflow_dispatch`, pour tester une
+> route à la demande. Les faire tourner en plus doublerait chaque appel.
+>
+> Cela règle au passage un piège de GitHub Actions : il désactive tout workflow
+> planifié après 60 jours sans commit sur le dépôt. La purge RGPD s'arrêtait
+> donc d'elle-même après deux mois de calme, sans prévenir.
 
 ## 6. Déploiement Vercel
 
