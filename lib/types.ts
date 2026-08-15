@@ -316,6 +316,26 @@ export const ALLERGENS = [
 
 export type Allergen = (typeof ALLERGENS)[number];
 
+/* Abréviations d'en-tête du tableau récapitulatif : quatorze colonnes ne
+ * tiennent pas en toutes lettres, même sur un écran large. Le libellé complet
+ * reste porté par l'attribut `title` et par la légende sous le tableau. */
+export const ALLERGEN_SHORT: Record<Allergen, string> = {
+  gluten: "G",
+  crustaces: "Cr",
+  oeufs: "Œ",
+  poissons: "P",
+  arachides: "Ar",
+  soja: "So",
+  lait: "L",
+  fruits_a_coque: "FC",
+  celeri: "Cé",
+  moutarde: "Mo",
+  sesame: "Sé",
+  sulfites: "Su",
+  lupin: "Lu",
+  mollusques: "Mol",
+};
+
 export const ALLERGEN_LABEL: Record<Allergen, string> = {
   gluten: "Gluten",
   crustaces: "Crustacés",
