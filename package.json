@@ -21,6 +21,7 @@
     "db:photos-cellar": "tsx scripts/photos-vers-cellar.ts",
     "db:allergenes": "tsx scripts/allergenes.ts",
     "db:sur-commande": "tsx scripts/section-sur-commande.ts",
+    "carte:web": "node scripts/carte-vers-web.mjs",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
     "auth0:setup": "tsx auth0/setup-m2m.ts",

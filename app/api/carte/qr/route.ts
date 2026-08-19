@@ -31,9 +31,9 @@ async function requestOrigin(): Promise<string> {
   const host = h.get("x-forwarded-host") ?? h.get("host");
   if (!host) return process.env.NEXTAUTH_URL ?? "https://o3saveurs.fr";
 
-  /* `x-forwarded-proto` est posé par le proxy de Vercel. En local il est absent
-   * et l'hôte commence par `localhost` : le https forcé donnerait un QR qui ne
-   * s'ouvre pas pendant le développement. */
+  /* `x-forwarded-proto` est posé par le proxy de l'hébergeur (Clever Cloud). En
+   * local il est absent et l'hôte commence par `localhost` : le https forcé
+   * donnerait un QR qui ne s'ouvre pas pendant le développement. */
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   return `${proto}://${host}`;
 }
