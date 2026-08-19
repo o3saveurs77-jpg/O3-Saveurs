@@ -60,6 +60,7 @@ export const PUBLIC_ROUTES = [
   { path: "/traiteur", label: "Traiteur", priority: 0.7, changeFrequency: "monthly" },
   { path: "/a-propos", label: "À propos", priority: 0.5, changeFrequency: "monthly" },
   { path: "/contact", label: "Contact", priority: 0.6, changeFrequency: "monthly" },
+  { path: "/allergenes", label: "Allergènes", priority: 0.4, changeFrequency: "monthly" },
   /* `/commander` n'y figure pas : le tunnel de commande est en `noindex` (voir
    * `app/commander/page.tsx`), et un plan du site qui déclare une page
    * interdite d'index est une contradiction que Search Console signale. */
@@ -243,11 +244,16 @@ export function restaurantNode(input: {
     name: `${profile.name} — ${profile.tagline}`,
     alternateName: profile.name,
     description:
-      "Restaurant de cuisine du monde à Pontault-Combault : spécialités d'Afrique de l'Ouest, du Maghreb et de Méditerranée, préparées maison. Livraison et vente à emporter.",
+      `Restaurant de cuisine du monde à ${profile.city} : spécialités d'Afrique de l'Ouest, ` +
+      "du Maghreb et de Méditerranée, préparées maison. Livraison et vente à emporter.",
     url: SITE_URL,
     telephone: toE164(profile.phone),
     email: profile.email,
-    image: [abs("/photos/p03.jpg"), abs("/photos/p11.jpg"), abs("/photos/p04.jpg")],
+    image: [
+      abs("/photos/Couverture-Hero.jpg"),
+      abs("/photos/p04.jpg"),
+      abs("/photos/p11.jpg"),
+    ],
     address: {
       "@type": "PostalAddress",
       streetAddress: profile.street,
@@ -454,7 +460,7 @@ export function faqNode(input: {
 
   qa.push({
     q: "Quel type de cuisine sert Ô 3 Saveurs — Chez Laila ?",
-    a: "Une cuisine du monde préparée maison : spécialités d'Afrique de l'Ouest (tcheb, mafé, yassa), du Maghreb (tajines, couscous) et de Méditerranée, ainsi que des grillades, sandwichs, salades et desserts maison.",
+    a: "Une cuisine du monde préparée maison : spécialités d'Afrique de l'Ouest (thiéboudiène, mafé, yassa), du Maghreb (tajines, couscous) et de Méditerranée, ainsi que des grillades, sandwichs, salades et desserts maison.",
   });
 
   qa.push({

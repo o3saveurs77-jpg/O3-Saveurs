@@ -15,12 +15,12 @@ export const metadata: Metadata = {
   // Titre court : le layout y ajoute « · Ô 3 Saveurs — Chez Laila ».
   title: "La Carte",
   description:
-    "Toute la carte d'Ô 3 Saveurs à Pontault-Combault : tajines, couscous, tcheb, mafé, yassa, grillades, sandwichs, salades, boissons maison et desserts. Livraison et à emporter.",
+    "Toute la carte d'Ô 3 Saveurs à Pontault-Combault : tajines, couscous, thiéboudiène, mafé, yassa, grillades, sandwichs, salades, boissons maison et desserts. Livraison et à emporter.",
   alternates: { canonical: "/carte" },
   openGraph: {
     title: "La Carte · Ô 3 Saveurs — Chez Laila",
     description:
-      "Tajines, couscous, tcheb, mafé, grillades et desserts maison — commandez en livraison ou à emporter.",
+      "Tajines, couscous, thiéboudiène, mafé, grillades et desserts maison — commandez en livraison ou à emporter.",
     url: "/carte",
   },
 };
