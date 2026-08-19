@@ -145,6 +145,7 @@ export const SECTION_KINDS = [
   "plats_populaires",
   "plat_du_jour",
   "formules",
+  "sur_commande",
   "zones",
   "infos_pratiques",
 ] as const;
@@ -326,6 +327,17 @@ export const KIND_META: Record<SectionKind, KindMeta> = {
     dynamic: true,
     once: false,
   },
+  sur_commande: {
+    label: "Plats sur commande",
+    hint: "Les pièces à réserver à l'avance (délai > 0 dans l'écran Plats), avec leur mode d'emploi.",
+    icon: "clock",
+    fields: ["eyebrow", "title", "subtitle", "theme", "columns", "limit", "cta", "alt", "items"],
+    itemFields: ["title", "text", "icon"],
+    itemLabel: "explication",
+    itemArticle: "une",
+    dynamic: true,
+    once: true,
+  },
   zones: {
     label: "Zones de livraison",
     hint: "Les secteurs livrés, leurs frais et leurs minimums, depuis l'écran Zones.",
@@ -359,7 +371,14 @@ export const KIND_GROUPS: { title: string; kinds: SectionKind[] }[] = [
   { title: "Offres & appels à l'action", kinds: ["tarifs", "appel_action", "hero"] },
   {
     title: "Blocs reliés à la base",
-    kinds: ["plats_populaires", "plat_du_jour", "formules", "zones", "infos_pratiques"],
+    kinds: [
+      "plats_populaires",
+      "plat_du_jour",
+      "formules",
+      "sur_commande",
+      "zones",
+      "infos_pratiques",
+    ],
   },
 ];
 
@@ -556,6 +575,41 @@ export function starterContent(kind: SectionKind): SectionContent {
       return { ...base, theme: "brique", eyebrow: "Plat du jour", subtitle: "Préparé en quantité limitée — uniquement aujourd'hui.", ctaLabel: "Commander", ctaHref: "/carte" };
     case "formules":
       return { ...base, theme: "gris", columns: 2, eyebrow: "Le bon plan", title: "Nos formules", limit: 6 };
+    case "sur_commande":
+      return {
+        ...base,
+        theme: "sombre",
+        columns: 2,
+        limit: 6,
+        eyebrow: "Fêtes & grandes tablées",
+        title: "Vos grandes occasions, *sur commande*",
+        subtitle:
+          "Les grosses pièces et les plats de fête ne se lancent pas à la minute : ils se réservent quelques jours à l'avance et se préparent pour votre tablée.",
+        ctaLabel: "Demander un devis",
+        ctaHref: "/contact",
+        altLabel: "Voir la carte",
+        altHref: "/carte#cat-sur-commande",
+        items: [
+          item(1, {
+            id: "delai",
+            title: "Vous réservez à l'avance",
+            text: "Chaque pièce porte son délai, indiqué ci-dessous : le temps de passer chez le boucher, de mariner et d'occuper le four.",
+            icon: "clock",
+          }),
+          item(2, {
+            id: "accord",
+            title: "Nous confirmons",
+            text: "Votre réservation nous arrive en attente. Nous la validons une fois la date et la quantité vérifiées, et vous recevez un e-mail.",
+            icon: "check",
+          }),
+          item(3, {
+            id: "paiement",
+            title: "Payé en ligne, remboursé si nous refusons",
+            text: "La réservation se règle par carte au moment de la commande. Si nous ne pouvons pas l'honorer, vous êtes intégralement remboursé.",
+            icon: "euro",
+          }),
+        ],
+      };
     case "zones":
       return { ...base, columns: 4, eyebrow: "On vient jusqu'à vous", title: "Zones de livraison", subtitle: "Hors zone, l'à emporter reste possible." };
     case "infos_pratiques":
@@ -606,7 +660,7 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
     seed("hero", "Bandeau d'ouverture", {
       eyebrow: "Chez Laila · Cuisine du monde",
       title: "Le voyage *des saveurs*\nlivré chez vous.",
-      body: "Tajines, tcheb, yassa, mafé, grillades & bowls frais — la cuisine du monde de Chez Laila, préparée maison à Pontault-Combault.",
+      body: "Tajines, thiéboudiène, yassa, mafé, grillades & bowls frais — la cuisine du monde de Chez Laila, préparée maison à Pontault-Combault.",
       photos: [photo(3), photo(11)],
       ctaLabel: "Voir la carte",
       ctaHref: "/carte",
@@ -665,6 +719,9 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
       columns: 5,
       limit: 6,
     }),
+    /* Le contenu de départ tient déjà tout entier dans `starterContent` : le
+       recopier ici en ferait une seconde version à corriger deux fois. */
+    seed("sur_commande", "Plats sur commande", {}),
     seed("zones", "Zones de livraison", {
       eyebrow: "On vient jusqu'à vous",
       title: "Zones de livraison",

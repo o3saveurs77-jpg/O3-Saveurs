@@ -167,6 +167,8 @@ export interface SectionContext {
   /** Plats photographiés qui défilent dans la vitrine du bandeau d'ouverture. */
   heroDishes: Dish[];
   platToday: PlatDuJourView | null;
+  /** Pièces à réserver à l'avance — gigot, couscous, agneau entier. */
+  surCommande: Dish[];
   zones: Zone[];
   freeDeliveryThresholdCents: number | null;
   formules: Formula[];
@@ -177,6 +179,7 @@ export const EMPTY_CONTEXT: SectionContext = {
   populaires: [],
   heroDishes: [],
   platToday: null,
+  surCommande: [],
   zones: [],
   freeDeliveryThresholdCents: null,
   formules: [],
@@ -234,6 +237,28 @@ async function loadHeroDishes(limit: number): Promise<Dish[]> {
     take: limit * 6,
   });
   return spreadByCategory(rows.map(rowToDish), limit);
+}
+
+/**
+ * Pièces à réserver à l'avance.
+ *
+ * Le critère est le **délai**, pas la catégorie « Sur commande » : c'est
+ * exactement la définition qu'applique le tunnel de commande
+ * (`isPreorderDish`). Une pièce dont la cliente pose un délai depuis l'écran
+ * Plats apparaît donc ici sans qu'on touche au contenu de la section, et un
+ * plat repassé à zéro heure en disparaît — au lieu de rester annoncé « sur
+ * commande » sur l'accueil alors que le panier l'accepte pour le soir même.
+ *
+ * Les plus courts délais d'abord : le visiteur voit ce qu'il peut avoir
+ * après-demain avant l'agneau entier qui en demande trois fois plus.
+ */
+async function loadSurCommande(limit: number): Promise<Dish[]> {
+  const rows = await prisma.dish.findMany({
+    where: { available: true, leadTimeHours: { gt: 0 } },
+    orderBy: [{ leadTimeHours: "asc" }, { position: "asc" }, { name: "asc" }],
+    take: limit,
+  });
+  return rows.map(rowToDish);
 }
 
 async function loadZones(): Promise<{ zones: Zone[]; freeDeliveryThresholdCents: number | null }> {
@@ -346,6 +371,18 @@ export async function loadSectionContext(sections: PageSectionView[]): Promise<S
         ctx.platToday = plat;
       }),
       "plat du jour",
+    );
+  }
+
+  if (kinds.has("sur_commande")) {
+    const limit = Math.max(
+      ...sections.filter((s) => s.kind === "sur_commande").map((s) => s.content.limit),
+    );
+    guard(
+      loadSurCommande(limit).then((rows) => {
+        ctx.surCommande = rows;
+      }),
+      "plats sur commande",
     );
   }
 
