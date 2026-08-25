@@ -14,6 +14,7 @@ import {
   SITE_URL,
   PUBLIC_ROUTES,
   DISALLOWED_PATHS,
+  brandAliases,
   type BusinessProfile,
 } from "@/lib/seo";
 import { DEFAULT_HOURS } from "@/lib/hours";
@@ -90,6 +91,45 @@ describe("toE164", () => {
     expect(toE164("")).toBe("");
     expect(toE164("06.12.34.56.78")).toBe("+33612345678");
   });
+
+// ─── Graphies de la marque ─────────────────────────────
+
+describe("brandAliases", () => {
+  const aliases = brandAliases(PROFILE);
+
+  it("rattache la graphie tapée par les clients à celle du site", () => {
+    // « o3 saveurs » est la requête réelle ; « Ô 3 Saveurs » est ce qu'écrit
+    // le site. Sans ce pont, rien ne dit à un moteur que c'est le même
+    // restaurant.
+    expect(aliases).toContain("O3 Saveurs");
+    expect(aliases).toContain("O3Saveurs");
+    expect(aliases).toContain("Ô3 Saveurs");
+    expect(aliases).toContain("O 3 Saveurs");
+  });
+
+  it("garde le nom du site, l'enseigne et le domaine", () => {
+    expect(aliases).toContain("Ô 3 Saveurs");
+    expect(aliases).toContain("Chez Laila");
+    expect(aliases).toContain("O3 Saveurs Chez Laila");
+    expect(aliases).toContain("o3saveurs.fr");
+  });
+
+  it("n'expose jamais un hôte de développement", () => {
+    // « localhost:3000 » est une graphie de rien du tout : le garde-fou de
+    // `publicHost()` n'accepte qu'un nom de domaine, point et sans port.
+    expect(aliases.some((a) => a.includes(":"))).toBe(false);
+  });
+
+  it("ne répète aucune graphie", () => {
+    expect(new Set(aliases).size).toBe(aliases.length);
+  });
+
+  it("suit le nom des réglages plutôt qu'une liste écrite en dur", () => {
+    const autre = brandAliases({ ...PROFILE, name: "Café 7 Épices", tagline: "" });
+    expect(autre).toContain("Cafe7 Epices");
+    expect(autre).not.toContain("Chez Laila");
+  });
+});
 });
 
 // ─── Horaires ──────────────────────────────────────────

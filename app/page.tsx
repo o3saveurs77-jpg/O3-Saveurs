@@ -7,9 +7,16 @@ import { graph, restaurantNode, websiteNode, faqNode } from "@/lib/seo";
 
 export const metadata: Metadata = {
   /* `title.absolute` court-circuite le gabarit du layout : l'accueil porte le
-   * titre complet, sans que la marque y soit ajoutée une seconde fois. */
+   * titre complet, sans que la marque y soit ajoutée une seconde fois.
+   *
+   * La marque **ouvre** le titre. Elle le fermait — « Restaurant africain &
+   * maghrébin à Pontault-Combault · Ô 3 Saveurs » — ce qui est le bon ordre
+   * pour une requête générique (« restaurant africain 77 ») et le mauvais pour
+   * une requête de marque (« o3 saveurs »), la seule que tapent les gens à qui
+   * on a tendu une carte de visite. Les deux mots-clés restent dans le titre,
+   * ils ont simplement cédé la première place. */
   title: {
-    absolute: "Restaurant africain & maghrébin à Pontault-Combault · Ô 3 Saveurs",
+    absolute: "Ô 3 Saveurs · Restaurant africain & maghrébin à Pontault-Combault",
   },
   description:
     "Ô 3 Saveurs — Chez Laila : cuisine d'Afrique de l'Ouest, du Maghreb et de Méditerranée préparée maison à Pontault-Combault. Commande en ligne, livraison et à emporter.",

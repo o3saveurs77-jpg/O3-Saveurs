@@ -36,7 +36,7 @@ export const metadata: Metadata = {
    * auquel le gabarit ajoutait la marque une seconde fois, donnant en résultat
    * de recherche « La Carte · Ô 3 Saveurs — Chez Laila · Ô 3 Saveurs ». */
   title: {
-    default: "Restaurant africain & maghrébin à Pontault-Combault · Ô 3 Saveurs",
+    default: "Ô 3 Saveurs · Restaurant africain & maghrébin à Pontault-Combault",
     template: "%s · Ô 3 Saveurs — Chez Laila",
   },
   description:

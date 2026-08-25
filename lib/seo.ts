@@ -122,6 +122,61 @@ export function toE164(phone: string): string {
   return digits;
 }
 
+/* ─── Écritures de la marque ────────────────────────────────── */
+
+/** Retire les diacritiques : « Ô 3 Saveurs » → « O 3 Saveurs ». */
+function deaccent(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Colle la lettre au chiffre : « Ô 3 Saveurs » → « Ô3 Saveurs ». */
+function glue(s: string): string {
+  return s.replace(/([A-Za-zÀ-ÿ])\s+(\d)/g, "$1$2");
+}
+
+/**
+ * Toutes les façons dont le nom du restaurant s'écrit réellement.
+ *
+ * Le site écrit partout « Ô 3 Saveurs » — accent circonflexe, espace avant le
+ * chiffre. Personne ne tape cela : on cherche « o3 saveurs », « o3saveurs »,
+ * « chez laila ». Google replie bien les accents, mais « Ô 3 » et « o3 » ne se
+ * découpent pas en les mêmes mots, et rien sur le site ne dit que les deux
+ * désignent le même restaurant. `alternateName` le dit — c'est la façon
+ * prévue par schema.org de rattacher plusieurs graphies à une seule entité.
+ *
+ * Les variantes sont **dérivées** du nom, pas listées à la main : le jour où
+ * la cliente change le nom en réglages, la liste suit. Et elle reste courte —
+ * ce sont des orthographes de la même marque, pas des mots-clés empilés.
+ */
+/** Nom d'hôte du site, s'il est publiable — « o3saveurs.fr », jamais « localhost ». */
+function publicHost(): string {
+  const host = (SITE_URL.split("//").pop() ?? "").toLowerCase();
+  const bare = host.startsWith("www.") ? host.slice(4) : host;
+  // Un domaine public porte un point et jamais de numéro de port.
+  return bare.includes(".") && !bare.includes(":") ? bare : "";
+}
+
+export function brandAliases(profile: BusinessProfile): string[] {
+  const { name, tagline } = profile;
+  const full = tagline ? `${name} ${tagline}` : name;
+  const spellings = [name, full].flatMap((s) => [s, deaccent(s), glue(s), glue(deaccent(s))]);
+
+  const aliases = [
+    ...spellings,
+    // Forme collée sans espace du tout : « O3Saveurs », telle qu'on la tape
+    // dans une barre d'adresse.
+    glue(deaccent(name)).replace(/\s+/g, ""),
+    tagline,
+    // Le nom de domaine est lui-même une graphie de la marque, et c'est celle
+    // qu'on recopie depuis un ticket de caisse ou un flyer. Écarté s'il n'a
+    // pas l'allure d'un domaine public : en développement, `SITE_URL` vaut
+    // « localhost:3000 », et personne ne cherche un restaurant sous ce nom.
+    publicHost(),
+  ];
+
+  return [...new Set(aliases.map((s) => s.trim()).filter(Boolean))];
+}
+
 /* ─── Horaires ──────────────────────────────────────────────── */
 
 const SCHEMA_WEEKDAY = [
@@ -242,7 +297,7 @@ export function restaurantNode(input: {
     "@type": "Restaurant",
     "@id": NODE.restaurant,
     name: `${profile.name} — ${profile.tagline}`,
-    alternateName: profile.name,
+    alternateName: brandAliases(profile),
     description:
       `Restaurant de cuisine du monde à ${profile.city} : spécialités d'Afrique de l'Ouest, ` +
       "du Maghreb et de Méditerranée, préparées maison. Livraison et vente à emporter.",
@@ -254,6 +309,14 @@ export function restaurantNode(input: {
       abs("/photos/p04.jpg"),
       abs("/photos/p11.jpg"),
     ],
+    /* `logo` et `image` ne jouent pas le même rôle et Google ne les
+     * interchange pas : `image` sont les photos du lieu, `logo` est la marque
+     * elle-même — c'est cette vignette qui s'affiche dans le panneau de droite
+     * et à côté du lien dans les résultats mobiles. Une table dressée n'y a
+     * jamais sa place. `/apple-icon` est l'emblème rendu en PNG 180×180 par
+     * `app/apple-icon.tsx` : une seule source pour l'icône d'onglet, celle du
+     * téléphone et celle du panneau de marque. */
+    logo: abs("/apple-icon"),
     address: {
       "@type": "PostalAddress",
       streetAddress: profile.street,
@@ -318,6 +381,7 @@ export function websiteNode(profile: BusinessProfile): JsonLdNode {
     url: SITE_URL,
     name: `${profile.name} — ${profile.tagline}`,
     inLanguage: "fr-FR",
+    alternateName: brandAliases(profile),
     publisher: { "@id": NODE.restaurant },
   };
 }

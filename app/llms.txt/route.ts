@@ -1,5 +1,5 @@
 import { loadSeoContext } from "@/lib/seoData";
-import { SITE_URL, PUBLIC_ROUTES, priceRange } from "@/lib/seo";
+import { SITE_URL, PUBLIC_ROUTES, priceRange, brandAliases } from "@/lib/seo";
 import { cats } from "@/lib/menu";
 import { fmtCents } from "@/lib/money";
 
@@ -27,6 +27,14 @@ export async function GET() {
   const { profile } = ctx;
 
   const horaires = ctx.hoursLabels.map((h) => `- ${h.day} : ${h.hours}`).join("\n");
+
+  /* Les graphies de la marque, en clair. Un modèle à qui l'on demande « o3
+     saveurs » ne fait pas le rapprochement avec « Ô 3 Saveurs » tout seul : le
+     JSON-LD le dit en `alternateName`, cette ligne le dit en français — et
+     c'est le langage naturel que ces moteurs citent le plus volontiers. */
+  const graphies = brandAliases(profile)
+    .filter((a) => a !== profile.name)
+    .join(", ");
 
   const livraison = ctx.zones
     .map(
@@ -75,6 +83,7 @@ export async function GET() {
 - Téléphone : ${profile.phone}
 - Courriel : ${profile.email}
 - Site : ${SITE_URL}
+- Aussi écrit : ${graphies}
 - Type : restaurant africain, maghrébin et méditerranéen — halal
 - Fourchette de prix : ${priceRange(ctx.dishes)}
 - Services : livraison à domicile, vente à emporter, traiteur (buffets, plateaux repas)
