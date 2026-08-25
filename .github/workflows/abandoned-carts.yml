@@ -1,21 +1,25 @@
 name: Relance panier abandonné
 
-# Vercel Hobby limite les Cron Jobs intégrés à une exécution par jour, ce qui
-# ne convient pas à une fenêtre de relance de 30 minutes (durée de vie d'une
-# session Stripe Checkout, voir app/api/checkout/route.ts). On délègue donc la
-# planification à GitHub Actions, gratuit sur ce dépôt.
+# ⚠ Déclenchement manuel uniquement — la planification vit ailleurs.
 #
-# Secrets requis (Settings → Secrets and variables → Actions) :
-#   SITE_URL     — l'URL de production, ex. https://o3saveurs.vercel.app
-#   CRON_SECRET  — la même valeur que la variable d'environnement Vercel du
-#                  même nom (Project Settings → Environment Variables).
+# Ce workflow date de l'hébergement Vercel, dont l'offre Hobby limitait les Cron
+# Jobs intégrés à une exécution par jour. Depuis le passage à Clever Cloud, la
+# planification est portée par `clevercloud/cron.json`, exécuté par l'instance
+# elle-même : pas de secret à tenir à jour en double, et l'horaire suit
+# `NEXTAUTH_URL` sans qu'on ait à le redire ici.
+#
+# L'horaire a donc été retiré, sans quoi les deux planificateurs appelleraient
+# la même route — inoffensif (la relance est idempotente, voir `dedupeKey` dans
+# lib/email.ts) mais deux fois plus d'appels pour rien, et deux endroits à
+# corriger le jour où le domaine change.
+#
+# Le déclenchement manuel reste utile pour tester la route sans attendre le
+# prochain quart d'heure. Il exige deux secrets du dépôt
+# (Settings → Secrets and variables → Actions) :
+#   SITE_URL     — l'URL de production, soit https://o3saveurs.fr
+#   CRON_SECRET  — la même valeur que la variable Clever Cloud du même nom.
 
 on:
-  schedule:
-    # Toutes les 10 minutes. GitHub Actions ne garantit pas l'horaire exact
-    # sous charge ; sans conséquence ici, la relance est idempotente (voir
-    # dedupeKey dans lib/email.ts).
-    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 jobs:

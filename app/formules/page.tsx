@@ -6,12 +6,19 @@ import { FormulesClient } from "@/components/formule/FormulesClient";
 import { rowToFormula, formulaSupplements } from "@/lib/formulas";
 import { fmtPrice } from "@/lib/menu";
 import type { Formula } from "@/lib/menu";
+import { JsonLd } from "@/components/JsonLd";
+import { graph, formulasNode, breadcrumbNode } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Nos Formules · Ô 3 Saveurs — Chez Laila",
+  title: "Nos Formules",
   description:
-    "Formules Express, Midi, Gourmande, Sandwich et Menu Enfant : un plat au choix parmi nos salades, tajines, plats d'Afrique de l'Ouest et grillades, à prix fixe.",
+    "Formules Express, Midi, Gourmande, Sandwich et Menu Enfant à prix fixe : un plat au choix parmi nos salades, tajines, plats d'Afrique de l'Ouest et grillades, à Pontault-Combault.",
   alternates: { canonical: "/formules" },
+  openGraph: {
+    title: "Nos Formules · Ô 3 Saveurs — Chez Laila",
+    description: "Un plat au choix, une boisson maison — à prix fixe, midi et soir.",
+    url: "/formules",
+  },
 };
 
 /* Même cadence que la carte : les formules bougent au rythme du back-office. */
@@ -46,8 +53,17 @@ export default async function FormulesPage() {
     (a, b) => a.cents - b.cents,
   );
 
+  const jsonLd = graph([
+    formulasNode(formulas),
+    breadcrumbNode([
+      { name: "Accueil", path: "/" },
+      { name: "Nos Formules", path: "/formules" },
+    ]),
+  ]);
+
   return (
     <>
+      <JsonLd data={jsonLd} />
       <header className="relative overflow-hidden bg-panel-2">
         <div className="ots-band" />
         <div className="wrap relative py-12 text-center sm:py-14">

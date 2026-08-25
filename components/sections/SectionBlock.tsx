@@ -23,6 +23,7 @@ import {
   InfosPratiquesBlock,
   PlatDuJourBlock,
   PlatsPopulairesBlock,
+  SurCommandeBlock,
   ZonesBlock,
 } from "@/components/sections/DynamicBlocks";
 
@@ -63,6 +64,8 @@ export function SectionBlock({
       return <PlatDuJourBlock content={content} ctx={ctx} />;
     case "formules":
       return <FormulesBlock content={content} ctx={ctx} />;
+    case "sur_commande":
+      return <SurCommandeBlock content={content} ctx={ctx} />;
     case "zones":
       return <ZonesBlock content={content} ctx={ctx} />;
     case "infos_pratiques":

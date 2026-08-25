@@ -185,6 +185,20 @@ describe("contenu par défaut des pages", () => {
     }
   });
 
+  it("explique les plats sur commande avant de les lister", () => {
+    // Réserver un gigot suppose un délai, l'accord du restaurant et un
+    // paiement d'avance : le bloc n'a de sens que s'il porte ces explications,
+    // et le rendu compte sur leur icône pour aligner les trois cartes.
+    const bloc = DEFAULT_SECTIONS.accueil.find((s) => s.kind === "sur_commande");
+    expect(bloc).toBeDefined();
+    expect(bloc!.content.items.length).toBeGreaterThanOrEqual(3);
+    for (const item of bloc!.content.items) {
+      expect(item.title, item.id).toBeTruthy();
+      expect(item.text, item.id).toBeTruthy();
+      expect(item.icon, item.id).toBeTruthy();
+    }
+  });
+
   it("ne place qu'une fois les blocs qui ne valent qu'une fois", () => {
     for (const page of PAGES) {
       const counts = new Map<string, number>();

@@ -429,3 +429,22 @@ mégaoctets, pas cent dix-neuf.
 
 Ce document-ci, lui, a été établi en **lisant les 65 pages en image** — donc sur
 ce qui est réellement visible, et non sur la couche texte.
+
+### Contournement en place (2026-08-19)
+
+En attendant cet export à plat, `npm run carte:web` fabrique la version servie
+par le site : les 65 pages sont **rendues en image** à 150 dpi, puis
+réassemblées. 113,7 Mo → 12,1 Mo, soit un dixième du poids.
+
+Rendre en image plutôt que recompresser n'est pas un choix de commodité : c'est
+ce qui fait disparaître les couches mortes. Ne subsiste que ce qui était
+visible, et la couche texte — celle qui portait `6,00` sous `5,00` — est vide.
+`pdftotext` sur `public/carte-o3-saveurs.pdf` ne rend plus rien du tout.
+
+Ce qu'on perd, en connaissance de cause : la recherche et la sélection de texte
+dans le PDF. La carte interrogeable reste celle du site, en HTML, sur `/carte` —
+c'est elle que lisent les moteurs de recherche, et elle est à jour en base.
+
+Le jour où la carte est réexportée à plat depuis l'outil de création, le fichier
+obtenu ira directement dans `public/` : plus léger *et* avec son texte. Le
+script et cette section n'auront plus de raison d'être.

@@ -488,7 +488,8 @@ function SectionEditor({
         <p className="flex items-start gap-2 rounded-xl bg-teal/10 px-4 py-3 text-sm text-teal">
           <Icon name="lock" size={16} className="mt-0.5 shrink-0" />
           Le contenu de ce bloc vient de la base (plats, formules, zones, réglages). Vous réglez ici
-          son titre et son habillage ; le reste se modifie dans l&apos;écran concerné.
+          son titre{meta.itemFields.length > 0 ? ", ses textes" : ""} et son habillage ; le reste se
+          modifie dans l&apos;écran concerné.
         </p>
       )}
 

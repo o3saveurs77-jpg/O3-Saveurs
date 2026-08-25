@@ -4,18 +4,24 @@ name: Purge RGPD des données périmées
 # confidentialité (art. 5.1.e du RGPD). Voir lib/retention.ts pour les seuils
 # et la raison de chacun.
 #
-# Une exécution par jour suffit : les durées se comptent en mois ou en années,
-# et la purge est idempotente. On passe par GitHub Actions comme la relance de
-# panier, pour n'avoir qu'un seul mécanisme de planification à maintenir.
+# ⚠ Déclenchement manuel uniquement — la planification vit ailleurs.
 #
-# Secrets requis (Settings → Secrets and variables → Actions) :
-#   SITE_URL     — l'URL de production
-#   CRON_SECRET  — la même valeur que la variable d'environnement Vercel
+# Depuis le passage de Vercel à Clever Cloud, l'horaire est porté par
+# `clevercloud/cron.json` (4 h du matin), exécuté par l'instance elle-même. Le
+# garder aussi ici ferait tourner la purge deux fois par nuit : sans dégât — la
+# purge est idempotente — mais avec deux endroits à corriger, et l'un des deux
+# qu'on oublierait.
+#
+# Cette obligation-là ne tolère pas l'à-peu-près : c'est une purge légale
+# (art. 5.1.e du RGPD), pas une tâche de confort. Vérifier après déploiement
+# qu'elle tourne bien côté Clever Cloud : `clever logs | grep cron`.
+#
+# Le déclenchement manuel reste disponible. Il exige deux secrets du dépôt
+# (Settings → Secrets and variables → Actions) :
+#   SITE_URL     — l'URL de production, soit https://o3saveurs.fr
+#   CRON_SECRET  — la même valeur que la variable Clever Cloud du même nom.
 
 on:
-  schedule:
-    # 3 h 15 UTC, hors des heures de service du restaurant.
-    - cron: "15 3 * * *"
   workflow_dispatch:
 
 jobs:

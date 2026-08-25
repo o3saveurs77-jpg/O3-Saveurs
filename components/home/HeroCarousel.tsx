@@ -62,6 +62,37 @@ export function HeroCarousel({
   const hold = () => setPaused(true);
   const release = () => setPaused(false);
 
+  /* Chargement des photos suivantes : différé, pas annulé.
+   *
+   * Translatées hors d'un conteneur `overflow-hidden`, elles ne deviennent
+   * jamais « visibles » au sens du chargement différé — en `lazy` pur, le
+   * visiteur qui glisse tomberait sur un cadre vide. D'où le `eager` posé
+   * ici à l'origine. Sauf que Next 15 émet un `<link rel="preload">` pour
+   * chaque image `eager` : les six photos de la vitrine partaient en tête du
+   * `<head>`, au même rang de priorité que la photo du bandeau — celle qui
+   * décide du LCP, donc de la note de performance que Google prend en compte.
+   * Six téléchargements lourds passaient devant elle.
+   *
+   * On garde les deux propriétés : `lazy` au premier rendu, le temps que le
+   * bandeau s'affiche, puis bascule en `eager` dès que le navigateur souffle.
+   * Changer l'attribut d'une image déjà montée déclenche bien son chargement,
+   * et à cet instant le `<head>` est joué depuis longtemps. */
+  const [preloadRest, setPreloadRest] = useState(false);
+
+  useEffect(() => {
+    if (!animated) return;
+    const canIdle = typeof window.requestIdleCallback === "function";
+    // Le `timeout` est un garde-fou : sur un onglet chargé, l'inactivité peut
+    // ne jamais venir, et les photos doivent finir par se charger quand même.
+    const id = canIdle
+      ? window.requestIdleCallback(() => setPreloadRest(true), { timeout: 3000 })
+      : window.setTimeout(() => setPreloadRest(true), 1200);
+    return () => {
+      if (canIdle) window.cancelIdleCallback(id as number);
+      else window.clearTimeout(id as number);
+    };
+  }, [animated]);
+
   return (
     <div
       className="relative aspect-[4/5] w-full overflow-hidden rounded-[28px] border-4 border-white/20 shadow-[var(--shadow-lg)]"
@@ -87,12 +118,11 @@ export function HeroCarousel({
               src={slide.src}
               alt={slide.label || "Spécialité de la maison"}
               fill
-              /* `eager` au-delà de la première : les photos suivantes sont hors
-                 cadre par translation, donc jamais « visibles » au sens du
-                 chargement différé — elles ne commenceraient à se charger qu'au
-                 moment de glisser, et le visiteur verrait un cadre vide. */
+              /* La première porte le `priority` — c'est la seule que le
+                 `<head>` a le droit de précharger. Les autres attendent
+                 `preloadRest` (voir plus haut) : différées, jamais oubliées. */
               priority={i === 0}
-              loading={i === 0 ? undefined : "eager"}
+              loading={i === 0 ? undefined : preloadRest ? "eager" : "lazy"}
               sizes="(min-width: 1024px) 38vw, 90vw"
               className="object-cover"
             />

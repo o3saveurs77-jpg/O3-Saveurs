@@ -1,4 +1,7 @@
-# Mise en production — Clever Cloud, IONOS, Resend
+# Mise en production — Clever Cloud, OVH, Resend
+
+> **Domaine retenu : `o3saveurs.fr`, enregistré chez OVH.** L'hébergement reste
+> Clever Cloud ; OVH ne sert que de bureau d'enregistrement et de zone DNS.
 
 Mode opératoire complet, dans l'ordre où il faut l'exécuter. Chaque étape dit
 **ce qui casse si on la saute** : c'est ce qui permet de reprendre après une
@@ -15,7 +18,7 @@ Vercel depuis le passage du stockage à S3.
 Il vous faut, ouverts devant vous :
 
 - un compte **Clever Cloud** avec un moyen de paiement enregistré ;
-- l'accès **IONOS** au domaine (probablement `o3saveurs.fr`) ;
+- l'accès **OVH** au domaine `o3saveurs.fr` (espace client → _Noms de domaine_) ;
 - l'accès **Resend**, **Stripe** et **Auth0** ;
 - les identifiants de la base **Neon** actuelle (dans votre `.env`).
 
@@ -108,6 +111,23 @@ navigateur, qui ne voit pas les variables serveur.
 > cadres vides, sans erreur nulle part. `npm run verif:prod` refuse de partir
 > dans ce cas.
 
+### Verser les photos livrées
+
+```bash
+npm run db:photos-cellar
+```
+
+Les photos de la livraison initiale vivaient dans `public/photos/`, servies par
+Next ; celles téléversées depuis l'administration allaient sur Cellar. Deux
+origines pour une même chose. Ce script verse les premières sur Cellar et
+repointe la base — plats et sections de page.
+
+`public/photos/` **reste dans le dépôt** : six commandes déjà passées y
+référencent leurs plats, et une facture doit rester lisible telle qu'elle a été
+émise. Le seed, lui, écrit toujours des chemins locaux, pour qu'une installation
+neuve fonctionne sans stockage objet — relancer ce script après tout
+`npm run db:seed`.
+
 ---
 
 ## 3. Variables d'environnement
@@ -123,12 +143,19 @@ clever env set AUTH0_ISSUER "https://…auth0.com"
 clever env set AUTH0_M2M_CLIENT_ID "…"
 clever env set AUTH0_M2M_CLIENT_SECRET "…"
 clever env set STRIPE_SECRET_KEY "…"
-clever env set STRIPE_WEBHOOK_SECRET "…"      # à régénérer, voir §7
+clever env set STRIPE_WEBHOOK_SECRET "…"      # celui du webhook du §7, pas celui de Vercel
 clever env set RESEND_API_KEY "…"
 clever env set RESEND_FROM_EMAIL "commandes@o3saveurs.fr"
 clever env set RESTAURANT_NOTIFY_EMAIL "…"
 clever env set ADMIN_EMAIL "…"
 clever env set CRON_SECRET "$(openssl rand -base64 32)"
+```
+
+Le jeu complet, valeurs comprises, est prêt dans `clever-env.txt` — hors dépôt,
+sur le disque, à côté de `.env`. Plutôt que de retaper vingt commandes :
+
+```bash
+clever env import < clever-env.txt
 ```
 
 Contrôle, avant tout déploiement :
@@ -138,7 +165,9 @@ clever ssh
 npm run verif:prod
 ```
 
-Il énumère ce qui manque **et ce que chaque manque casse concrètement**.
+Il énumère ce qui manque **et ce que chaque manque casse concrètement**. Au
+2026-08-13, sur le contenu de `.env.production.local` : **20 vérifications au
+vert, aucun blocage**.
 
 ---
 
@@ -166,10 +195,23 @@ clever scale --build-flavor M
 
 > **Si on saute le crochet :** le déploiement paraît réussir jusqu'au bout,
 > puis s'arrête sur `Could not find a production build in the '.next'
-> directory`. Le site ne démarre pas du tout.
+directory`. Le site ne démarre pas du tout.
 
-> **Si on saute la machine dédiée :** le build s'interrompt en cours de route
-> sur un `JavaScript heap out of memory`, sans autre explication.
+> **Si on saute la machine dédiée** (constaté le 2026-08-13) **:** le build
+> démarre, affiche `Creating an optimized production build`, puis meurt au bout
+> de deux minutes sur :
+>
+> ```
+> Next.js build worker exited with code: null and signal: SIGKILL
+> ```
+>
+> Pas de `JavaScript heap out of memory`, pas de trace : c'est le noyau qui tue
+> le processus, et il ne laisse rien derrière lui. Le message ressemble à un
+> plantage de Next.js — il n'en est pas un.
+>
+> Ne pas tenter de relever `NODE_OPTIONS` à la place. Les 644 Mo sont dérivés de
+> la mémoire physique de l'instance : autoriser un tas plus grand que la machine
+> ne fait qu'avancer le moment où le noyau intervient.
 
 ---
 
@@ -187,19 +229,42 @@ c'est le signe que la base répond.
 
 ---
 
-## 6. Domaine chez IONOS
+## 6. Domaine chez OVH
 
-Dans Clever Cloud : *Domain names* → ajouter `o3saveurs.fr` et `www.o3saveurs.fr`.
+Dans Clever Cloud : _Domain names_ → ajouter `o3saveurs.fr` **et**
+`www.o3saveurs.fr`. Relevez l'adresse IP que Clever Cloud affiche à cet
+endroit : c'est elle qui va dans la zone, et elle seule fait foi.
 
-Chez IONOS, dans la zone DNS :
+Chez OVH : _Espace client → Noms de domaine → o3saveurs.fr → Zone DNS_.
 
-| Type    | Nom   | Valeur                              |
-| ------- | ----- | ----------------------------------- |
-| `A`     | `@`   | l'IP indiquée par Clever Cloud      |
-| `CNAME` | `www` | `domain.clever-cloud.com.`          |
+| Type    | Sous-domaine | Cible                         |
+| ------- | ------------ | ----------------------------- |
+| `A`     | (vide)       | l'IP relevée sur Clever Cloud |
+| `CNAME` | `www`        | `domain.clever-cloud.com.`    |
 
-Le certificat HTTPS est engendré automatiquement une fois la propagation faite
-(quelques minutes à quelques heures). N'annoncez rien avant d'avoir le cadenas.
+Trois pièges propres à OVH, dans l'ordre où on les rencontre :
+
+1. **La zone n'est pas vide au départ.** OVH y met un `A` vers sa page de
+   parcage et un `CNAME www` vers `o3saveurs.fr.`. Il faut **modifier** ces
+   deux entrées, pas en ajouter de nouvelles : deux `A` sur `@` enverraient un
+   visiteur sur deux au parcage, une fois sur deux — la panne la plus
+   déroutante qui soit, puisqu'un rechargement « répare » le site.
+2. **Le point final du `CNAME` est obligatoire.** `domain.clever-cloud.com`
+   sans point devient `domain.clever-cloud.com.o3saveurs.fr` et ne résout pas.
+3. **Vérifiez les serveurs DNS.** _Serveurs DNS_ doit afficher ceux d'OVH
+   (`dns….ovh.net` / `ns….ovh.net`). S'ils pointent encore ailleurs — Vercel,
+   un ancien hébergeur — la zone éditée ici n'est lue par personne.
+
+Contrôle, une fois la propagation faite :
+
+```bash
+nslookup o3saveurs.fr
+nslookup www.o3saveurs.fr
+```
+
+Le certificat HTTPS est engendré automatiquement ensuite (quelques minutes à
+quelques heures). **N'annoncez rien avant d'avoir le cadenas** : sans lui, les
+cookies de session sécurisés sont refusés et personne ne reste connecté.
 
 > **Si on saute cette étape :** le site n'est joignable que sur l'URL
 > `*.cleverapps.io`, et Auth0 refusera la connexion — l'URL de rappel ne
@@ -209,39 +274,79 @@ Le certificat HTTPS est engendré automatiquement une fois la propagation faite
 
 ## 7. Reconfigurer les services externes
 
-Ces trois-là pointent encore sur Vercel. **Tant qu'ils ne sont pas repointés,
+Ces trois-là pointaient encore sur Vercel. **Tant qu'ils ne sont pas repointés,
 le site est en ligne mais ne fonctionne pas vraiment.**
 
-### Auth0
-*Applications → o3-saveurs → Settings* :
-- **Allowed Callback URLs** : `https://o3saveurs.fr/api/auth/callback/auth0`
-- **Allowed Logout URLs** : `https://o3saveurs.fr`
+Deux des trois se pilotent maintenant depuis le dépôt, pour que la
+configuration parte du même endroit que le code — et se rejoue à l'identique le
+jour où le domaine changera encore.
 
-Gardez les entrées `localhost` pour le développement. Vérifiez ensuite avec
+### Auth0 — fait ✅
+
+```bash
+npm run auth0:urls -- --url=https://o3saveurs.fr --appliquer
+```
+
+Recale `callbacks`, `allowed_logout_urls` et `web_origins` sur le domaine, plus
+sa variante `www`, en gardant `localhost` pour le développement. Idempotent :
+relançable sans risque, il affiche l'écart avant d'écrire.
+
+**Le script est additif à dessein** : les URL Vercel sont conservées, sinon la
+connexion casserait sur le site encore en ligne pendant les heures de
+propagation DNS. Une fois la bascule confirmée et Vercel coupé (voir « Ne pas
+oublier »), on purge :
+
+```bash
+npm run auth0:urls -- --url=https://o3saveurs.fr --nettoyer --appliquer
+```
+
+Contrôle du reste du tenant — rôles, Action Post-Login, claims — avec
 `npm run auth0:check`.
 
 > Sans cela : `OAuthCallbackError` à chaque tentative de connexion.
 
-### Stripe
-*Developers → Webhooks* : créez un point de terminaison sur
-`https://o3saveurs.fr/api/webhooks/stripe`, avec les événements
-`checkout.session.completed`, `checkout.session.expired`,
-`checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`
-et `charge.refunded`.
+### Stripe — fait, en mode test ⚠
 
-**Le secret de signature change** : reportez le nouveau dans
-`STRIPE_WEBHOOK_SECRET`.
+```bash
+npm run stripe:webhook -- --url=https://o3saveurs.fr --appliquer
+```
 
-> Sans cela : le client paie, Stripe encaisse, et la commande reste « en
+Crée le point de terminaison `https://o3saveurs.fr/api/webhooks/stripe` avec
+les cinq événements traités par `app/api/webhooks/stripe/route.ts`, et affiche
+le secret de signature — **une seule fois** : Stripe ne le redonne jamais.
+Reportez-le dans `STRIPE_WEBHOOK_SECRET` (c'est fait).
+
+> **⚠ Le site ouvrira en mode test.** `STRIPE_SECRET_KEY` est une clé
+> `sk_test_…` : le tunnel de paiement fonctionne de bout en bout, mais aucune
+> carte réelle n'est débitée et aucun euro n'arrive sur le compte. Pour
+> encaisser vraiment, il faudra activer le compte Stripe, puis **tout refaire
+> en mode live** : nouvelle clé `sk_live_…`, nouveau webhook, nouveau secret de
+> signature. Les deux modes ne partagent rien.
+>
+> Sans le webhook : le client paie, Stripe encaisse, et la commande reste « en
 > attente de paiement ». Ni facture, ni passage en cuisine. C'est la panne la
 > plus coûteuse de la liste, et la plus silencieuse.
 
-### Resend
-*Domains* → ajouter `o3saveurs.fr`. Resend fournit des enregistrements **SPF**,
-**DKIM** et **DMARC** à créer chez IONOS.
+### Resend — à faire, chez OVH
 
-Attendez la vérification avant d'annoncer l'ouverture : sans elle, vos emails
-partent en indésirables, quand ils partent.
+_Domains_ → ajouter `o3saveurs.fr`. Resend fournit alors des enregistrements à
+recopier dans la zone DNS OVH (§6) :
+
+| Type  | Sous-domaine        | Rôle                             |
+| ----- | ------------------- | -------------------------------- |
+| `TXT` | `send`              | SPF — autorise Resend à écrire   |
+| `TXT` | `resend._domainkey` | DKIM — signe les messages        |
+| `TXT` | `_dmarc`            | DMARC — politique en cas d'échec |
+| `MX`  | `send`              | retours d'erreur                 |
+
+> **Attention à l'auto-complétion d'OVH** : le champ « sous-domaine » attend
+> `resend._domainkey`, pas le nom complet. OVH ajoute `.o3saveurs.fr` de
+> lui-même, et le saisir en entier donne un enregistrement à double suffixe que
+> Resend ne trouvera jamais.
+
+`RESEND_FROM_EMAIL` vaut déjà `commandes@o3saveurs.fr` : **cette adresse ne
+peut pas envoyer tant que le domaine n'est pas vérifié.** Attendez le
+« Verified » vert avant d'annoncer l'ouverture.
 
 > Sans cela : ni confirmation de commande, ni facture, ni alerte de nouvelle
 > commande. Vous ne sauriez même pas qu'on a commandé.
@@ -276,9 +381,12 @@ Dans l'ordre, sur le domaine définitif :
 
 1. La carte s'affiche, avec les vrais plats.
 2. Connexion : vous arrivez sur le back-office, pas sur l'espace client.
-3. **Une commande réelle à 1 €, payée par carte.** Vérifiez que vous recevez
-   l'alerte, que le client reçoit sa facture PDF, et que la commande apparaît
-   en cuisine. *Cette chaîne complète n'a jamais tourné une seule fois.*
+   L'écran Auth0 doit afficher « Ô 3 Saveurs », plus « My App ».
+3. **Une commande complète, payée par carte.** Stripe étant en mode test,
+   utilisez la carte `4242 4242 4242 4242`, date future, CVC quelconque.
+   Vérifiez que vous recevez l'alerte, que le client reçoit sa facture PDF, et
+   que la commande apparaît en cuisine. _Cette chaîne complète n'a jamais
+   tourné une seule fois._
 4. Remboursez cette commande depuis le back-office : l'avoir doit arriver.
 5. `npm run verif:prod` : tout au vert.
 
@@ -295,3 +403,14 @@ Dans l'ordre, sur le domaine définitif :
   le pied de page. Tranchez avant d'ouvrir.
 - **Ne coupez pas Vercel et Neon tout de suite.** Laissez-les une semaine : si
   quelque chose manque dans la copie, la source est encore là.
+- **Une fois Vercel coupé**, purgez ses URL du tenant Auth0 :
+  `npm run auth0:urls -- --url=https://o3saveurs.fr --nettoyer --appliquer`.
+  Tant qu'elles y sont, une adresse de rappel morte reste déclarée comme
+  légitime.
+- **Le mode test de Stripe n'est pas un détail d'ouverture.** Tant que
+  `STRIPE_SECRET_KEY` commence par `sk_test_`, le site prend des commandes,
+  émet des factures et affiche « payé » — sans qu'un seul euro soit encaissé.
+  Il n'y a aucun signe visible côté client. À trancher avant d'annoncer.
+- **Deux comptes Auth0 pour `o3saveurs77@gmail.com`** (un par mot de passe, un
+  par Google), tous deux ADMIN. Ce n'est pas un problème, mais les favoris et
+  adresses enregistrés diffèrent selon le bouton utilisé pour se connecter.

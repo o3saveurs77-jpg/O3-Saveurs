@@ -54,6 +54,52 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
 
+  /* Types et lint : vérifiés en intégration continue, pas au déploiement.
+   *
+   * Une fois la compilation webpack tenue dans la mémoire de l'instance, c'est
+   * l'étape « Linting and checking validity of types » qui se faisait tuer, au
+   * bout de quatre minutes : `tsc` sur l'ensemble du projet coûte plus cher que
+   * la compilation elle-même.
+   *
+   * On peut s'en passer ici parce qu'on ne s'en passe pas ailleurs :
+   * `.github/workflows/ci.yml` lance `typecheck`, `lint`, les tests **et** un
+   * build à chaque poussée sur `main` et à chaque pull request — sur le commit
+   * exact qui part en production.
+   *
+   * ⚠️ Le filet est là, pas ici. Retirer ou laisser rouge cette CI, et une
+   * erreur de types partirait en production sans que rien ne l'arrête. */
+  eslint: { ignoreDuringBuilds: true },
+  typescript: { ignoreBuildErrors: true },
+
+  /* Compilation sur une machine d'un gigaoctet.
+   *
+   * Clever Cloud impose un `--max-old-space-size` dérivé de l'instance, et
+   * cette limite vaut pour **chaque** processus Node, pas pour la machine. Next
+   * compile par défaut dans un worker distinct du processus principal : deux
+   * tas pour une seule mémoire physique, et le noyau en tue un. D'où le
+   * « Next.js build worker exited with code: null and signal: SIGKILL », sec,
+   * sans trace — une erreur de tas V8 laisse un message, le tueur du noyau non.
+   *
+   *  · `webpackBuildWorker: false` — compiler dans le processus principal,
+   *    plutôt que d'ouvrir un second tas à côté ;
+   *  · `cpus: 1` — un seul ouvrier pour la génération statique ;
+   *  · `webpackMemoryOptimizations` — la variante économe de webpack.
+   *
+   * ⚠️ Ne pas ajouter `workerThreads: true` en croyant économiser un processus.
+   * Next transmet alors la configuration aux ouvriers par clonage structuré, et
+   * le `headers()` ci-dessous — une fonction — ne se clone pas : la génération
+   * statique s'arrête sur « DataCloneError: ()=>null could not be cloned », qui
+   * ne dit rien de sa cause. Les processus enfants, par défaut, sérialisent
+   * autrement et n'ont pas ce défaut.
+   *
+   * Le build est plus lent, faute de parallélisme. À reconsidérer si une
+   * machine de compilation dédiée est un jour activée. */
+  experimental: {
+    webpackMemoryOptimizations: true,
+    webpackBuildWorker: false,
+    cpus: 1,
+  },
+
   images: {
     remotePatterns: storageHost
       ? [

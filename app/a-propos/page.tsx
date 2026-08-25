@@ -3,9 +3,15 @@ import { SectionList } from "@/components/sections/SectionBlock";
 import { loadPage } from "@/lib/pageContent";
 
 export const metadata: Metadata = {
-  title: "À propos · Ô 3 Saveurs — Chez Laila",
+  title: "À propos — l'histoire de Chez Laila",
   description:
-    "L'histoire de Chez Laila : une cuisine du monde généreuse, préparée maison à Pontault-Combault.",
+    "L'histoire de Chez Laila : une cuisine du monde généreuse, préparée maison à Pontault-Combault — Afrique de l'Ouest, Maghreb et Méditerranée.",
+  alternates: { canonical: "/a-propos" },
+  openGraph: {
+    title: "À propos · Ô 3 Saveurs — Chez Laila",
+    description: "Une cuisine du monde généreuse, préparée maison à Pontault-Combault.",
+    url: "/a-propos",
+  },
 };
 
 /* Le récit, les valeurs et les informations pratiques étaient écrits dans ce

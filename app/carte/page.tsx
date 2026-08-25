@@ -7,12 +7,22 @@ import { fmtPrice } from "@/lib/menu";
 import type { Dish } from "@/lib/menu";
 import { loadDailySpecial } from "@/lib/dailySpecial";
 import { Icon } from "@/components/Icon";
+import { cats } from "@/lib/menu";
+import { JsonLd } from "@/components/JsonLd";
+import { graph, menuNode, breadcrumbNode } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "La Carte · Ô 3 Saveurs — Chez Laila",
+  // Titre court : le layout y ajoute « · Ô 3 Saveurs — Chez Laila ».
+  title: "La Carte",
   description:
-    "Découvrez toute la carte : saveurs africaines, maghrébines et méditerranéennes, grillades, sandwichs, boissons maison et desserts.",
+    "Toute la carte d'Ô 3 Saveurs à Pontault-Combault : tajines, couscous, thiéboudiène, mafé, yassa, grillades, sandwichs, salades, boissons maison et desserts. Livraison et à emporter.",
   alternates: { canonical: "/carte" },
+  openGraph: {
+    title: "La Carte · Ô 3 Saveurs — Chez Laila",
+    description:
+      "Tajines, couscous, thiéboudiène, mafé, grillades et desserts maison — commandez en livraison ou à emporter.",
+    url: "/carte",
+  },
 };
 
 /* Même cadence que l'accueil : la carte change au rythme des réglages du
@@ -37,8 +47,21 @@ async function loadDishes(): Promise<Dish[]> {
 export default async function CartePage() {
   const [dishes, platToday] = await Promise.all([loadDishes(), loadDailySpecial().catch(() => null)]);
 
+  /* La carte en `Menu` / `MenuSection` / `MenuItem` : c'est ce balisage qui
+   * permet à un moteur de citer un plat *et son prix*. Il est construit sur
+   * les mêmes `dishes` que la page — il ne peut donc pas annoncer un plat que
+   * le visiteur ne verrait pas. */
+  const jsonLd = graph([
+    menuNode(dishes, cats),
+    breadcrumbNode([
+      { name: "Accueil", path: "/" },
+      { name: "La Carte", path: "/carte" },
+    ]),
+  ]);
+
   return (
     <>
+      <JsonLd data={jsonLd} />
       <header className="relative overflow-hidden bg-primary text-white">
         <div className="ots-band flip" />
         <div

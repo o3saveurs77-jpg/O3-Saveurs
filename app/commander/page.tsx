@@ -2,7 +2,16 @@ import type { Metadata } from "next";
 import { CheckoutClient } from "@/components/checkout/CheckoutClient";
 
 export const metadata: Metadata = {
-  title: "Commander · Ô 3 Saveurs — Chez Laila",
+  title: "Commander",
+  description:
+    "Finalisez votre commande Ô 3 Saveurs : livraison à Pontault-Combault et alentours, ou retrait au restaurant.",
+  alternates: { canonical: "/commander" },
+  /* Tunnel de commande : pour un robot, qui arrive toujours avec un panier
+   * vide, la page ne contient que « Votre panier est vide ». L'indexer, c'est
+   * proposer une page creuse en résultat de recherche et dépenser du budget
+   * d'exploration ailleurs que sur la carte. `follow` reste : les liens de la
+   * page continuent de transmettre leur poids. */
+  robots: { index: false, follow: true },
 };
 
 export default function CommanderPage() {

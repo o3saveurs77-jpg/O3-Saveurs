@@ -153,7 +153,6 @@ export function Footer() {
             <Link href="/mentions-legales" className="hover:text-gold">Mentions légales</Link>
             <Link href="/cgv" className="hover:text-gold">CGV</Link>
             <Link href="/confidentialite" className="hover:text-gold">Confidentialité</Link>
-            <Link href="/admin" className="hover:text-gold">Back-office</Link>
           </nav>
         </div>
       </div>

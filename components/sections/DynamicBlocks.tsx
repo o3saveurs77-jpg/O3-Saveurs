@@ -10,15 +10,24 @@
  * moins qu'une grille vide ou un tarif inventé.
  */
 
+import Image from "next/image";
 import Link from "next/link";
 import { DishCard } from "@/components/DishCard";
-import { Icon } from "@/components/Icon";
+import { Icon, type IconName } from "@/components/Icon";
 import { Reveal } from "@/components/Reveal";
 import { fmtPrice } from "@/lib/menu";
 import { formulaSupplements, isFormulaOrderable } from "@/lib/formulas";
+import { formatLeadTime } from "@/lib/preorder";
 import type { SectionContent } from "@/lib/pageSections";
 import type { SectionContext } from "@/lib/pageContent";
-import { Accent, SectionHeading, SectionWrap, gridCols, tone } from "@/components/sections/Shell";
+import {
+  Accent,
+  CtaRow,
+  SectionHeading,
+  SectionWrap,
+  gridCols,
+  tone,
+} from "@/components/sections/Shell";
 
 // ─── Plats mis en avant ───────────────────────────────────────
 
@@ -194,6 +203,110 @@ export function FormulesBlock({ content, ctx }: { content: SectionContent; ctx: 
           );
         })}
       </div>
+    </SectionWrap>
+  );
+}
+
+// ─── Plats sur commande ───────────────────────────────────────
+
+/**
+ * Les grosses pièces réservées à l'avance : d'abord comment ça marche, ensuite
+ * ce qui se réserve réellement aujourd'hui.
+ *
+ * L'ordre n'est pas décoratif. Réserver un agneau entier n'a rien d'un ajout au
+ * panier — il y a un délai, un accord du restaurant et un paiement d'avance — et
+ * un client qui découvre ces trois règles au moment de payer se croit piégé. Le
+ * mode d'emploi passe donc devant la liste.
+ *
+ * Les pièces viennent de `ctx.surCommande`, pas d'une liste ressaisie ici : un
+ * plat retiré de la carte disparaît de l'accueil, et son délai est celui que le
+ * tunnel appliquera. On n'utilise pas `DishCard` — ces plats n'ont ni photo ni,
+ * pour l'instant, de prix arrêté, et une grille de vignettes grises portant
+ * toutes « Bientôt » donnerait l'impression d'une carte à l'abandon.
+ */
+export function SurCommandeBlock({
+  content,
+  ctx,
+}: {
+  content: SectionContent;
+  ctx: SectionContext;
+}) {
+  const plats = ctx.surCommande.slice(0, content.limit);
+  if (!plats.length) return null; // aucune pièce à réserver en ce moment
+
+  const t = tone(content.theme);
+
+  return (
+    <SectionWrap theme={content.theme} id="sur-commande" className="scroll-mt-20">
+      <SectionHeading content={content} t={t} />
+
+      {content.items.length > 0 && (
+        <div className="mt-9 grid gap-5 sm:grid-cols-3">
+          {content.items.map((item, i) => (
+            <Reveal key={item.id} delay={i * 110} className="h-full">
+              <div
+                className={`flex h-full flex-col items-center gap-3 rounded-[var(--radius-card)] border p-6 text-center shadow-[var(--shadow-soft)] ${t.card}`}
+              >
+                <span
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${
+                    t.dark ? "bg-white/10 text-gold" : "bg-primary-soft text-primary"
+                  }`}
+                >
+                  {/* Une explication sans icône garde son alignement plutôt que
+                      de remonter d'un cran par rapport à ses voisines. */}
+                  <Icon name={(item.icon ?? "check") as IconName} size={22} />
+                </span>
+                <h3 className="text-lg leading-tight">{item.title}</h3>
+                {item.text && <p className={`text-sm ${t.body}`}>{item.text}</p>}
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      )}
+
+      <div className={`mt-6 grid gap-4 ${gridCols(content.columns)}`}>
+        {plats.map((d, i) => (
+          <Reveal key={d.id} delay={i * 70} className="h-full">
+            <div
+              className={`flex h-full gap-4 rounded-[var(--radius-card)] border p-4 shadow-[var(--shadow-soft)] transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[var(--shadow-lg)] ${t.card}`}
+            >
+              {/* La vignette n'apparaît que si la photo existe : sans elle, la
+                  description prend toute la largeur au lieu de laisser un carré
+                  vide dans chaque carte. */}
+              {d.photo && (
+                <Image
+                  src={d.photo}
+                  alt=""
+                  width={160}
+                  height={160}
+                  className="h-20 w-20 shrink-0 rounded-2xl object-cover sm:h-24 sm:w-24"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[17px] leading-tight">{d.name}</h3>
+                <p className={`mt-1 text-sm ${t.body}`}>{d.desc}</p>
+                <p className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold">
+                  {/* Le délai chiffré plutôt qu'un simple « sur commande » : la
+                      même mention que sur la carte, et le seul endroit où ce
+                      nombre est écrit — il vient du plat. */}
+                  <span className={`inline-flex items-center gap-1.5 ${t.body}`}>
+                    <Icon name="clock" size={13} />
+                    {formatLeadTime(d.leadTimeHours)} à l&apos;avance
+                  </span>
+                  <span className={t.dark ? "text-gold" : "text-brick"}>
+                    {/* Une pièce se vend au poids : tant que la cuisine n'a pas
+                        arrêté son tarif, on invite à demander plutôt que
+                        d'annoncer un prix qui n'existe pas. */}
+                    {d.priceCents !== null ? fmtPrice(d.priceCents) : "Prix sur demande"}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </Reveal>
+        ))}
+      </div>
+
+      <CtaRow content={content} t={t} className="mt-8 justify-center" />
     </SectionWrap>
   );
 }
