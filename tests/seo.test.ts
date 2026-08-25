@@ -197,6 +197,26 @@ describe("priceRange", () => {
     expect(range).toBe("9–18 €");
   });
 
+  it("écarte les pièces qui se réservent à l'avance", () => {
+    // En production, l'agneau entier à 420 € faisait annoncer « 2–420 € » :
+    // une pièce de réception commandée 72 h à l'avance n'est pas le prix d'un
+    // repas. Le délai de préparation la distingue, pas sa catégorie.
+    const range = priceRange([
+      dish({ cat: "sur-commande", name: "Agneau entier", priceCents: 42000, leadTimeHours: 72 }),
+      dish({ cat: "sur-commande", name: "Paella", priceCents: 7500, leadTimeHours: 48 }),
+      dish({ cat: "africaine", priceCents: 900 }),
+      dish({ cat: "grillades", priceCents: 1800 }),
+    ]);
+    expect(range).toBe("9–18 €");
+  });
+
+  it("garde un plat ordinaire, même dans une catégorie à délai", () => {
+    // Le filtre porte sur le délai de la pièce, pas sur le nom de sa famille.
+    expect(priceRange([dish({ cat: "sur-commande", priceCents: 1400, leadTimeHours: 0 })])).toBe(
+      "14 €",
+    );
+  });
+
   it("n'annonce jamais un plancher à 0 €", () => {
     expect(priceRange([dish({ cat: "entrees", priceCents: 50 })])).toBe("1 €");
   });

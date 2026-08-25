@@ -249,10 +249,29 @@ const PRICE_RANGE_EXCLUDED_CATS = ["accompagnements", "boissons", "canettes"] as
  * Calculée sur le catalogue plutôt que figée : la carte bouge, et un
  * `priceRange` obsolète est une contradiction de plus entre le balisage et la
  * page. Les plats sans prix (« Bientôt ») sont ignorés.
+ *
+ * Deux familles en sortent, pour deux raisons différentes.
+ *
+ * · **Ce qui n'est pas un plat** — une sauce à 1 €, une canette à 2 €. Elles
+ *   répondent « rien » à la question posée, et tiraient le plancher à zéro.
+ *
+ * · **Ce qui n'est pas un repas du jour** — l'agneau entier à 420 €, le
+ *   demi-agneau à 220 €, la paella pour la tablée. Ces pièces se réservent
+ *   48 à 72 h à l'avance pour une réception ; les compter revenait à annoncer
+ *   « 2–420 € », un chiffre qu'aucun client n'a jamais payé pour dîner et que
+ *   Google affichait tel quel dans son panneau.
+ *
+ * Le second filtre porte sur le **délai**, pas sur la catégorie. La liste de
+ * catégories ci-dessus a précisément montré sa faiblesse : « Sur commande »
+ * est née après elle et personne n'a pensé à l'y ajouter. `leadTimeHours`
+ * décrit la chose elle-même — une pièce qui demande deux jours de préparation
+ * n'est pas ce qu'on mange ce soir — et vaudra donc pour la prochaine famille
+ * de ce genre sans qu'on ait à y revenir.
  */
 export function priceRange(dishes: Dish[]): string {
   const prices = dishes
     .filter((d) => !(PRICE_RANGE_EXCLUDED_CATS as readonly string[]).includes(d.cat))
+    .filter((d) => !d.leadTimeHours)
     .map((d) => d.priceCents)
     .filter((c): c is number => typeof c === "number" && c > 0);
   if (prices.length === 0) return "€€";
