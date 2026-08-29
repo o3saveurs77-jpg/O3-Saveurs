@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fmtPrice } from "@/lib/menu";
+import { fmtPrice, info } from "@/lib/menu";
 import type { Zone } from "@/lib/menu";
 import { resolveZone, suggestCities } from "@/lib/zones";
 import { Icon } from "./Icon";
@@ -146,7 +146,7 @@ export function ZoneCheck() {
                 </p>
               ) : (
                 <p className="mt-0.5">
-                  Pensez à <strong>l'à emporter</strong> ou commandez via <strong>Uber Eats</strong>.
+                  Pensez à <strong>l'à emporter</strong> ou commandez via <strong>{info.partners}</strong>.
                 </p>
               )}
             </div>

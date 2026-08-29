@@ -101,7 +101,7 @@ export function Footer() {
             </li>
             <li className="flex items-center gap-2">
               <Icon name="truck" size={18} className="shrink-0 text-primary" />
-              Livraison & à emporter · {info.partner}
+              Livraison & à emporter, mais aussi {info.partners}
             </li>
           </ul>
         </div>

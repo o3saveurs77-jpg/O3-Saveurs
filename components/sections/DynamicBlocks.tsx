@@ -429,7 +429,7 @@ export function InfosPratiquesBlock({
               <Icon name="scooter" size={18} className="mt-0.5 shrink-0 text-primary" />
               <div>
                 <dt className={t.body}>Livraison</dt>
-                <dd className="font-semibold">À domicile, à emporter & {p.partner}</dd>
+                <dd className="font-semibold">À domicile, à emporter, mais aussi {p.partners}</dd>
               </div>
             </div>
           </dl>

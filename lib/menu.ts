@@ -184,7 +184,9 @@ export const info = {
     { d: "Dimanche", h: "18h00 – 22h45  ·  (fermé le midi)" },
   ],
   payments: ["Espèces", "Carte Bleue", "Tickets Restaurant"],
-  partner: "Uber Eats",
+  /* Pluriel : la maison est sur plusieurs plateformes, et n'en citer qu'une
+   * laissait croire aux autres qu'elle n'y est pas. */
+  partners: "Uber Eats & Deliveroo",
   /* Le pied de page dessinait deux ronds cliquables pour Instagram et Snapchat
    * — mais `socials` ne contenait que des libellés, sans la moindre adresse.
    * C'étaient des `<span>` : un visiteur cliquait dans le vide.
