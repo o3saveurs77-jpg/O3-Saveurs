@@ -407,12 +407,12 @@ export const items: SeedDish[] = [
    * Identifiants explicites : la numérotation `dN` suit le rang dans cette
    * liste, une insertion ici renommerait tout ce qui suit lors d'un seed
    * rejoué. Voir la même précaution sur « sur commande » plus bas. */
-  D({ id: "can-coca", cat: "canettes", name: "Coca-Cola 33 cl", desc: "Canette de Coca-Cola, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-sprite", cat: "canettes", name: "Sprite 33 cl", desc: "Canette de Sprite, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-fanta", cat: "canettes", name: "Fanta 33 cl", desc: "Canette de Fanta, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-ice-tea", cat: "canettes", name: "Ice Tea 33 cl", desc: "Canette d'Ice Tea, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-orangina", cat: "canettes", name: "Orangina 33 cl", desc: "Canette d'Orangina, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-tropico", cat: "canettes", name: "Tropico 33 cl", desc: "Canette de Tropico, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-coca", cat: "canettes", name: "Coca-Cola 33 cl", desc: "Canette de Coca-Cola, servie bien fraîche.", price: 2, photo: "/photos/coca-cola.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-sprite", cat: "canettes", name: "Sprite 33 cl", desc: "Canette de Sprite, servie bien fraîche.", price: 2, photo: "/photos/sprite.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-fanta", cat: "canettes", name: "Fanta 33 cl", desc: "Canette de Fanta, servie bien fraîche.", price: 2, photo: "/photos/fanta.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-ice-tea", cat: "canettes", name: "Ice Tea 33 cl", desc: "Canette d'Ice Tea, servie bien fraîche.", price: 2, photo: "/photos/ice-tea.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-orangina", cat: "canettes", name: "Orangina 33 cl", desc: "Canette d'Orangina, servie bien fraîche.", price: 2, photo: "/photos/orangina.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-tropico", cat: "canettes", name: "Tropico 33 cl", desc: "Canette de Tropico, servie bien fraîche.", price: 2, photo: "/photos/tropico.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
   D({ id: "can-eau", cat: "canettes", name: "Eau minérale 50 cl", desc: "Bouteille d'eau minérale, 50 cl.", price: 2, photo: null, tags: ["50 cl", "Bien frais"], vatRateBp: 550 }),
 
   /* DESSERTS — identifiants figés à leur valeur d'origine (d49 à d53).
