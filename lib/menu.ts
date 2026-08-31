@@ -474,6 +474,22 @@ export const items: SeedDish[] = [
   D({ id: "sc-paella", cat: "sur-commande", name: "Paella", desc: "Paella généreuse aux fruits de mer et au poulet, safran et poivrons.", price: null, photo: null, tags: ["Sur commande", "À partager"], leadTimeHours: 48 }),
   D({ id: "sc-demi-agneau", cat: "sur-commande", name: "Demi-agneau", desc: "Demi-agneau préparé et rôti entier — pour vos grandes occasions.", price: null, photo: null, tags: ["Sur commande", "Grande réception"], leadTimeHours: 72 }),
   D({ id: "sc-agneau-entier", cat: "sur-commande", name: "Agneau entier", desc: "Agneau entier rôti à la braise, préparé sur mesure pour vos fêtes.", price: null, photo: null, tags: ["Sur commande", "Grande réception"], leadTimeHours: 72 }),
+
+  /* PHOTOS D'AOÛT 2026 — deux plats que la maison cuisine déjà mais que la
+   * carte ne portait pas. Ils arrivent par leurs photos, livrées le 31 août :
+   * un couscous sans viande, qu'aucune ligne ne proposait alors que les
+   * couscous en ligne contiennent tous de la viande, et la pastilla, dont la
+   * garniture se choisit — c'est ce que dit la photo fournie.
+   *
+   * Prix arrêtés avec la cliente : 9,90 € le couscous, 9,00 € la pastilla.
+   *
+   * Identifiants explicites et place en fin de liste, pour la raison dite juste
+   * au-dessus : le `D` incrémente son compteur à chaque appel, identifiant
+   * fourni ou non, et une insertion au milieu décalerait tous les `dN`
+   * suivants. Leur famille d'affichage vient de `cat`, leur rang de
+   * `position` — posé à la création en base par `scripts/nouveaux-plats.ts`. */
+  D({ id: "couscous-vegetarien", cat: "maghreb", name: "Couscous Végétarien", desc: "Semoule roulée maison et ses sept légumes mijotés — courgettes, carottes, navets et pois chiches.", price: 9.9, badge: "Nouveau", photo: "/photos/couscous-vegetarien.jpg", tags: ["Végé", "Mijoté"] }),
+  D({ id: "pastilla", cat: "entrees", name: "Pastilla", desc: "Feuilleté croustillant aux amandes effilées, sucré-salé — garniture au choix.", price: 9, badge: "Nouveau", photo: "/photos/pastilla.jpg", options: [{ name: "Garniture", required: true, choices: [{ l: "Fruits de mer" }, { l: "Poulet" }] }], tags: ["Croustillant", "Sucré-salé"] }),
 ];
 
 /* Options communes aux sandwichs : la sauce au choix et le supplément cheddar,
@@ -520,6 +536,12 @@ export interface SeedFormula {
 export const FORMULA_SUPPLEMENTS: Record<string, number> = {
   "Thiéboudiène Poisson": 4,
   "Poisson Entier Grillé": 9,
+  /* La pastilla est la plus chère des entrées — 9 €, quand les autres vont de
+   * 4 à 7,50 €. Sans supplément, un seed la ferait entrer dans le créneau
+   * « votre entrée » de la formule Midi à 15,90 €, aux côtés d'un plat à
+   * 12,90 € : vendue à perte. Déduit de la règle énoncée plus haut — formule
+   * garnie ≈ prix à la carte + 4 € — et à faire confirmer par la cliente. */
+  Pastilla: 1.5,
 };
 
 /**

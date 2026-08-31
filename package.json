@@ -22,6 +22,7 @@
     "db:photos-canettes": "tsx scripts/photos-canettes.ts",
     "db:grands-formats": "tsx scripts/grands-formats.ts",
     "db:poulet-roti": "tsx scripts/poulet-roti-hors-formules.ts",
+    "db:nouveaux-plats": "tsx scripts/nouveaux-plats.ts",
     "db:allergenes": "tsx scripts/allergenes.ts",
     "db:sur-commande": "tsx scripts/section-sur-commande.ts",
     "carte:web": "node scripts/carte-vers-web.mjs",
