@@ -246,7 +246,7 @@ export const cats: Category[] = [
      savait pas laquelle sortir, et le stock d'un Coca était impossible à
      distinguer de celui d'un Tropico. Une famille à part, une référence par
      canette. */
-  { id: "canettes", label: "Canettes & Eaux", script: "Canettes & Eaux" },
+  { id: "canettes", label: "Canettes & bouteilles", script: "Canettes & bouteilles" },
   { id: "desserts", label: "Desserts", script: "Desserts" },
   /* Grosses pièces et plats de fête, préparés sur réservation. Une catégorie
      à part et non un badge dans les grillades : le client qui cherche à dîner
@@ -415,7 +415,28 @@ export const items: SeedDish[] = [
   D({ id: "can-ice-tea", cat: "canettes", name: "Ice Tea 33 cl", desc: "Canette d'Ice Tea, servie bien fraîche.", price: 2, photo: "/photos/ice-tea.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
   D({ id: "can-orangina", cat: "canettes", name: "Orangina 33 cl", desc: "Canette d'Orangina, servie bien fraîche.", price: 2, photo: "/photos/orangina.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
   D({ id: "can-tropico", cat: "canettes", name: "Tropico 33 cl", desc: "Canette de Tropico, servie bien fraîche.", price: 2, photo: "/photos/tropico.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-eau", cat: "canettes", name: "Eau minérale 50 cl", desc: "Bouteille d'eau minérale, 50 cl.", price: 2, photo: null, tags: ["50 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-eau", cat: "canettes", name: "Volvic 50 cl", desc: "Bouteille d'eau minérale naturelle Volvic, 50 cl.", price: 2, photo: "/photos/volvic-50cl.jpg", tags: ["50 cl", "Bien frais"], vatRateBp: 550 }),
+
+  /* GRANDS FORMATS — la bouteille de 1,5 L, pour les tablées.
+   *
+   * La grille boissons d'août 2026 les ajoute pour une raison de panier : une
+   * commande de couscous pour six repartait avec six canettes, quand une
+   * bouteille coûte moins cher au client et laisse davantage à la maison.
+   *
+   * 4,00 € le soda et 2,50 € l'eau, soit 0,50 à 1,00 € sous le marché des
+   * plateformes : c'est un produit de supermarché, dont le client connaît le
+   * prix — contrairement aux jus maison, où le 50 cl fait la différence.
+   *
+   * Les marques sont celles des photos fournies par la maison, et non la liste
+   * indicative du document, qui citait Oasis et Evian : on ne met pas en vente
+   * une référence dont personne n'a confirmé qu'elle est au frigo. */
+  D({ id: "btl-coca", cat: "canettes", name: "Coca-Cola 1,5 L", desc: "Bouteille de Coca-Cola, 1,5 L — à partager.", price: 4, photo: "/photos/coca-cola-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-sprite", cat: "canettes", name: "Sprite 1,5 L", desc: "Bouteille de Sprite, 1,5 L — à partager.", price: 4, photo: "/photos/sprite-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-fanta", cat: "canettes", name: "Fanta 1,5 L", desc: "Bouteille de Fanta Orange, 1,5 L — à partager.", price: 4, photo: "/photos/fanta-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-ice-tea", cat: "canettes", name: "Ice Tea 1,5 L", desc: "Bouteille d'Ice Tea pêche, 1,5 L — à partager.", price: 4, photo: "/photos/ice-tea-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-orangina", cat: "canettes", name: "Orangina 1,5 L", desc: "Bouteille d'Orangina, 1,5 L — à partager.", price: 4, photo: "/photos/orangina-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-tropico", cat: "canettes", name: "Tropico 1,5 L", desc: "Bouteille de Tropico, 1,5 L — à partager.", price: 4, photo: "/photos/tropico-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-volvic", cat: "canettes", name: "Volvic 1,5 L", desc: "Bouteille d'eau minérale naturelle Volvic, 1,5 L.", price: 2.5, photo: "/photos/volvic-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
 
   /* DESSERTS — identifiants figés à leur valeur d'origine (d49 à d53).
    *
