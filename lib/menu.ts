@@ -356,7 +356,7 @@ export const items: SeedDish[] = [
   D({ cat: "grillades", name: "Brochette Poulet", desc: "Brochettes de poulet mariné, grillées au feu de bois — accompagnement au choix.", price: 7, photo: photo(0), tags: ["Feu à la braise", "Mariné"] }),
   D({ cat: "grillades", name: "Brochette Bœuf", desc: "Brochettes de bœuf mariné, grillées au feu de bois — accompagnement au choix.", price: 8, photo: photo(12), tags: ["Feu à la braise", "Mariné"] }),
   D({ cat: "grillades", name: "Poulet Rôti", desc: "Poulet rôti maison au feu de bois, doré et juteux — 1 accompagnement au choix.", price: 8, photo: photo(17), tags: ["Feu à la braise", "Rôti maison"] }),
-  D({ cat: "grillades", name: "Cuisse de Poulet", desc: "Cuisse de poulet marinée & braisée au feu de bois — à l'unité.", price: 3, photo: null, tags: ["Feu à la braise", "Mariné"] }),
+  D({ cat: "grillades", name: "Cuisse de Poulet", desc: "Cuisse de poulet marinée & braisée au feu de bois — à l'unité.", price: 3, photo: "/photos/cuisse-poulet-unite.jpg", tags: ["Feu à la braise", "Mariné"] }),
   D({ cat: "grillades", name: "Pilon de Poulet", desc: "Pilons de poulet marinés & braisés au feu de bois — 3 pièces.", price: 5, photo: null, tags: ["Feu à la braise", "Mariné"] }),
   D({ cat: "grillades", name: "Ailes de Poulet", desc: "Ailes de poulet épicées & croustillantes, braisées au feu de bois — 5 pièces.", price: 5, photo: null, tags: ["Feu à la braise", "Épicé"] }),
   D({ cat: "grillades", name: "Poisson Entier Grillé", desc: "Dorade entière grillée au feu de bois, selon arrivage — 1 accompagnement.", price: 18, photo: photo(29), tags: ["Feu à la braise", "Poisson frais"] }),
