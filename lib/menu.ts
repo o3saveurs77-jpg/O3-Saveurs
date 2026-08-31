@@ -542,6 +542,22 @@ export const FORMULA_SUPPLEMENTS: Record<string, number> = {
    * 12,90 € : vendue à perte. Déduit de la règle énoncée plus haut — formule
    * garnie ≈ prix à la carte + 4 € — et à faire confirmer par la cliente. */
   Pastilla: 1.5,
+  /* Grands formats : le créneau boisson leur est ouvert depuis le 31 août, et
+   * une bouteille de 1,5 L vaut le double d'une canette. Sans ces lignes, un
+   * seed la donnerait — 4,00 € de marchandise dans une formule à 12,90 €.
+   *
+   * Le montant est calé sur la canette à 2,00 €, la boisson incluse de la
+   * formule la moins garnie : c'est le supplément le plus prudent, celui
+   * qu'aucune formule ne peut sous-facturer. En base, il est recalculé créneau
+   * par créneau — +0,50 € seulement là où la boisson incluse est un jus à
+   * 3,50 €. */
+  "Coca-Cola 1,5 L": 2,
+  "Sprite 1,5 L": 2,
+  "Fanta 1,5 L": 2,
+  "Ice Tea 1,5 L": 2,
+  "Orangina 1,5 L": 2,
+  "Tropico 1,5 L": 2,
+  "Volvic 1,5 L": 0.5,
 };
 
 /**
@@ -553,19 +569,30 @@ export const FORMULA_SUPPLEMENTS: Record<string, number> = {
 const PLAT_CATS = ["salades", "maghreb", "africaine", "grillades"];
 
 /**
- * Boissons maison uniquement : les canettes, revendues telles quelles, ont leur
- * propre famille et n'entrent donc plus dans ce créneau.
+ * Jus maison, canettes, eaux et grands formats.
+ *
+ * La famille des canettes avait été écartée de ce créneau lors de l'éclatement
+ * du plat fourre-tout. La cliente l'y a rouverte le 31 août, avec les
+ * bouteilles de 1,5 L : deux formules sur quatre n'offraient que les jus
+ * maison, et un client qui voulait un Coca avec son sandwich devait le
+ * commander à part, hors formule.
  *
  * L'exclusion se faisait auparavant en écartant un plat par son nom — une
  * chaîne à retaper à l'identique, qu'un simple renommage depuis
- * l'administration suffisait à rendre inopérante : la canette serait alors
- * rentrée dans toutes les formules sans que personne ne le décide. Le mécanisme
- * a été retiré avec son dernier usage ; une famille, elle, ne dépend pas d'un
- * libellé.
+ * l'administration suffisait à rendre inopérante. Le mécanisme a été retiré
+ * avec son dernier usage ; une famille, elle, ne dépend pas d'un libellé.
+ *
+ * ⚠️ Ouvrir une famille entière rend `FORMULA_SUPPLEMENTS` indispensable pour
+ * ce qu'elle contient de cher : sans les lignes qui y sont posées, un seed
+ * offrirait une bouteille de 1,5 L à 4,00 € dans une formule à 12,90 €. Les
+ * montants déclarés là-bas sont les plus prudents — calés sur la canette à
+ * 2,00 €, boisson incluse de la formule la moins garnie. En base, le supplément
+ * est calculé créneau par créneau (`scripts/formules-boissons.ts`), et c'est la
+ * base qui s'affiche.
  */
 const BOISSON_SLOT: SeedFormulaSlot = {
   label: "Votre boisson",
-  cats: ["boissons"],
+  cats: ["boissons", "canettes"],
 };
 
 export const seedFormulas: SeedFormula[] = [
