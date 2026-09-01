@@ -371,7 +371,7 @@ export const items: SeedDish[] = [
   D({ cat: "accompagnements", name: "Riz Blanc", desc: "Riz parfumé nature, cuit maison — l'accompagnement classique.", price: 2.5, photo: photo(18), tags: ["Nature", "Sans gluten"] }),
   D({ cat: "accompagnements", name: "Alloco", desc: "Bananes plantain bien mûres, frites et caramélisées.", price: 4, photo: photo(9), popular: true, tags: ["Caramélisé"] }),
   D({ cat: "accompagnements", name: "Riz Rouge", desc: "Riz au gras tomaté — parfumé, généreux et coloré.", price: 4, photo: photo(15), tags: ["Tomaté", "Fait maison"] }),
-  D({ cat: "accompagnements", name: "Thiéboudiène blanc", desc: "Riz au gras blanc, parfumé — façon sénégalaise.", price: 4, photo: photo(18), tags: ["Au gras", "Parfumé"] }),
+  D({ cat: "accompagnements", name: "Thiéboudiène blanc", desc: "Riz au gras blanc, parfumé — façon sénégalaise.", price: 4, photo: "/photos/thieboudiene-blanc.jpg", tags: ["Au gras", "Parfumé"] }),
   D({ cat: "accompagnements", name: "Frites Maison", desc: "Pommes de terre fraîches, coupées et frites maison — dorées et croustillantes.", price: 4, photo: photo(27), tags: ["Croustillant", "Fait maison"] }),
   D({ cat: "accompagnements", name: "Salade Composée", desc: "Salade fraîche, tomates cerises, vinaigrette huile d'olive & balsamique.", price: 4, photo: photo(21), tags: ["Frais", "Végétarien"] }),
   D({ cat: "accompagnements", name: "Patate fourrée au fromage", desc: "Pommes de terre garnies au fromage fondant, panées maison.", price: 4, photo: null, tags: ["6 pièces", "Fromage"] }),
@@ -489,7 +489,7 @@ export const items: SeedDish[] = [
    * suivants. Leur famille d'affichage vient de `cat`, leur rang de
    * `position` — posé à la création en base par `scripts/nouveaux-plats.ts`. */
   D({ id: "couscous-vegetarien", cat: "maghreb", name: "Couscous Végétarien", desc: "Semoule roulée maison et ses sept légumes mijotés — courgettes, carottes, navets et pois chiches.", price: 9.9, badge: "Nouveau", photo: "/photos/couscous-vegetarien.jpg", tags: ["Végé", "Mijoté"] }),
-  D({ id: "pastilla", cat: "entrees", name: "Pastilla", desc: "Feuilleté croustillant aux amandes effilées, sucré-salé — garniture au choix.", price: 9, badge: "Nouveau", photo: "/photos/pastilla.jpg", options: [{ name: "Garniture", required: true, choices: [{ l: "Fruits de mer" }, { l: "Poulet" }] }], tags: ["Croustillant", "Sucré-salé"] }),
+  D({ id: "pastilla", cat: "entrees", name: "Pastilla", desc: "Feuilleté croustillant aux amandes effilées, sucré-salé — garniture au choix.", price: 8.9, badge: "Nouveau", photo: "/photos/pastilla.jpg", options: [{ name: "Garniture", required: true, choices: [{ l: "Poulet" }, { l: "Fruits de mer", price: 2 }] }], tags: ["Croustillant", "Sucré-salé"] }),
 ];
 
 /* Options communes aux sandwichs : la sauce au choix et le supplément cheddar,
@@ -541,7 +541,7 @@ export const FORMULA_SUPPLEMENTS: Record<string, number> = {
    * « votre entrée » de la formule Midi à 15,90 €, aux côtés d'un plat à
    * 12,90 € : vendue à perte. Déduit de la règle énoncée plus haut — formule
    * garnie ≈ prix à la carte + 4 € — et à faire confirmer par la cliente. */
-  Pastilla: 1.5,
+  Pastilla: 1.4,
   /* Grands formats : le créneau boisson leur est ouvert depuis le 31 août, et
    * une bouteille de 1,5 L vaut le double d'une canette. Sans ces lignes, un
    * seed la donnerait — 4,00 € de marchandise dans une formule à 12,90 €.
