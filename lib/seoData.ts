@@ -12,7 +12,7 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
-import { getSettings, getOpeningHours } from "@/lib/settings";
+import { getSettings, getOpeningHours, deliveryOrigin } from "@/lib/settings";
 import { DEFAULT_HOURS, WEEKDAY_LABEL, formatDayHours, type DayHours } from "@/lib/hours";
 import { info, zones as seedZones, type Dish, type Zone } from "@/lib/menu";
 import { rowToDish, rowToZone } from "@/lib/serialize";
@@ -72,6 +72,11 @@ function fallbackContext(): SeoContext {
  * JSON-LD suit donc les réglages avec le même délai que la page visible, ce
  * qui est exactement ce qu'on veut — les deux ne peuvent pas se contredire.
  */
+/** Une coordonnée vaut quelque chose si elle est finie et non nulle. */
+function isUsable(n: number): boolean {
+  return Number.isFinite(n) && n !== 0;
+}
+
 export async function loadSeoContext(): Promise<SeoContext> {
   try {
     const [settings, hours, zoneRows, dishRows] = await Promise.all([
@@ -81,8 +86,26 @@ export async function loadSeoContext(): Promise<SeoContext> {
       prisma.dish.findMany({ orderBy: [{ position: "asc" }, { name: "asc" }] }),
     ]);
 
-    const lat = Number(settings["delivery.originLat"]);
-    const lng = Number(settings["delivery.originLng"]);
+    let lat = Number(settings["delivery.originLat"]);
+    let lng = Number(settings["delivery.originLng"]);
+
+    /* Coordonnées absentes : on les fait calculer une fois, et `deliveryOrigin()`
+     * les mémorise en base. Elles ne servaient jusqu'ici qu'à la facturation au
+     * kilomètre, laquelle exige une clé Google absente — donc elles n'étaient
+     * jamais calculées, et le nœud `Restaurant` sortait sans `geo`. Le repli sur
+     * la Base Adresse Nationale (`lib/geo`) n'en demande aucune.
+     *
+     * Un seul appel dans la vie du site : le résultat est écrit en réglages, et
+     * la condition ci-dessous devient fausse dès le rendu suivant. En cas
+     * d'échec — réseau, adresse non reconnue — on repart sans coordonnées,
+     * exactement comme avant. */
+    if (!isUsable(lat) || !isUsable(lng)) {
+      const origin = await deliveryOrigin().catch(() => null);
+      if (origin) {
+        lat = origin.lat;
+        lng = origin.lng;
+      }
+    }
 
     const socials = [
       settings["social.instagram"],
@@ -101,8 +124,8 @@ export async function loadSeoContext(): Promise<SeoContext> {
         street: settings["restaurant.address"],
         zip: settings["restaurant.zip"],
         city: settings["restaurant.city"],
-        lat: Number.isFinite(lat) && lat !== 0 ? lat : null,
-        lng: Number.isFinite(lng) && lng !== 0 ? lng : null,
+        lat: isUsable(lat) ? lat : null,
+        lng: isUsable(lng) ? lng : null,
         socials,
       },
       hours,

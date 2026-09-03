@@ -668,7 +668,7 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
       altHref: "#saveurs",
       items: [
         it("badge1", "Livraison & à emporter", "", { icon: "truck" }),
-        it("badge2", "Uber Eats", ""),
+        it("badge2", "Uber Eats & Deliveroo", ""),
       ],
     }),
     seed("cartes", "Trio des saveurs", {

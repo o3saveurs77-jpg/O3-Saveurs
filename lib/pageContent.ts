@@ -158,7 +158,7 @@ export interface PracticalInfo {
   address: string;
   phone: string;
   payments: string[];
-  partner: string;
+  partners: string;
   hours: { jour: string; horaire: string }[];
 }
 
@@ -316,7 +316,7 @@ async function loadPractical(): Promise<PracticalInfo> {
     address: formatAddress(settings) || info.address,
     phone: settings["restaurant.phone"] || info.phone,
     payments: payments.length ? payments : info.payments,
-    partner: info.partner,
+    partners: info.partners,
     hours: hours.map((h) => ({
       jour: WEEKDAY_LABEL[h.weekday],
       horaire: formatDayHours(h),

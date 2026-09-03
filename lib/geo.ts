@@ -103,16 +103,14 @@ export async function suggestAddresses(
     .filter((s) => s.placeId && s.label);
 }
 
-/** Coordonnées d'une adresse libre, ou `null`. */
-export async function geocode(address: string): Promise<LatLng | null> {
-  if (!isGeoConfigured() || !address.trim()) return null;
-
-  const key = address.trim().toLowerCase();
-  const cached = geocodeCache.get(key);
-  if (cached) return cached;
+/**
+ * Coordonnées d'une adresse, par Google quand la clé existe.
+ */
+async function geocodeGoogle(address: string): Promise<LatLng | null> {
+  if (!isGeoConfigured()) return null;
 
   const params = new URLSearchParams({
-    address: address.trim(),
+    address,
     key: KEY(),
     language: "fr",
     region: "fr",
@@ -123,8 +121,56 @@ export async function geocode(address: string): Promise<LatLng | null> {
   const results = Array.isArray(data.results) ? data.results : [];
   const loc = (results[0] as { geometry?: { location?: LatLng } } | undefined)?.geometry?.location;
   if (!loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) return null;
+  return { lat: loc.lat, lng: loc.lng };
+}
 
-  return remember(geocodeCache, key, { lat: loc.lat, lng: loc.lng });
+/**
+ * Repli sans clé : la Base Adresse Nationale.
+ *
+ * `api-adresse.data.gouv.fr` est le service officiel de l'État — gratuit,
+ * sans clé, sans quota déclaré, et fait autorité sur les adresses françaises,
+ * ce qui est exactement le périmètre d'un restaurant de Seine-et-Marne. Il ne
+ * remplace pas Google pour la **distance routière** (il ne mesure rien), mais
+ * il suffit pour le seul point qui manquait : la position du restaurant.
+ *
+ * Sans ce repli, `deliveryOrigin()` renvoyait `null` faute de clé, les
+ * réglages restaient vides, et le nœud `Restaurant` du JSON-LD sortait sans
+ * `geo` — un restaurant sans coordonnées, pour un moteur qui classe d'abord
+ * sur la proximité.
+ *
+ * Le score écarte les à-peu-près : l'API répond toujours quelque chose, et
+ * une rue homonyme à l'autre bout du pays vaut moins que pas de réponse.
+ */
+async function geocodeBAN(address: string): Promise<LatLng | null> {
+  const params = new URLSearchParams({ q: address, limit: "1", autocomplete: "0" });
+  const data = await fetchJson(`https://api-adresse.data.gouv.fr/search/?${params}`);
+  if (!data) return null;
+
+  const features = Array.isArray(data.features) ? data.features : [];
+  const hit = features[0] as
+    | { geometry?: { coordinates?: number[] }; properties?: { score?: number } }
+    | undefined;
+  if (!hit || (hit.properties?.score ?? 0) < 0.4) return null;
+
+  // La BAN rend [longitude, latitude] — l'ordre GeoJSON, l'inverse de l'usage.
+  const [lng, lat] = hit.geometry?.coordinates ?? [];
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat: lat as number, lng: lng as number };
+}
+
+/** Coordonnées d'une adresse libre, ou `null`. */
+export async function geocode(address: string): Promise<LatLng | null> {
+  const clean = address.trim();
+  if (!clean) return null;
+
+  const key = clean.toLowerCase();
+  const cached = geocodeCache.get(key);
+  if (cached) return cached;
+
+  const found = (await geocodeGoogle(clean)) ?? (await geocodeBAN(clean));
+  if (!found) return null;
+
+  return remember(geocodeCache, key, found);
 }
 
 /**

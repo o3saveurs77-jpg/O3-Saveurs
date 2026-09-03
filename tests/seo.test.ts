@@ -258,6 +258,24 @@ describe("restaurantNode", () => {
     expect(node.geo).toBeUndefined();
   });
 
+  it("porte les coordonnées dès que le géocodage a rendu un point", () => {
+    // Un moteur qui classe sur la proximité a besoin du point, pas seulement
+    // de la rue. Elles viennent de la Base Adresse Nationale, sans clé Google.
+    const situe = restaurantNode({
+      profile: { ...PROFILE, lat: 48.796343, lng: 2.609933 },
+      hours: DEFAULT_HOURS,
+      zones: ZONES,
+      dishes: [dish({ priceCents: 900 })],
+      acceptsCash: true,
+      acceptsCard: true,
+    });
+    expect(situe.geo).toEqual({
+      "@type": "GeoCoordinates",
+      latitude: 48.796343,
+      longitude: 2.609933,
+    });
+  });
+
   it("ajoute les coordonnées une fois le géocodage fait", () => {
     const geocoded = restaurantNode({
       profile: { ...PROFILE, lat: 48.7969, lng: 2.6103 },

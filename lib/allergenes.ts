@@ -37,6 +37,10 @@ export const ALLERGENES_PAR_PLAT: Record<string, Allergen[]> = {
   "Tajine Veau & Pruneaux": ["oeufs", "fruits_a_coque", "sesame"],
   "Tajine Poulet aux Légumes": ["celeri", "sulfites"],
   "Tajine Boulettes de Bœuf": ["gluten", "oeufs"],
+  /* Couscous : la semoule de blé porte le gluten, le bouillon des sept légumes
+   * le céleri. Le royal y ajoute les merguez, d'où les sulfites. */
+  "Couscous Poulet": ["gluten", "celeri"],
+  "Couscous Royal": ["gluten", "celeri", "sulfites"],
 
   // ── Saveur Méditerranéenne ───────────────────────────────────
   Chakchouka: ["oeufs"],
@@ -49,8 +53,10 @@ export const ALLERGENES_PAR_PLAT: Record<string, Allergen[]> = {
   "Thiéboudiène Poisson": ["poissons", "celeri"],
   "Yassa Poulet": ["moutarde", "sulfites"],
   "Mafé Bœuf": ["arachides"],
+  "Mafé Poulet": ["arachides"],
 
   // ── Grillades ────────────────────────────────────────────────
+  "Agneau Braisé": ["moutarde"],
   "Brochette Poulet": ["moutarde"],
   "Brochette Bœuf": ["moutarde"],
   "Poulet Rôti": [],

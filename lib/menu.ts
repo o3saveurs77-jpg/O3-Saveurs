@@ -184,7 +184,9 @@ export const info = {
     { d: "Dimanche", h: "18h00 – 22h45  ·  (fermé le midi)" },
   ],
   payments: ["Espèces", "Carte Bleue", "Tickets Restaurant"],
-  partner: "Uber Eats",
+  /* Pluriel : la maison est sur plusieurs plateformes, et n'en citer qu'une
+   * laissait croire aux autres qu'elle n'y est pas. */
+  partners: "Uber Eats & Deliveroo",
   /* Le pied de page dessinait deux ronds cliquables pour Instagram et Snapchat
    * — mais `socials` ne contenait que des libellés, sans la moindre adresse.
    * C'étaient des `<span>` : un visiteur cliquait dans le vide.
@@ -244,7 +246,7 @@ export const cats: Category[] = [
      savait pas laquelle sortir, et le stock d'un Coca était impossible à
      distinguer de celui d'un Tropico. Une famille à part, une référence par
      canette. */
-  { id: "canettes", label: "Canettes & Eaux", script: "Canettes & Eaux" },
+  { id: "canettes", label: "Canettes & bouteilles", script: "Canettes & bouteilles" },
   { id: "desserts", label: "Desserts", script: "Desserts" },
   /* Grosses pièces et plats de fête, préparés sur réservation. Une catégorie
      à part et non un badge dans les grillades : le client qui cherche à dîner
@@ -290,8 +292,8 @@ const D = (o: DishInput): SeedDish => ({
  *    ⚠️ Ce nom est aussi la clé de `FORMULA_SUPPLEMENTS`, que `prisma/seed.ts`
  *    apparie **par le nom** du plat. Les deux doivent donc être renommés d'un
  *    seul geste, ici : les désaccorder ferait écrire un supplément de 0 € au
- *    prochain seed, et le Thiéboudiène Poisson à 13 € entrerait dans une
- *    formule à 10,90 € sans que rien ne le signale. La panne s'est déjà
+ *    prochain seed, et le Thiéboudiène Poisson à 12,90 € entrerait dans une
+ *    formule à 12,90 € sans que rien ne le signale. La panne s'est déjà
  *    produite. À l'exécution, en revanche, le supplément est lu en base
  *    (`FormulaChoice.supplementCents`) : renommer un plat ne l'efface pas.
  *
@@ -308,23 +310,23 @@ const D = (o: DishInput): SeedDish => ({
  */
 export const items: SeedDish[] = [
   // ENTRÉES
-  D({ cat: "entrees", name: "Pastels Thon", desc: "Feuilletés croustillants au thon relevé — dorés et craquants.", price: 6, tags: ["6 pièces", "Croustillant"], photo: "/photos/pastel-thon.jpg" }),
-  D({ cat: "entrees", name: "Pastels Viande hachée", desc: "Bœuf haché épicé en pâte dorée et croustillante.", price: 7, tags: ["6 pièces", "Épicé"], photo: "/photos/pastel-boeuf.jpg" }),
-  D({ cat: "entrees", name: "Pastels Poulet", desc: "Effiloché de poulet aux épices douces, pâte dorée.", price: 7, tags: ["6 pièces", "Fait maison"], photo: "/photos/pastel-poulet.jpg" }),
+  D({ cat: "entrees", name: "Pastels Thon", desc: "Feuilletés croustillants au thon relevé — dorés et craquants.", price: 7, tags: ["6 pièces", "Croustillant"], photo: "/photos/pastel-thon.jpg" }),
+  D({ cat: "entrees", name: "Pastels Viande hachée", desc: "Bœuf haché épicé en pâte dorée et croustillante.", price: 7.5, tags: ["6 pièces", "Épicé"], photo: "/photos/pastel-boeuf.jpg" }),
+  D({ cat: "entrees", name: "Pastels Poulet", desc: "Effiloché de poulet aux épices douces, pâte dorée.", price: 7.5, tags: ["6 pièces", "Fait maison"], photo: "/photos/pastel-poulet.jpg" }),
   D({ cat: "entrees", name: "Salade composée", desc: "Salade fraîche, tomates cerises, vinaigrette huile d'olive.", price: 4, photo: photo(21), tags: ["Végé", "Frais"] }),
-  D({ cat: "entrees", name: "Patates fourrées au fromage", desc: "Pommes de terre garnies au fromage fondant, panées maison.", price: 4, tags: ["6 pièces", "Fromage"], photo: null }),
+  D({ cat: "entrees", name: "Patates fourrées au fromage", desc: "Pommes de terre garnies au fromage fondant, panées maison.", price: 5, tags: ["6 pièces", "Fromage"], photo: null }),
 
   // SALADES & BOWLS
-  D({ cat: "salades", name: "Salade Saumon Avocat", desc: "Saumon et avocat, mesclun et crudités, vinaigrette à l'huile d'olive.", price: 9, photo: photo(34), popular: true, tags: ["Frais", "Petit pain"] }),
-  D({ cat: "salades", name: "Salade Pâtes & Poulet", desc: "Pâtes fraîches, poulet grillé et tomates cerises.", price: 8.4, photo: photo(37), tags: ["Tomates cerises"] }),
-  D({ cat: "salades", name: "Salade Poulet Mozzarella", desc: "Poulet, mozzarella, tomates cerises et jeunes pousses.", price: 8.4, photo: photo(38), tags: ["Tomates cerises"] }),
-  D({ cat: "salades", name: "Salade César Avocat", desc: "Poulet grillé, avocat, parmesan, œuf et croûtons.", price: 9, photo: photo(39), popular: true }),
-  D({ cat: "salades", name: "Cecina de Bœuf", desc: "Cecina (bœuf séché), copeaux de parmesan, avocat et glaçage balsamique.", price: 10, photo: photo(41), tags: ["Généreux", "Petit pain"] }),
+  D({ cat: "salades", name: "Salade Saumon Avocat", desc: "Saumon et avocat, mesclun et crudités, vinaigrette à l'huile d'olive.", price: 10.9, photo: photo(34), popular: true, tags: ["Frais", "Petit pain"] }),
+  D({ cat: "salades", name: "Salade Pâtes & Poulet", desc: "Pâtes fraîches, poulet grillé et tomates cerises.", price: 9.5, photo: photo(37), tags: ["Tomates cerises"] }),
+  D({ cat: "salades", name: "Salade Poulet Mozzarella", desc: "Poulet, mozzarella, tomates cerises et jeunes pousses.", price: 9.5, photo: photo(38), tags: ["Tomates cerises"] }),
+  D({ cat: "salades", name: "Salade César Avocat", desc: "Poulet grillé, avocat, parmesan, œuf et croûtons.", price: 9.9, photo: photo(39), popular: true }),
+  D({ cat: "salades", name: "Cecina de Bœuf", desc: "Cecina (bœuf séché), copeaux de parmesan, avocat et glaçage balsamique.", price: 11.5, photo: photo(41), tags: ["Généreux", "Petit pain"] }),
 
   // SAVEUR DU MAGHREB (tajines)
-  D({ cat: "maghreb", name: "Tajine Veau & Pruneaux", desc: "Veau fondant, pruneaux moelleux, amandes, œuf et sésame — un sucré-salé signature.", price: 10.5, photo: photo(11), popular: true, tags: ["Sucré-salé"] }),
-  D({ cat: "maghreb", name: "Tajine Poulet aux Légumes", desc: "Poulet mijoté, petits pois, pommes de terre, carottes et olives.", price: 9, photo: photo(16), tags: ["Mijoté", "Généreux"] }),
-  D({ cat: "maghreb", name: "Tajine Boulettes de Bœuf", desc: "Boulettes de bœuf mijotées dans une sauce tomate parfumée — un grand classique.", price: 9.5, photo: photo(14), tags: ["Mijoté", "Sauce tomate"] }),
+  D({ cat: "maghreb", name: "Tajine Veau & Pruneaux", desc: "Veau fondant, pruneaux moelleux, amandes, œuf et sésame — un sucré-salé signature.", price: 12.9, photo: photo(11), popular: true, tags: ["Sucré-salé"] }),
+  D({ cat: "maghreb", name: "Tajine Poulet aux Légumes", desc: "Poulet mijoté, petits pois, pommes de terre, carottes et olives.", price: 10.9, photo: photo(16), tags: ["Mijoté", "Généreux"] }),
+  D({ cat: "maghreb", name: "Tajine Boulettes de Bœuf", desc: "Boulettes de bœuf mijotées dans une sauce tomate parfumée — un grand classique.", price: 11.5, photo: photo(14), tags: ["Mijoté", "Sauce tomate"] }),
 
   // SAVEUR MÉDITERRANÉENNE
   D({
@@ -341,20 +343,20 @@ export const items: SeedDish[] = [
     ],
   }),
   D({ cat: "medit", name: "Salade d'Aubergines (Zaalouk)", desc: "Caviar d'aubergines à la marocaine, tomate, ail & cumin.", price: 5, photo: null, tags: ["Végé", "Marocaine"] }),
-  D({ cat: "medit", name: "Sardines Frites", desc: "Sardines fraîches, sel & citron — juste saisies, croustillantes.", price: 8, photo: null, tags: ["Poisson frais", "Citronné"] }),
+  D({ cat: "medit", name: "Sardines Frites", desc: "Sardines fraîches, sel & citron — juste saisies, croustillantes.", price: 8.5, photo: null, tags: ["Poisson frais", "Citronné"] }),
 
   // SAVEUR D'AFRIQUE DE L'OUEST
-  D({ cat: "africaine", name: "Thiéboudiène Poulet", desc: "Riz au gras façon Thiéboudiène, poulet mijoté et légumes confits.", price: 8.5, photo: photo(4), options: [rizOpt], popular: true, tags: ["Mijoté"] }),
-  D({ cat: "africaine", name: "Thiéboudiène Bœuf", desc: "Riz au gras tomaté, bœuf fondant mijoté et légumes confits — la générosité du Thiéboudiène.", price: 9.5, photo: photo(24), options: [rizOpt], popular: true, tags: ["Mijoté"] }),
-  D({ cat: "africaine", name: "Thiéboudiène Poisson", desc: "Riz au gras, poisson frit entier, légumes fondants et sauce maison.", price: 13, photo: photo(28), options: [rizOpt], popular: true, tags: ["Poisson frais"] }),
-  D({ cat: "africaine", name: "Yassa Poulet", desc: "Poulet braisé, sauce oignon-citron, olives et riz blanc parfumé.", price: 8.5, photo: photo(30), popular: true, tags: ["Citronné"] }),
-  D({ cat: "africaine", name: "Mafé Bœuf", desc: "Bœuf mijoté dans une sauce arachide onctueuse, servi sur riz blanc parfumé.", price: 9.5, photo: photo(1), popular: true, tags: ["Sauce arachide"] }),
+  D({ cat: "africaine", name: "Thiéboudiène Poulet", desc: "Riz au gras façon Thiéboudiène, poulet mijoté et légumes confits.", price: 10.9, photo: photo(4), options: [rizOpt], popular: true, tags: ["Mijoté"] }),
+  D({ cat: "africaine", name: "Thiéboudiène Bœuf", desc: "Riz au gras tomaté, bœuf fondant mijoté et légumes confits — la générosité du Thiéboudiène.", price: 11.9, photo: photo(24), options: [rizOpt], popular: true, tags: ["Mijoté"] }),
+  D({ cat: "africaine", name: "Thiéboudiène Poisson", desc: "Riz au gras, poisson frit entier, légumes fondants et sauce maison.", price: 12.9, photo: photo(28), options: [rizOpt], popular: true, tags: ["Poisson frais"] }),
+  D({ cat: "africaine", name: "Yassa Poulet", desc: "Poulet braisé, sauce oignon-citron, olives et riz blanc parfumé.", price: 9.9, photo: photo(30), popular: true, tags: ["Citronné"] }),
+  D({ cat: "africaine", name: "Mafé Bœuf", desc: "Bœuf mijoté dans une sauce arachide onctueuse, servi sur riz blanc parfumé.", price: 11.9, photo: photo(1), popular: true, tags: ["Sauce arachide"] }),
 
   // GRILLADES
-  D({ cat: "grillades", name: "Brochette Poulet", desc: "Brochettes de poulet mariné, grillées au feu de bois — accompagnement au choix.", price: 7, photo: photo(0), tags: ["Feu à la braise", "Mariné"] }),
-  D({ cat: "grillades", name: "Brochette Bœuf", desc: "Brochettes de bœuf mariné, grillées au feu de bois — accompagnement au choix.", price: 8, photo: photo(12), tags: ["Feu à la braise", "Mariné"] }),
-  D({ cat: "grillades", name: "Poulet Rôti", desc: "Poulet rôti maison au feu de bois, doré et juteux — 1 accompagnement au choix.", price: 8, photo: photo(17), tags: ["Feu à la braise", "Rôti maison"] }),
-  D({ cat: "grillades", name: "Cuisse de Poulet", desc: "Cuisse de poulet marinée & braisée au feu de bois — à l'unité.", price: 3, photo: null, tags: ["Feu à la braise", "Mariné"] }),
+  D({ cat: "grillades", name: "Brochette Poulet", desc: "Brochettes de poulet mariné, grillées au feu de bois — accompagnement au choix.", price: 8.5, photo: photo(0), tags: ["Feu à la braise", "Mariné"] }),
+  D({ cat: "grillades", name: "Brochette Bœuf", desc: "Brochettes de bœuf mariné, grillées au feu de bois — accompagnement au choix.", price: 9.5, photo: photo(12), tags: ["Feu à la braise", "Mariné"] }),
+  D({ cat: "grillades", name: "Poulet Rôti", desc: "Poulet rôti maison au feu de bois, doré et juteux — 1 accompagnement au choix.", price: 9.9, photo: photo(17), tags: ["Feu à la braise", "Rôti maison"] }),
+  D({ cat: "grillades", name: "Cuisse de Poulet", desc: "Cuisse de poulet marinée & braisée au feu de bois — à l'unité.", price: 3, photo: "/photos/cuisse-poulet-unite.jpg", tags: ["Feu à la braise", "Mariné"] }),
   D({ cat: "grillades", name: "Pilon de Poulet", desc: "Pilons de poulet marinés & braisés au feu de bois — 3 pièces.", price: 5, photo: null, tags: ["Feu à la braise", "Mariné"] }),
   D({ cat: "grillades", name: "Ailes de Poulet", desc: "Ailes de poulet épicées & croustillantes, braisées au feu de bois — 5 pièces.", price: 5, photo: null, tags: ["Feu à la braise", "Épicé"] }),
   D({ cat: "grillades", name: "Poisson Entier Grillé", desc: "Dorade entière grillée au feu de bois, selon arrivage — 1 accompagnement.", price: 18, photo: photo(29), tags: ["Feu à la braise", "Poisson frais"] }),
@@ -366,10 +368,10 @@ export const items: SeedDish[] = [
   D({ cat: "sandwichs", name: "Sandwich Brochette Bœuf", desc: "Brochette de bœuf grillé en baguette tradition, crudités et sauce au choix.", price: 8, photo: null, tags: ["Baguette tradition", "Grillé"] }),
 
   // ACCOMPAGNEMENTS
-  D({ cat: "accompagnements", name: "Riz Blanc", desc: "Riz parfumé nature, cuit maison — l'accompagnement classique.", price: 2.5, photo: photo(18), tags: ["Nature", "Sans gluten"] }),
+  D({ cat: "accompagnements", name: "Riz Blanc", desc: "Riz parfumé nature, cuit maison — l'accompagnement classique.", price: 3, photo: photo(18), tags: ["Nature", "Sans gluten"] }),
   D({ cat: "accompagnements", name: "Alloco", desc: "Bananes plantain bien mûres, frites et caramélisées.", price: 4, photo: photo(9), popular: true, tags: ["Caramélisé"] }),
   D({ cat: "accompagnements", name: "Riz Rouge", desc: "Riz au gras tomaté — parfumé, généreux et coloré.", price: 4, photo: photo(15), tags: ["Tomaté", "Fait maison"] }),
-  D({ cat: "accompagnements", name: "Thiéboudiène blanc", desc: "Riz au gras blanc, parfumé — façon sénégalaise.", price: 4, photo: photo(18), tags: ["Au gras", "Parfumé"] }),
+  D({ cat: "accompagnements", name: "Thiéboudiène blanc", desc: "Riz au gras blanc, parfumé — façon sénégalaise.", price: 4, photo: "/photos/thieboudiene-blanc.jpg", tags: ["Au gras", "Parfumé"] }),
   D({ cat: "accompagnements", name: "Frites Maison", desc: "Pommes de terre fraîches, coupées et frites maison — dorées et croustillantes.", price: 4, photo: photo(27), tags: ["Croustillant", "Fait maison"] }),
   D({ cat: "accompagnements", name: "Salade Composée", desc: "Salade fraîche, tomates cerises, vinaigrette huile d'olive & balsamique.", price: 4, photo: photo(21), tags: ["Frais", "Végétarien"] }),
   D({ cat: "accompagnements", name: "Patate fourrée au fromage", desc: "Pommes de terre garnies au fromage fondant, panées maison.", price: 4, photo: null, tags: ["6 pièces", "Fromage"] }),
@@ -384,8 +386,8 @@ export const items: SeedDish[] = [
    * vente se faisant à emporter ou en livraison. Servie au gobelet, la même
    * boisson relèverait de 10 % — le taux se règle alors plat par plat depuis
    * l'écran Plats, sans toucher au code. */
-  D({ cat: "boissons", name: "Jus de Gingembre", desc: "Gingembre frais pressé maison, vif et tonifiant.", price: 3.5, photo: photo(2), tags: ["Pressé maison", "50 cl"], popular: true, vatRateBp: 550 }),
-  D({ cat: "boissons", name: "Jus de Bissap", desc: "Infusion d'hibiscus pressée maison, fraîche et légèrement acidulée.", price: 3.5, photo: photo(26), tags: ["Infusion maison", "50 cl"], vatRateBp: 550 }),
+  D({ cat: "boissons", name: "Jus de Gingembre", desc: "Gingembre frais pressé maison, vif et tonifiant.", price: 4.5, photo: photo(2), tags: ["Pressé maison", "50 cl"], popular: true, vatRateBp: 550 }),
+  D({ cat: "boissons", name: "Jus de Bissap", desc: "Infusion d'hibiscus pressée maison, fraîche et légèrement acidulée.", price: 4.5, photo: photo(26), tags: ["Infusion maison", "50 cl"], vatRateBp: 550 }),
   D({ cat: "boissons", name: "Cocktail Maison", desc: "Cocktail de fruits sans alcool, frais et de saison — selon arrivage.", price: 3.5, photo: photo(20), tags: ["Selon saison", "25 cl"], vatRateBp: 550 }),
   D({ cat: "boissons", name: "Jus d'Avocat", desc: "Jus d'avocat onctueux, préparé à la commande.", price: 4, photo: null, tags: ["À la commande", "25 cl"], vatRateBp: 550 }),
   D({ cat: "boissons", name: "Jus d'Orange", desc: "Oranges fraîchement pressées, pur jus du jour.", price: 3.5, photo: null, tags: ["Pressé du jour", "25 cl"], vatRateBp: 550 }),
@@ -407,13 +409,34 @@ export const items: SeedDish[] = [
    * Identifiants explicites : la numérotation `dN` suit le rang dans cette
    * liste, une insertion ici renommerait tout ce qui suit lors d'un seed
    * rejoué. Voir la même précaution sur « sur commande » plus bas. */
-  D({ id: "can-coca", cat: "canettes", name: "Coca-Cola 33 cl", desc: "Canette de Coca-Cola, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-sprite", cat: "canettes", name: "Sprite 33 cl", desc: "Canette de Sprite, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-fanta", cat: "canettes", name: "Fanta 33 cl", desc: "Canette de Fanta, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-ice-tea", cat: "canettes", name: "Ice Tea 33 cl", desc: "Canette d'Ice Tea, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-orangina", cat: "canettes", name: "Orangina 33 cl", desc: "Canette d'Orangina, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-tropico", cat: "canettes", name: "Tropico 33 cl", desc: "Canette de Tropico, servie bien fraîche.", price: 2, photo: null, tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
-  D({ id: "can-eau", cat: "canettes", name: "Eau minérale 50 cl", desc: "Bouteille d'eau minérale, 50 cl.", price: 2, photo: null, tags: ["50 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-coca", cat: "canettes", name: "Coca-Cola 33 cl", desc: "Canette de Coca-Cola, servie bien fraîche.", price: 2, photo: "/photos/coca-cola.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-sprite", cat: "canettes", name: "Sprite 33 cl", desc: "Canette de Sprite, servie bien fraîche.", price: 2, photo: "/photos/sprite.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-fanta", cat: "canettes", name: "Fanta 33 cl", desc: "Canette de Fanta, servie bien fraîche.", price: 2, photo: "/photos/fanta.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-ice-tea", cat: "canettes", name: "Ice Tea 33 cl", desc: "Canette d'Ice Tea, servie bien fraîche.", price: 2, photo: "/photos/ice-tea.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-orangina", cat: "canettes", name: "Orangina 33 cl", desc: "Canette d'Orangina, servie bien fraîche.", price: 2, photo: "/photos/orangina.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-tropico", cat: "canettes", name: "Tropico 33 cl", desc: "Canette de Tropico, servie bien fraîche.", price: 2, photo: "/photos/tropico.jpg", tags: ["33 cl", "Bien frais"], vatRateBp: 550 }),
+  D({ id: "can-eau", cat: "canettes", name: "Volvic 50 cl", desc: "Bouteille d'eau minérale naturelle Volvic, 50 cl.", price: 2, photo: "/photos/volvic-50cl.jpg", tags: ["50 cl", "Bien frais"], vatRateBp: 550 }),
+
+  /* GRANDS FORMATS — la bouteille de 1,5 L, pour les tablées.
+   *
+   * La grille boissons d'août 2026 les ajoute pour une raison de panier : une
+   * commande de couscous pour six repartait avec six canettes, quand une
+   * bouteille coûte moins cher au client et laisse davantage à la maison.
+   *
+   * 4,00 € le soda et 2,50 € l'eau, soit 0,50 à 1,00 € sous le marché des
+   * plateformes : c'est un produit de supermarché, dont le client connaît le
+   * prix — contrairement aux jus maison, où le 50 cl fait la différence.
+   *
+   * Les marques sont celles des photos fournies par la maison, et non la liste
+   * indicative du document, qui citait Oasis et Evian : on ne met pas en vente
+   * une référence dont personne n'a confirmé qu'elle est au frigo. */
+  D({ id: "btl-coca", cat: "canettes", name: "Coca-Cola 1,5 L", desc: "Bouteille de Coca-Cola, 1,5 L — à partager.", price: 4, photo: "/photos/coca-cola-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-sprite", cat: "canettes", name: "Sprite 1,5 L", desc: "Bouteille de Sprite, 1,5 L — à partager.", price: 4, photo: "/photos/sprite-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-fanta", cat: "canettes", name: "Fanta 1,5 L", desc: "Bouteille de Fanta Orange, 1,5 L — à partager.", price: 4, photo: "/photos/fanta-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-ice-tea", cat: "canettes", name: "Ice Tea 1,5 L", desc: "Bouteille d'Ice Tea pêche, 1,5 L — à partager.", price: 4, photo: "/photos/ice-tea-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-orangina", cat: "canettes", name: "Orangina 1,5 L", desc: "Bouteille d'Orangina, 1,5 L — à partager.", price: 4, photo: "/photos/orangina-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-tropico", cat: "canettes", name: "Tropico 1,5 L", desc: "Bouteille de Tropico, 1,5 L — à partager.", price: 4, photo: "/photos/tropico-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
+  D({ id: "btl-volvic", cat: "canettes", name: "Volvic 1,5 L", desc: "Bouteille d'eau minérale naturelle Volvic, 1,5 L.", price: 2.5, photo: "/photos/volvic-15l.jpg", tags: ["1,5 L", "À partager"], vatRateBp: 550 }),
 
   /* DESSERTS — identifiants figés à leur valeur d'origine (d49 à d53).
    *
@@ -421,18 +444,18 @@ export const items: SeedDish[] = [
    * au-dessus les auraient décalés de d49-d53 à d55-d59, et un seed rejoué
    * aurait réécrit six plats existants sous le nom du voisin. Un identifiant
    * ne doit pas dépendre de ce qui le précède dans un fichier. */
-  D({ id: "d49", cat: "desserts", name: "Ananas frais", desc: "Ananas frais, coupé minute — léger et sucré.", price: 2.5, photo: photo(13), tags: ["Frais"] }),
-  D({ id: "d50", cat: "desserts", name: "Tiramisu", desc: "Tiramisu maison, café & mascarpone.", price: 2.5, photo: null, tags: ["Fait maison"] }),
-  D({ id: "d51", cat: "desserts", name: "Fondant Chocolat", desc: "Cœur coulant au chocolat noir, servi tiède.", price: 3, photo: null, tags: ["Fait maison"] }),
-  D({ id: "d52", cat: "desserts", name: "Mousse au Chocolat", desc: "Mousse au chocolat onctueuse, faite maison.", price: 3, photo: null, tags: ["Fait maison"] }),
-  D({ id: "d53", cat: "desserts", name: "Tarte du jour", desc: "Tarte pâtissière du jour — demandez la saveur du moment.", price: 3, photo: null, tags: ["Fait maison"] }),
+  D({ id: "d49", cat: "desserts", name: "Ananas frais", desc: "Ananas frais, coupé minute — léger et sucré.", price: 3, photo: photo(13), tags: ["Frais"] }),
+  D({ id: "d50", cat: "desserts", name: "Tiramisu", desc: "Tiramisu maison, café & mascarpone.", price: 3.5, photo: null, tags: ["Fait maison"] }),
+  D({ id: "d51", cat: "desserts", name: "Fondant Chocolat", desc: "Cœur coulant au chocolat noir, servi tiède.", price: 3.9, photo: null, tags: ["Fait maison"] }),
+  D({ id: "d52", cat: "desserts", name: "Mousse au Chocolat", desc: "Mousse au chocolat onctueuse, faite maison.", price: 3.5, photo: null, tags: ["Fait maison"] }),
+  D({ id: "d53", cat: "desserts", name: "Tarte du jour", desc: "Tarte pâtissière du jour — demandez la saveur du moment.", price: 3.5, photo: null, tags: ["Fait maison"] }),
 
   /* SUR COMMANDE — grosses pièces et plats de fête.
    *
-   * Prix laissés à `null` (« Bientôt » sur la carte) tant que la cliente ne les
-   * a pas arrêtés : `unitPriceOf` refuse une ligne sans prix, ces plats ne
-   * peuvent donc pas être commandés à zéro euro par accident. Ils se
-   * renseignent depuis l'écran Plats, sans toucher au code.
+   * Prix arrêtés par l'analyse concurrentielle du 2026-08-28 (section 8), qui
+   * les compare au marché traiteur d'Île-de-France ; ils étaient jusque-là à
+   * `null` (« Bientôt » sur la carte). Ils restent modifiables depuis l'écran
+   * Plats, et c'est la base qui fait foi — le seed ne sert qu'à repartir d'ici.
    *
    * Les délais suivent la charge réelle : un gigot ou un couscous se lancent la
    * veille pour le surlendemain (48 h), une bête entière demande un passage
@@ -445,12 +468,49 @@ export const items: SeedDish[] = [
    * renommé ces deux desserts en gigot et en épaule, et comme le délai n'est
    * posé qu'à la création, le gigot serait ressorti commandable pour le soir
    * même. Un identifiant qui décrit le plat ne peut pas dériver ainsi. */
-  D({ id: "sc-gigot", cat: "sur-commande", name: "Gigot d'agneau", desc: "Gigot d'agneau rôti lentement aux épices, tendre à se défaire à la cuillère.", price: null, photo: null, tags: ["Sur commande", "Pièce entière"], leadTimeHours: 48 }),
-  D({ id: "sc-epaule", cat: "sur-commande", name: "Épaule d'agneau", desc: "Épaule d'agneau confite au four, fondante et parfumée.", price: null, photo: null, tags: ["Sur commande", "Pièce entière"], leadTimeHours: 48 }),
-  D({ id: "sc-couscous", cat: "sur-commande", name: "Couscous marocain", desc: "Couscous royal aux sept légumes, semoule roulée maison — pour la tablée.", price: null, photo: null, tags: ["Sur commande", "À partager"], leadTimeHours: 48 }),
-  D({ id: "sc-paella", cat: "sur-commande", name: "Paella", desc: "Paella généreuse aux fruits de mer et au poulet, safran et poivrons.", price: null, photo: null, tags: ["Sur commande", "À partager"], leadTimeHours: 48 }),
-  D({ id: "sc-demi-agneau", cat: "sur-commande", name: "Demi-agneau", desc: "Demi-agneau préparé et rôti entier — pour vos grandes occasions.", price: null, photo: null, tags: ["Sur commande", "Grande réception"], leadTimeHours: 72 }),
-  D({ id: "sc-agneau-entier", cat: "sur-commande", name: "Agneau entier", desc: "Agneau entier rôti à la braise, préparé sur mesure pour vos fêtes.", price: null, photo: null, tags: ["Sur commande", "Grande réception"], leadTimeHours: 72 }),
+  D({ id: "sc-gigot", cat: "sur-commande", name: "Gigot d'agneau", desc: "Gigot d'agneau rôti lentement aux épices, tendre à se défaire à la cuillère.", price: 85, photo: null, tags: ["Sur commande", "Pièce entière"], leadTimeHours: 48 }),
+  D({ id: "sc-epaule", cat: "sur-commande", name: "Épaule d'agneau", desc: "Épaule d'agneau confite au four, fondante et parfumée.", price: 70, photo: null, tags: ["Sur commande", "Pièce entière"], leadTimeHours: 48 }),
+  D({ id: "sc-couscous", cat: "sur-commande", name: "Couscous marocain", desc: "Couscous royal aux sept légumes, semoule roulée maison — pour la tablée.", price: 85, photo: null, tags: ["Sur commande", "À partager"], leadTimeHours: 48 }),
+  D({ id: "sc-paella", cat: "sur-commande", name: "Paella", desc: "Paella généreuse aux fruits de mer et au poulet, safran et poivrons.", price: 90, photo: null, tags: ["Sur commande", "À partager"], leadTimeHours: 48 }),
+  D({ id: "sc-demi-agneau", cat: "sur-commande", name: "Demi-agneau", desc: "Demi-agneau préparé et rôti entier — pour vos grandes occasions.", price: 240, photo: null, tags: ["Sur commande", "Grande réception"], leadTimeHours: 72 }),
+  D({ id: "sc-agneau-entier", cat: "sur-commande", name: "Agneau entier", desc: "Agneau entier rôti à la braise, préparé sur mesure pour vos fêtes.", price: 450, photo: null, tags: ["Sur commande", "Grande réception"], leadTimeHours: 72 }),
+
+  /* NOUVEAUTÉS D'AOÛT 2026 — les quatre trous révélés par le relevé
+   * concurrent (`Analyse-Concurrentielle-5km-O3-Saveurs.pdf`, section 4) :
+   * African Evasion vend un mafé poulet et un agneau braisé que la carte
+   * n'avait pas, L'Étoile du Maroc deux couscous à 18 €. Prix de lancement
+   * calés 1,00 à 1,50 € sous eux, comme le reste de la grille.
+   *
+   * Ils sont écrits **en fin de liste**, et non dans leur famille : le `D` du
+   * dessus incrémente son compteur à chaque appel, y compris quand
+   * l'identifiant est fourni. Une insertion au milieu décalerait donc tous les
+   * `dN` suivants d'un cran, et un seed rejoué réécrirait chaque plat sous le
+   * nom de son voisin — la panne déjà décrite pour les desserts et les pièces
+   * sur commande. Leur place sur la carte ne vient pas d'ici de toute façon :
+   * elle est donnée par `position`, posé au moment de leur création en base
+   * (voir `scripts/tarifs-aout-2026.ts`).
+   *
+   * ⚠️ Le Couscous Royal (13,90 €) et l'Agneau Braisé (13,50 €) dépassent la
+   * F1 Express à 12,90 € : ils ont leur supplément dans
+   * `FORMULA_SUPPLEMENTS`, sans quoi un seed les ferait entrer dans le créneau
+   * « plat » à zéro euro de supplément — vendus à perte. */
+  D({ id: "mafe-poulet", cat: "africaine", name: "Mafé Poulet", desc: "Poulet mijoté dans une sauce arachide onctueuse, servi sur riz blanc parfumé.", price: 10.9, badge: "Nouveau", photo: null, tags: ["Sauce arachide"] }),
+  D({ id: "couscous-poulet", cat: "maghreb", name: "Couscous Poulet", desc: "Semoule roulée maison, poulet mijoté et ses sept légumes, bouillon parfumé.", price: 11.9, badge: "Nouveau", photo: null, tags: ["Mijoté", "Généreux"] }),
+  D({ id: "couscous-royal", cat: "maghreb", name: "Couscous Royal", desc: "Semoule roulée maison, merguez, agneau et poulet, sept légumes et bouillon parfumé.", price: 13.9, badge: "Nouveau", photo: null, tags: ["Mijoté", "Généreux"] }),
+  D({ id: "agneau-braise", cat: "grillades", name: "Brochette d'agneau braisé", desc: "Brochettes d'agneau braisé au feu de bois, fondantes et épicées — 1 accompagnement au choix.", price: 13.5, badge: "Nouveau", photo: null, tags: ["Feu à la braise", "Mariné"] }),
+  /* PHOTOS D'AOÛT 2026 — deux plats que la maison cuisine déjà mais que la
+   * carte ne portait pas. Ils arrivent par leurs photos, livrées le 31 août :
+   * un couscous sans viande, qu'aucune ligne ne proposait alors que les trois
+   * couscous existants contiennent tous de la viande, et la pastilla, dont la
+   * garniture se choisit — c'est ce que dit la photo fournie.
+   *
+   * Prix arrêtés avec la cliente : 9,90 € le couscous, deux euros sous le
+   * Couscous Poulet ; 9,00 € la pastilla.
+   *
+   * En fin de liste pour la raison dite juste au-dessus : le compteur `dN` se
+   * décale à chaque appel de `D`, identifiant explicite ou non. */
+  D({ id: "couscous-vegetarien", cat: "maghreb", name: "Couscous Végétarien", desc: "Semoule roulée maison et ses sept légumes mijotés — courgettes, carottes, navets et pois chiches.", price: 9.9, badge: "Nouveau", photo: "/photos/couscous-vegetarien.jpg", tags: ["Végé", "Mijoté"] }),
+  D({ id: "pastilla", cat: "entrees", name: "Pastilla", desc: "Feuilleté croustillant aux amandes effilées, sucré-salé — garniture au choix.", price: 8.9, badge: "Nouveau", photo: "/photos/pastilla.jpg", options: [{ name: "Garniture", required: true, choices: [{ l: "Poulet" }, { l: "Fruits de mer", price: 2 }] }], tags: ["Croustillant", "Sucré-salé"] }),
 ];
 
 /* Options communes aux sandwichs : la sauce au choix et le supplément cheddar,
@@ -491,36 +551,77 @@ export interface SeedFormula {
 
 /**
  * Suppléments appliqués dans toutes les formules, par nom de plat (en euros).
- * Ce sont les deux plats dont le coût matière dépasse largement le prix de
- * formule — les servir sans supplément vendrait la formule à perte.
+ * Ce sont les plats dont le coût matière dépasse le prix de formule — les
+ * servir sans supplément vendrait la formule à perte.
+ *
+ * La règle qui les relie : formule garnie ≈ prix du plat à la carte + 4 €,
+ * soit le prix d'une boisson maison. Les deux premiers viennent de la carte
+ * officielle ; les deux suivants en sont déduits, l'analyse concurrentielle
+ * d'août 2026 ayant fixé le prix des plats sans parler des formules. À faire
+ * confirmer par la cliente.
  */
 export const FORMULA_SUPPLEMENTS: Record<string, number> = {
   "Thiéboudiène Poisson": 4,
   "Poisson Entier Grillé": 9,
+  "Couscous Royal": 5,
+  "Agneau Braisé": 4.5,
+  /* La pastilla est la plus chère des entrées — 9 €, quand les autres vont
+   * de 4 à 7,50 €. Sans supplément, un seed la ferait entrer dans le créneau
+   * « votre entrée » de la formule Midi à 15,90 €, aux côtés d'un plat à
+   * 12,90 € : vendue à perte. Déduit comme les deux précédents, à faire
+   * confirmer par la cliente. */
+  Pastilla: 1.4,
+  /* Grands formats : le créneau boisson leur est ouvert depuis le 31 août, et
+   * une bouteille de 1,5 L vaut le double d'une canette. Sans ces lignes, un
+   * seed la donnerait — 4,00 € de marchandise dans une formule à 12,90 €.
+   *
+   * Le montant est calé sur la canette à 2,00 €, la boisson incluse de la
+   * formule la moins garnie : c'est le supplément le plus prudent, celui
+   * qu'aucune formule ne peut sous-facturer. En base, il est recalculé créneau
+   * par créneau — +0,50 € seulement là où la boisson incluse est un jus à
+   * 3,50 €. */
+  "Coca-Cola 1,5 L": 2,
+  "Sprite 1,5 L": 2,
+  "Fanta 1,5 L": 2,
+  "Ice Tea 1,5 L": 2,
+  "Orangina 1,5 L": 2,
+  "Tropico 1,5 L": 2,
+  "Volvic 1,5 L": 0.5,
 };
 
 /**
  * Familles proposées au créneau « plat » des formules — « salades & bowls,
  * tajines, plats d'Afrique de l'Ouest & grillades » selon la carte officielle.
  * La Méditerranée en est absente : ses trois plats sont des petites assiettes
- * à 5–8 €, hors d'échelle pour un créneau de formule à 10,90 €.
+ * à 5–8 €, hors d'échelle pour un créneau de formule à 12,90 €.
  */
 const PLAT_CATS = ["salades", "maghreb", "africaine", "grillades"];
 
 /**
- * Boissons maison uniquement : les canettes, revendues telles quelles, ont leur
- * propre famille et n'entrent donc plus dans ce créneau.
+ * Jus maison, canettes, eaux et grands formats.
+ *
+ * La famille des canettes avait été écartée de ce créneau lors de l'éclatement
+ * du plat fourre-tout. La cliente l'y a rouverte le 31 août, avec les
+ * bouteilles de 1,5 L : deux formules sur quatre n'offraient que les jus
+ * maison, et un client qui voulait un Coca avec son sandwich devait le
+ * commander à part, hors formule.
  *
  * L'exclusion se faisait auparavant en écartant un plat par son nom — une
  * chaîne à retaper à l'identique, qu'un simple renommage depuis
- * l'administration suffisait à rendre inopérante : la canette serait alors
- * rentrée dans toutes les formules sans que personne ne le décide. Le mécanisme
- * a été retiré avec son dernier usage ; une famille, elle, ne dépend pas d'un
- * libellé.
+ * l'administration suffisait à rendre inopérante. Le mécanisme a été retiré
+ * avec son dernier usage ; une famille, elle, ne dépend pas d'un libellé.
+ *
+ * ⚠️ Ouvrir une famille entière rend `FORMULA_SUPPLEMENTS` indispensable pour
+ * ce qu'elle contient de cher : sans les lignes qui y sont posées, un seed
+ * offrirait une bouteille de 1,5 L à 4,00 € dans une formule à 12,90 €. Les
+ * montants déclarés là-bas sont les plus prudents — calés sur la canette à
+ * 2,00 €, boisson incluse de la formule la moins garnie. En base, le supplément
+ * est calculé créneau par créneau (`scripts/formules-boissons.ts`), et c'est la
+ * base qui s'affiche.
  */
 const BOISSON_SLOT: SeedFormulaSlot = {
   label: "Votre boisson",
-  cats: ["boissons"],
+  cats: ["boissons", "canettes"],
 };
 
 export const seedFormulas: SeedFormula[] = [
@@ -529,7 +630,7 @@ export const seedFormulas: SeedFormula[] = [
     name: "Express",
     desc: "Un plat au choix + une boisson",
     extra: "Formule la plus rapide",
-    price: 10.9,
+    price: 12.9,
     slots: [{ label: "Votre plat", cats: PLAT_CATS }, BOISSON_SLOT],
   },
   {
@@ -537,7 +638,7 @@ export const seedFormulas: SeedFormula[] = [
     name: "Midi",
     desc: "Entrée + plat au choix + dessert",
     extra: "Idéal pour la pause déjeuner",
-    price: 13.9,
+    price: 15.9,
     slots: [
       { label: "Votre entrée", cats: ["entrees"] },
       { label: "Votre plat", cats: PLAT_CATS },
@@ -549,7 +650,7 @@ export const seedFormulas: SeedFormula[] = [
     name: "Gourmande",
     desc: "Entrée + plat + dessert + boisson",
     extra: "La formule complète",
-    price: 16.9,
+    price: 18.9,
     slots: [
       { label: "Votre entrée", cats: ["entrees"] },
       { label: "Votre plat", cats: PLAT_CATS },
