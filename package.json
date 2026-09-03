@@ -21,6 +21,7 @@
     "db:thieboudiene": "tsx scripts/renommer-thieboudiene.ts",
     "db:photos-cellar": "tsx scripts/photos-vers-cellar.ts",
     "db:photos-canettes": "tsx scripts/photos-canettes.ts",
+    "db:photos-nouvelles": "tsx scripts/photos-nouvelles.ts",
     "db:grands-formats": "tsx scripts/grands-formats.ts",
     "db:poulet-roti": "tsx scripts/poulet-roti-hors-formules.ts",
     "db:nouveaux-plats": "tsx scripts/nouveaux-plats.ts",
