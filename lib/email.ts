@@ -118,14 +118,9 @@ export async function send({
     return false;
   }
 
-  try {
-    await client().emails.send({ from: FROM, to, subject, html, attachments });
-    await prisma.emailLog.create({
-      data: { kind, orderId: orderId ?? null, to, dedupeKey: dedupeKey ?? null, ok: true },
-    });
-    return true;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "erreur inconnue";
+  /* Un seul chemin pour les deux causes d'échec : le refus de l'API, qui
+   * arrive dans la valeur de retour, et la panne de transport, qui lève. */
+  const echec = async (message: string): Promise<false> => {
     console.error(`[email] échec « ${subject} » → ${to} : ${message}`);
     await prisma.emailLog
       .create({
@@ -140,6 +135,27 @@ export async function send({
       })
       .catch(() => {});
     return false;
+  };
+
+  try {
+    /* Resend ne lève pas quand il refuse l'envoi : `send()` résout en plaçant
+     * l'erreur dans `error`, et `data` à `null` — son type `Response<T>` est
+     * une union discriminée. Ne pas lire ce retour, c'était enregistrer
+     * « envoyé » pour un domaine non vérifié, un expéditeur invalide ou un
+     * quota dépassé, et faire du journal censé surveiller les emails la
+     * garantie que tout va bien. Le `catch` ne couvre que le transport. */
+    const { error } = await client().emails.send({ from: FROM, to, subject, html, attachments });
+    if (error) {
+      const code = error.statusCode ? ` ${error.statusCode}` : "";
+      return echec(`refus de Resend (${error.name}${code}) : ${error.message}`);
+    }
+
+    await prisma.emailLog.create({
+      data: { kind, orderId: orderId ?? null, to, dedupeKey: dedupeKey ?? null, ok: true },
+    });
+    return true;
+  } catch (cause) {
+    return echec(cause instanceof Error ? cause.message : "erreur inconnue");
   }
 }
 
