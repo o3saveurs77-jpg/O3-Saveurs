@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -7,6 +10,8 @@ import {
   restaurantNode,
   menuNode,
   formulasNode,
+  cateringNode,
+  aboutPageNode,
   breadcrumbNode,
   faqNode,
   graph,
@@ -14,8 +19,11 @@ import {
   SITE_URL,
   PUBLIC_ROUTES,
   DISALLOWED_PATHS,
+  PAGE_META,
+  pageMetadata,
   brandAliases,
   type BusinessProfile,
+  type PagePath,
 } from "@/lib/seo";
 import { DEFAULT_HOURS } from "@/lib/hours";
 import type { Category, Dish, Formula, Zone } from "@/lib/menu";
@@ -91,6 +99,7 @@ describe("toE164", () => {
     expect(toE164("")).toBe("");
     expect(toE164("06.12.34.56.78")).toBe("+33612345678");
   });
+});
 
 // ─── Graphies de la marque ─────────────────────────────
 
@@ -129,7 +138,6 @@ describe("brandAliases", () => {
     expect(autre).toContain("Cafe7 Epices");
     expect(autre).not.toContain("Chez Laila");
   });
-});
 });
 
 // ─── Horaires ──────────────────────────────────────────
@@ -303,6 +311,32 @@ describe("restaurantNode", () => {
 
   it("n'annonce pas de réservation de table — le restaurant n'en prend pas", () => {
     expect(node.acceptsReservations).toBe(false);
+  });
+});
+
+// ─── Nœud AboutPage ────────────────────────────────────
+
+describe("aboutPageNode", () => {
+  const node = aboutPageNode(PROFILE);
+
+  it("déclare une page qui parle du restaurant, et non qui le côtoie", () => {
+    expect(node["@type"]).toBe("AboutPage");
+    // `about` rattache l'entité, `mainEntity` dit quoi citer : les deux visent
+    // le nœud `Restaurant`, qui doit figurer dans le même graphe de page.
+    expect(node.about).toEqual({ "@id": `${SITE_URL}/#restaurant` });
+    expect(node.mainEntity).toEqual({ "@id": `${SITE_URL}/#restaurant` });
+    expect(node.isPartOf).toEqual({ "@id": `${SITE_URL}/#website` });
+  });
+
+  it("reprend la description de la page plutôt qu'un texte parallèle", () => {
+    expect(node.description).toBe(PAGE_META["/a-propos"].description);
+  });
+
+  it("nomme l'enseigne, puisque c'est ce que la page raconte", () => {
+    expect(String(node.name)).toContain("Chez Laila");
+    // Enseigne vide : pas de tiret orphelin dans le nom.
+    const sansEnseigne = aboutPageNode({ ...PROFILE, tagline: "" });
+    expect(String(sansEnseigne.name)).toBe("À propos — Ô 3 Saveurs");
   });
 });
 
@@ -493,5 +527,132 @@ describe("tables de routes", () => {
     for (const p of ["/admin", "/compte", "/facture", "/commande", "/api"]) {
       expect(DISALLOWED_PATHS as readonly string[]).toContain(p);
     }
+  });
+
+  it("date chaque entrée du plan du site", () => {
+    /* Sans `lastmod`, un robot n'a aucune raison de repasser. La base ne sait
+     * dater que les plats, les formules et les pages à sections : les autres
+     * tombent sur cette date, qui doit donc exister et être lisible. */
+    for (const route of PUBLIC_ROUTES) {
+      expect(route.revised, route.path).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(Number.isNaN(new Date(route.revised).getTime()), route.path).toBe(false);
+    }
+  });
+
+  it("n'annonce aucune révision à venir", () => {
+    // Une date future est un signal que Search Console rejette, et elle trahit
+    // presque toujours un horodatage de compilation glissé dans la table.
+    const demain = Date.now() + 24 * 3600 * 1000;
+    for (const route of PUBLIC_ROUTES) {
+      expect(new Date(route.revised).getTime(), route.path).toBeLessThan(demain);
+    }
+  });
+});
+
+// ─── Métadonnées des pages publiques ───────────────────
+
+describe("PAGE_META", () => {
+  const entrees = Object.entries(PAGE_META) as [PagePath, (typeof PAGE_META)[PagePath]][];
+
+  /* Les pages vitrine se gagnent sur une requête locale : la commune doit
+   * figurer dans la phrase que Google affiche. Les pages légales non — on ne
+   * cherche pas « CGV Pontault-Combault », et y pousser la ville ferait du
+   * remplissage là où il faut de la clarté. */
+  const VITRINE = ["/carte", "/formules", "/traiteur", "/a-propos", "/contact", "/allergenes"];
+
+  it("couvre toutes les pages publiques sauf l'accueil", () => {
+    // L'accueil tient sa description du layout racine, qui sert aussi de repli
+    // à toute page n'en déclarant pas : la dupliquer ici serait une seconde
+    // source pour une même phrase.
+    const attendues = PUBLIC_ROUTES.map((r) => r.path).filter((p) => p !== "/");
+    expect(Object.keys(PAGE_META).sort()).toEqual([...attendues].sort());
+  });
+
+  it("tient chaque description entre 150 et 160 caractères", () => {
+    /* Au-delà de 160, Google coupe la phrase en plein milieu ; en deçà de 150,
+     * on laisse de la place gratuite inutilisée. Cinq pages sortaient à 163 et
+     * plus, deux pages légales à moins de 100. */
+    for (const [path, meta] of entrees) {
+      expect(meta.description.length, `${path} : « ${meta.description} »`).toBeGreaterThanOrEqual(
+        150,
+      );
+      expect(meta.description.length, `${path} : « ${meta.description} »`).toBeLessThanOrEqual(160);
+    }
+  });
+
+  it("ne répète pas deux fois la même description", () => {
+    // Deux pages à la description identique, c'est Google qui en choisit une
+    // et ignore l'autre.
+    const textes = entrees.map(([, m]) => m.description);
+    expect(new Set(textes).size).toBe(textes.length);
+  });
+
+  it("nomme la commune sur les pages vitrine", () => {
+    for (const path of VITRINE) {
+      expect(PAGE_META[path as PagePath].description, path).toContain("Pontault-Combault");
+    }
+  });
+
+  it("déclare une image de partage qui existe réellement", () => {
+    /* C'est tout l'intérêt du test : un chemin faux ne lève aucune erreur, ne
+     * casse aucune page, et se voit seulement sous la forme d'un aperçu gris
+     * dans la conversation WhatsApp où le lien a été envoyé. */
+    for (const [path, meta] of entrees) {
+      expect(meta.share.url, path).toMatch(/^\/photos\/.+\.(jpg|jpeg|png|webp)$/);
+      const fichier = join(process.cwd(), "public", meta.share.url);
+      expect(existsSync(fichier), `${path} → ${meta.share.url} introuvable`).toBe(true);
+    }
+  });
+
+  it("déclare des images assez grandes pour une vignette de partage", () => {
+    // En dessous de 600 px de large, Facebook et WhatsApp rétrogradent
+    // l'aperçu en petite miniature carrée — autant n'en pas mettre.
+    for (const [path, meta] of entrees) {
+      expect(meta.share.width, path).toBeGreaterThanOrEqual(600);
+      expect(meta.share.height, path).toBeGreaterThan(0);
+      expect(meta.share.alt.length, path).toBeGreaterThan(20);
+    }
+  });
+});
+
+describe("pageMetadata", () => {
+  const meta = pageMetadata({
+    path: "/traiteur",
+    title: "Traiteur à Pontault-Combault",
+    accroche: "Buffets, plateaux repas et réceptions — devis gratuit sous 24 h.",
+  });
+
+  it("déclare la canonique de la page, jamais celle de l'accueil", () => {
+    // Le piège du dépôt : le layout racine ne porte aucun `alternates`, sans
+    // quoi toute page sans canonique propre se déclarerait copie de l'accueil.
+    expect(meta.alternates?.canonical).toBe("/traiteur");
+  });
+
+  it("porte l'image de la page, que Next n'hérite pas du layout", () => {
+    /* Next *remplace* `openGraph`, il ne le complète pas : une page qui en
+     * déclarait un perdait l'image du layout et sortait sans visuel. */
+    const images = meta.openGraph?.images as { url: string; alt: string }[];
+    expect(images).toHaveLength(1);
+    expect(images[0].url).toBe(PAGE_META["/traiteur"].share.url);
+    expect(meta.twitter?.images).toEqual([PAGE_META["/traiteur"].share.url]);
+  });
+
+  it("rétablit ce que le remplacement d'openGraph faisait perdre", () => {
+    expect(meta.openGraph).toMatchObject({
+      type: "website",
+      locale: "fr_FR",
+      siteName: "Ô 3 Saveurs — Chez Laila",
+      url: "/traiteur",
+    });
+  });
+
+  it("garde un titre court pour le gabarit du layout, long pour le partage", () => {
+    expect(meta.title).toBe("Traiteur à Pontault-Combault");
+    expect(meta.openGraph?.title).toBe("Traiteur à Pontault-Combault · Ô 3 Saveurs — Chez Laila");
+  });
+
+  it("retombe sur la description quand aucune accroche n'est donnée", () => {
+    const sansAccroche = pageMetadata({ path: "/cgv", title: "Conditions générales de vente" });
+    expect(sansAccroche.openGraph?.description).toBe(PAGE_META["/cgv"].description);
   });
 });

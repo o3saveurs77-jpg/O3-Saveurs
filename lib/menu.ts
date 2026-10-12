@@ -170,12 +170,65 @@ export interface PlatDuJour {
   nom: string;
 }
 
+/**
+ * Téléphone en forme lisible : « 0954831275 » comme « +33 9 54 83 12 75 »
+ * rendent tous deux « 09 54 83 12 75 ».
+ *
+ * Le numéro affiché vient des réglages, donc d'un champ de saisie : il arrive
+ * collé, ponctué ou en indicatif international selon la façon dont il a été
+ * recopié. Le mettre en forme à l'affichage évite d'exiger une saisie parfaite
+ * — et évite surtout de retoucher la base chaque fois qu'elle ne l'est pas.
+ * Une valeur non reconnue (numéro étranger, poste interne) ressort telle
+ * quelle : mieux vaut un format inhabituel qu'un numéro mutilé.
+ */
+export function formatPhone(raw: string): string {
+  const brut = String(raw ?? "").trim();
+  let chiffres = brut.replace(/\D/g, "");
+  if (chiffres.startsWith("00")) chiffres = chiffres.slice(2);
+  if (chiffres.length === 11 && chiffres.startsWith("33")) chiffres = `0${chiffres.slice(2)}`;
+  if (chiffres.length !== 10 || !chiffres.startsWith("0")) return brut;
+  return (chiffres.match(/\d{2}/g) ?? []).join(" ");
+}
+
+/**
+ * Cible d'un lien d'appel, indicatif international compris :
+ * « tel:+33954831275 ».
+ *
+ * Les écrans se contentaient de `info.phone.replace(/\s/g, "")`, ce qui donnait
+ * un numéro purement national — et une cible cassée dès que la valeur des
+ * réglages contenait un point ou un tiret.
+ *
+ * `lib/seo.ts` a sa propre conversion E.164 pour le balisage, mais elle n'est
+ * pas réutilisée ici : ce module-ci est chargé par le navigateur, et importer
+ * `lib/seo` depuis le pied de page y ferait entrer tous les constructeurs de
+ * JSON-LD.
+ */
+export function telHref(raw: string): string {
+  let chiffres = String(raw ?? "").replace(/\D/g, "");
+  if (chiffres.startsWith("00")) chiffres = chiffres.slice(2);
+  if (chiffres.length === 10 && chiffres.startsWith("0")) return `tel:+33${chiffres.slice(1)}`;
+  if (chiffres.startsWith("33")) return `tel:+${chiffres}`;
+  return `tel:${chiffres}`;
+}
+
 export const info = {
   name: "Ô 3 Saveurs",
   tag: "Chez Laila",
   sub: "Cuisine du monde",
   baseline: "Afrique · Maghreb · Méditerranée — préparé maison, livré chez vous.",
-  phone: "01 72 84 52 44",
+  /* ⚠️ Coordonnées de **repli**, pas la source.
+   *
+   * Ce qui s'affiche vient des réglages (`restaurant.phone`,
+   * `restaurant.address`, `restaurant.partners`) : la cliente les change seule
+   * depuis l'écran Réglages. Ces constantes ne servent plus que lorsque la base
+   * est injoignable, et sur les deux écrans qui doivent tenir sans elle
+   * (`app/error.tsx`, `app/not-found.tsx`).
+   *
+   * Elles étaient restées au numéro d'avant le changement de ligne : comme le
+   * pied de page, les pages d'erreur, le tunnel de commande et le balisage les
+   * lisaient au lieu des réglages, tout le site donnait un numéro qui ne sonne
+   * plus — alors que le bon était déjà saisi au back-office. */
+  phone: "09 54 83 12 75",
   address: "38 rue des Prés Saint-Martin, 77340 Pontault-Combault",
   hours: [
     { d: "Lun – Jeu", h: "11h30 – 14h30  ·  18h00 – 22h45" },
@@ -185,7 +238,9 @@ export const info = {
   ],
   payments: ["Espèces", "Carte Bleue", "Tickets Restaurant"],
   /* Pluriel : la maison est sur plusieurs plateformes, et n'en citer qu'une
-   * laissait croire aux autres qu'elle n'y est pas. */
+   * laissait croire aux autres qu'elle n'y est pas. Repli du réglage
+   * `restaurant.partners` : savoir quelle plateforme est réellement active
+   * relève de l'exploitation, pas du code. */
   partners: "Uber Eats & Deliveroo",
   /* Le pied de page dessinait deux ronds cliquables pour Instagram et Snapchat
    * — mais `socials` ne contenait que des libellés, sans la moindre adresse.

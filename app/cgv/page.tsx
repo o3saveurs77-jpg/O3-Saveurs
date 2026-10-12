@@ -16,6 +16,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { rowToZone } from "@/lib/serialize";
 import { fmtCents, fmtVatRate } from "@/lib/money";
+import { pageMetadata } from "@/lib/seo";
 import type { Zone } from "@/lib/menu";
 import {
   LEGAL_UPDATED,
@@ -30,12 +31,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+/* Description, canonique et image de partage : `lib/seo.ts`. */
+export const metadata: Metadata = pageMetadata({
+  path: "/cgv",
   title: "Conditions générales de vente",
-  description:
-    "Conditions de commande, prix, livraison, paiement, réclamations et droit de rétractation.",
-  alternates: { canonical: "/cgv" },
-};
+});
 
 async function readZones(): Promise<Zone[]> {
   try {

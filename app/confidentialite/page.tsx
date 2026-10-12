@@ -11,6 +11,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMetadata } from "@/lib/seo";
 import {
   LEGAL_UPDATED,
   LegalBody,
@@ -22,12 +23,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+/* Description, canonique et image de partage : `lib/seo.ts`. */
+export const metadata: Metadata = pageMetadata({
+  path: "/confidentialite",
   title: "Politique de confidentialité",
-  description:
-    "Quelles données nous collectons, pourquoi, combien de temps nous les conservons, et comment exercer vos droits.",
-  alternates: { canonical: "/confidentialite" },
-};
+});
 
 /** Un tableau vaut mieux qu'un paragraphe pour l'art. 13 : chaque finalité a sa base légale. */
 const TRAITEMENTS = [

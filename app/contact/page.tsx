@@ -3,19 +3,14 @@ import { Icon } from "@/components/Icon";
 import { ContactForm } from "@/components/contact/ContactForm";
 import { JsonLd } from "@/components/JsonLd";
 import { loadSeoContext } from "@/lib/seoData";
-import { graph, restaurantNode, breadcrumbNode, toE164 } from "@/lib/seo";
+import { graph, restaurantNode, breadcrumbNode, toE164, pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+/* Description, canonique et image de partage : `lib/seo.ts`. */
+export const metadata: Metadata = pageMetadata({
+  path: "/contact",
   title: "Contact, adresse & horaires",
-  description:
-    "Adresse, téléphone et horaires d'ouverture du restaurant Ô 3 Saveurs — Chez Laila, 38 rue des Prés Saint-Martin à Pontault-Combault (77340).",
-  alternates: { canonical: "/contact" },
-  openGraph: {
-    title: "Contact · Ô 3 Saveurs — Chez Laila",
-    description: "Adresse, téléphone et horaires du restaurant à Pontault-Combault.",
-    url: "/contact",
-  },
-};
+  accroche: "Adresse, téléphone et horaires du restaurant à Pontault-Combault.",
+});
 
 /* Même cadence que les autres pages vitrine : les coordonnées suivent les
  * réglages du back-office. */

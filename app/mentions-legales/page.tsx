@@ -8,6 +8,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMetadata } from "@/lib/seo";
 import {
   LEGAL_UPDATED,
   LegalBody,
@@ -21,12 +22,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+/* Description, canonique et image de partage : `lib/seo.ts`. */
+export const metadata: Metadata = pageMetadata({
+  path: "/mentions-legales",
   title: "Mentions légales",
-  description:
-    "Éditeur du site, informations légales de l'entreprise, hébergeur et responsable de la publication.",
-  alternates: { canonical: "/mentions-legales" },
-};
+});
 
 export default async function MentionsLegalesPage() {
   const s = await readSettings();

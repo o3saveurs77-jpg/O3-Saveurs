@@ -283,7 +283,16 @@ export function FormuleBuilder({ formula, onClose }: Props) {
                         </span>
 
                         <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
+                          {/* `min-w-0` aussi sur cette ligne, et pas seulement
+                              sur son parent : un conteneur flex garde par
+                              défaut la largeur minimale de son contenu, donc
+                              `truncate` ne tronquait rien et la pastille de
+                              supplément, en `shrink-0`, sortait du cadre de la
+                              carte. C'est le défaut « cartes de plats coupées à
+                              droite sur téléphone » signalé par la cliente —
+                              même cause que les champs de recherche corrigés
+                              dans `MenuClient` et `ZoneCheck`. */}
+                          <span className="flex min-w-0 items-center gap-2">
                             <span className="truncate font-bold">{dish.name}</span>
                             {choice.supplementCents > 0 && (
                               <span className="shrink-0 rounded-full bg-gold/25 px-2 py-0.5 text-xs font-bold text-[#7a5f00]">

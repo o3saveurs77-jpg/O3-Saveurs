@@ -16,6 +16,7 @@ import {
   THEMES,
   THEME_LABEL,
   isAllowedPhoto,
+  photoAlt,
   type ItemField,
   type PageSectionView,
   type PageSlug,
@@ -181,11 +182,26 @@ function PhotoPicker({
 /** Liste ordonnée de photos — pour les blocs « texte & photos » et « galerie ». */
 function PhotoListField({
   photos,
+  alts,
+  describable = true,
   onChange,
+  onAlts,
   onError,
 }: {
   photos: string[];
+  /** Descriptions saisies, rangées par chemin de photo. */
+  alts: Record<string, string>;
+  /**
+   * Proposer le champ de description ?
+   *
+   * Non pour le bandeau d'ouverture : sa photo de fond et sa vitrine tirent
+   * déjà leur texte alternatif d'ailleurs (le nom du plat affiché, ou la
+   * mention de la maison). Offrir un champ qui ne sortirait nulle part serait
+   * promettre un réglage sans effet.
+   */
+  describable?: boolean;
   onChange: (next: string[]) => void;
+  onAlts: (next: Record<string, string>) => void;
   onError: (message: string) => void;
 }) {
   const move = (index: number, dir: -1 | 1) => {
@@ -196,6 +212,19 @@ function PhotoListField({
     onChange(next);
   };
 
+  /* Retirer une photo retire sa description : la laisser derrière elle, c'est
+     la voir resurgir sur une autre image si la même photo revient un jour. */
+  const remove = (index: number) => {
+    const next = photos.filter((_, j) => j !== index);
+    onChange(next);
+    // Sauf si la même photo figure encore ailleurs dans la section.
+    if (!next.includes(photos[index])) {
+      const rest = { ...alts };
+      delete rest[photos[index]];
+      onAlts(rest);
+    }
+  };
+
   return (
     <div className="space-y-3">
       {photos.map((src, i) => (
@@ -203,7 +232,23 @@ function PhotoListField({
           <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg">
             <Image src={src} alt="" width={56} height={56} className="h-full w-full object-cover" />
           </div>
-          <p className="min-w-0 flex-1 truncate text-xs text-ink-2">{src}</p>
+          {/* La description passe devant le chemin du fichier : « p11.jpg »
+              n'apprenait rien à personne, alors que ce champ est la seule
+              chose que le code ne peut pas deviner à la place de la cliente. */}
+          {describable ? (
+            <div className="min-w-0 flex-1">
+              <input
+                className={INPUT}
+                value={alts[src] ?? ""}
+                placeholder={`Décrire la photo — à défaut : « ${photoAlt(src, {})} »`}
+                aria-label={`Description de la photo ${i + 1}`}
+                onChange={(e) => onAlts({ ...alts, [src]: e.target.value })}
+              />
+              <p className="mt-1 truncate text-[11px] text-ink-2">{src}</p>
+            </div>
+          ) : (
+            <p className="min-w-0 flex-1 truncate text-xs text-ink-2">{src}</p>
+          )}
           <div className="flex shrink-0 gap-1">
             <button
               type="button"
@@ -225,7 +270,7 @@ function PhotoListField({
             </button>
             <button
               type="button"
-              onClick={() => onChange(photos.filter((_, j) => j !== i))}
+              onClick={() => remove(i)}
               aria-label="Retirer la photo"
               className="grid h-8 w-8 place-items-center rounded-lg border border-line text-brick hover:bg-brick/10"
             >
@@ -691,12 +736,15 @@ function SectionEditor({
           hint={
             section.kind === "hero"
               ? "La première sert de fond au bandeau. La vitrine de droite fait défiler les plats photographiés de la carte ; les photos suivantes ne servent de repli que si aucun plat n'a de photo."
-              : undefined
+              : "Décrivez chaque photo en une courte phrase — « Tajine de veau aux pruneaux ». Ce texte est lu par les personnes qui naviguent au lecteur d'écran, s'affiche si la photo ne charge pas, et c'est aussi le seul moyen pour Google de savoir ce qu'elle montre. Laissé vide, le titre de la section sert de repli."
           }
         >
           <PhotoListField
             photos={c.photos}
+            alts={c.photoAlts}
+            describable={section.kind !== "hero"}
             onChange={(photos) => patch({ photos })}
+            onAlts={(photoAlts) => patch({ photoAlts })}
             onError={onError}
           />
         </Field>

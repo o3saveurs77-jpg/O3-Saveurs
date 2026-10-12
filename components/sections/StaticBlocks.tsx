@@ -11,7 +11,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import { Reveal } from "@/components/Reveal";
 import { fmtPrice } from "@/lib/menu";
-import { paragraphs, type SectionContent } from "@/lib/pageSections";
+import { paragraphs, photoAlt, type SectionContent } from "@/lib/pageSections";
 import {
   Accent,
   CtaRow,
@@ -20,6 +20,7 @@ import {
   SectionWrap,
   Strong,
   gridCols,
+  gridSizes,
   tone,
 } from "@/components/sections/Shell";
 
@@ -56,8 +57,21 @@ export function EnteteBlock({ content }: { content: SectionContent }) {
 
 // ─── Cartes photo ─────────────────────────────────────────────
 
-export function CartesBlock({ content, id }: { content: SectionContent; id?: string }) {
+export function CartesBlock({
+  content,
+  id,
+  lead = false,
+}: {
+  content: SectionContent;
+  id?: string;
+  /** Première image de la page — voir `SectionList`. */
+  lead?: boolean;
+}) {
   const t = tone(content.theme);
+  const sizes = gridSizes({ columns: content.columns, gap: 24 });
+  // Rang de la première carte réellement illustrée : c'est elle, et elle seule,
+  // qui mérite le préchargement quand la section ouvre la page.
+  const first = content.items.findIndex((item) => item.photo);
 
   return (
     <SectionWrap theme={content.theme} id={id} className="scroll-mt-20">
@@ -73,7 +87,8 @@ export function CartesBlock({ content, id }: { content: SectionContent; id?: str
                   src={item.photo}
                   alt={item.title}
                   fill
-                  sizes="(max-width: 768px) 100vw, 33vw"
+                  sizes={sizes}
+                  priority={lead && i === first}
                   className="object-cover transition duration-700 ease-out group-hover:scale-110"
                 />
               ) : (
@@ -223,7 +238,14 @@ export function TarifsBlock({ content }: { content: SectionContent }) {
 
 // ─── Texte & photos ───────────────────────────────────────────
 
-export function TexteImagesBlock({ content }: { content: SectionContent }) {
+export function TexteImagesBlock({
+  content,
+  lead = false,
+}: {
+  content: SectionContent;
+  /** Première image de la page — voir `SectionList`. */
+  lead?: boolean;
+}) {
   const t = tone(content.theme);
   const paras = paragraphs(content.body);
 
@@ -252,7 +274,14 @@ export function TexteImagesBlock({ content }: { content: SectionContent }) {
         </Reveal>
 
         <div className={content.reverse ? "md:order-1" : ""}>
-          <PhotoGrid photos={content.photos} columns={2} height="h-40 sm:h-44" />
+          <PhotoGrid
+            photos={content.photos}
+            alts={content.photoAlts}
+            title={content.title}
+            columns={2}
+            height="h-40 sm:h-44"
+            lead={lead}
+          />
         </div>
       </div>
     </SectionWrap>
@@ -261,8 +290,18 @@ export function TexteImagesBlock({ content }: { content: SectionContent }) {
 
 // ─── Galerie ──────────────────────────────────────────────────
 
-export function GalerieBlock({ content }: { content: SectionContent }) {
+export function GalerieBlock({
+  content,
+  lead = false,
+}: {
+  content: SectionContent;
+  /** Première image de la page — voir `SectionList`. */
+  lead?: boolean;
+}) {
   const t = tone(content.theme);
+  /* La galerie impose deux colonnes dès le mobile (`grid-cols-2`), puis suit
+     les paliers réglés au back-office — d'où `base: 2`. */
+  const sizes = gridSizes({ columns: content.columns, gap: 16, base: 2 });
 
   return (
     <SectionWrap theme={content.theme}>
@@ -273,9 +312,14 @@ export function GalerieBlock({ content }: { content: SectionContent }) {
             <div className="group relative h-44 w-full overflow-hidden rounded-2xl shadow-[var(--shadow-lg)] sm:h-52">
               <Image
                 src={src}
-                alt=""
+                alt={photoAlt(src, content.photoAlts, {
+                  title: content.title,
+                  index: i,
+                  total: content.photos.length,
+                })}
                 fill
-                sizes="(max-width: 768px) 50vw, 25vw"
+                sizes={sizes}
+                priority={lead && i === 0}
                 className="object-cover transition duration-700 ease-out group-hover:scale-110"
               />
             </div>

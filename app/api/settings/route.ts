@@ -32,6 +32,8 @@ const PUBLIC_KEYS: readonly SettingKey[] = [
   "restaurant.address",
   "restaurant.zip",
   "restaurant.city",
+  /* Citées au pied de page de chaque page : aussi publiques que l'adresse. */
+  "restaurant.partners",
   "social.instagram",
   "social.snapchat",
   "social.facebook",
@@ -101,6 +103,15 @@ function validate(key: SettingKey, raw: unknown): { ok: true; value: string } | 
     case "restaurant.phone": {
       const res = phoneField(asString);
       return res.ok ? { ok: true, value: asString.trim() } : { ok: false, error: res.error };
+    }
+
+    /* Plateformes de livraison : texte libre et court, le vide étant un choix
+     * — il retire la ligne du pied de page plutôt que d'annoncer une plateforme
+     * qui ne prendrait pas la commande. */
+    case "restaurant.partners": {
+      if (blank) return { ok: true, value: "" };
+      const res = str(asString, "Les plateformes de livraison", { max: 120 });
+      return res.ok ? { ok: true, value: res.value } : { ok: false, error: res.error };
     }
 
     case "restaurant.zip": {

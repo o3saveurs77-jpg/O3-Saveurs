@@ -22,6 +22,8 @@
  * garde celui-ci testable sans Prisma.
  */
 
+import type { Metadata } from "next";
+
 import type { DayHours } from "@/lib/hours";
 import type { Category, Dish, Formula, Zone } from "@/lib/menu";
 
@@ -52,26 +54,41 @@ export const NODE = {
  * personnelles (`/compte`, `/facture`, `/commande`, `/admin`, `/livreur`,
  * `/tournee`) n'y figurent pas — elles sont par ailleurs en `noindex` via
  * `next.config.mjs` et `app/robots.ts`.
+ *
+ * `revised` est la date de dernière révision **du contenu** de la page, tenue
+ * à la main. Elle ne sert qu'aux pages que la base ne sait pas dater : la
+ * Carte et les Formules ont leurs plats et leurs formules horodatés en base,
+ * les pages à sections aussi, mais Traiteur, Contact, Allergènes et les trois
+ * pages légales sont écrites dans le dépôt — elles sortaient donc du plan du
+ * site sans aucune date, et Google n'avait aucun signal pour y revenir.
+ *
+ * Écrite ici plutôt que déduite de la compilation, et c'est délibéré : une
+ * date de build remonterait à chaque déploiement, y compris pour un correctif
+ * CSS, et dirait aux robots que tout le site change en permanence — un signal
+ * qu'ils finissent par ignorer. On la remonte quand la page change pour de
+ * bon, pas quand le dépôt bouge.
  */
 export const PUBLIC_ROUTES = [
-  { path: "/", label: "Accueil", priority: 1, changeFrequency: "weekly" },
-  { path: "/carte", label: "La Carte", priority: 0.9, changeFrequency: "weekly" },
-  { path: "/formules", label: "Nos Formules", priority: 0.8, changeFrequency: "weekly" },
-  { path: "/traiteur", label: "Traiteur", priority: 0.7, changeFrequency: "monthly" },
-  { path: "/a-propos", label: "À propos", priority: 0.5, changeFrequency: "monthly" },
-  { path: "/contact", label: "Contact", priority: 0.6, changeFrequency: "monthly" },
-  { path: "/allergenes", label: "Allergènes", priority: 0.4, changeFrequency: "monthly" },
+  { path: "/", label: "Accueil", priority: 1, changeFrequency: "weekly", revised: "2026-08-25" },
+  { path: "/carte", label: "La Carte", priority: 0.9, changeFrequency: "weekly", revised: "2026-10-13" },
+  { path: "/formules", label: "Nos Formules", priority: 0.8, changeFrequency: "weekly", revised: "2026-10-13" },
+  { path: "/traiteur", label: "Traiteur", priority: 0.7, changeFrequency: "monthly", revised: "2026-10-13" },
+  { path: "/a-propos", label: "À propos", priority: 0.5, changeFrequency: "monthly", revised: "2026-10-13" },
+  { path: "/contact", label: "Contact", priority: 0.6, changeFrequency: "monthly", revised: "2026-10-13" },
+  { path: "/allergenes", label: "Allergènes", priority: 0.4, changeFrequency: "monthly", revised: "2026-10-13" },
   /* `/commander` n'y figure pas : le tunnel de commande est en `noindex` (voir
    * `app/commander/page.tsx`), et un plan du site qui déclare une page
    * interdite d'index est une contradiction que Search Console signale. */
-  { path: "/mentions-legales", label: "Mentions légales", priority: 0.1, changeFrequency: "yearly" },
-  { path: "/cgv", label: "CGV", priority: 0.1, changeFrequency: "yearly" },
-  { path: "/confidentialite", label: "Confidentialité", priority: 0.1, changeFrequency: "yearly" },
+  { path: "/mentions-legales", label: "Mentions légales", priority: 0.1, changeFrequency: "yearly", revised: "2026-10-13" },
+  { path: "/cgv", label: "CGV", priority: 0.1, changeFrequency: "yearly", revised: "2026-10-13" },
+  { path: "/confidentialite", label: "Confidentialité", priority: 0.1, changeFrequency: "yearly", revised: "2026-10-13" },
 ] as const satisfies readonly {
   path: string;
   label: string;
   priority: number;
   changeFrequency: "weekly" | "monthly" | "yearly";
+  /** Date ISO `AAAA-MM-JJ`, jamais un horodatage de compilation. */
+  revised: string;
 }[];
 
 /**
@@ -92,6 +109,217 @@ export const DISALLOWED_PATHS = [
   "/livreur",
   "/tournee",
 ] as const;
+
+/* ─── Métadonnées des pages publiques ───────────────────────── */
+
+/**
+ * Nom de marque tel qu'il s'affiche dans un onglet et un aperçu de partage.
+ *
+ * Écrit ici et non lu en réglages, contrairement à tout le reste du module :
+ * `export const metadata` est évalué sans `await`, une page ne peut donc pas
+ * attendre la base pour composer son titre. C'est déjà le choix du layout
+ * racine, qui porte le même gabarit — cette constante le rend commun au lieu
+ * de le laisser recopié dans neuf fichiers.
+ */
+export const BRAND = "Ô 3 Saveurs — Chez Laila";
+
+/** Visuel repris par Facebook, WhatsApp, iMessage et Slack à chaque partage. */
+export interface PageShare {
+  /** Chemin réel sous `public/` — une image absente donne un aperçu vide. */
+  url: string;
+  width: number;
+  height: number;
+  alt: string;
+}
+
+/**
+ * Visuel de repli des pages légales.
+ *
+ * Elles n'ont pas de photo à elles et n'en demandent pas : on n'illustre pas
+ * des CGV avec un plat, cela ne dit rien de leur contenu. La table dressée du
+ * site — celle que le layout racine sert déjà par défaut — fait au moins
+ * reconnaître le restaurant quand le lien circule.
+ */
+const SHARE_DEFAUT = {
+  url: "/photos/p03.jpg",
+  width: 1600,
+  height: 1066,
+  alt: "Table dressée de plats et de cocktails maison du restaurant Ô 3 Saveurs",
+} as const satisfies PageShare;
+
+export interface PageMeta {
+  /**
+   * 150 à 160 caractères.
+   *
+   * Au-delà, Google coupe la phrase en plein milieu ; en deçà, on laisse de la
+   * place payée et non utilisée. Ce n'est pas un endroit où empiler des
+   * mots-clés : c'est la seule phrase que le client lit avant de décider de
+   * cliquer, elle doit lui dire ce qu'il va trouver.
+   */
+  description: string;
+  share: PageShare;
+}
+
+/**
+ * Ce que chaque page publique annonce aux moteurs et aux messageries.
+ *
+ * Rassemblé ici plutôt que dans les neuf `page.tsx` pour une raison simple :
+ * c'est la seule façon de **vérifier** ces textes. Une description trop longue
+ * ou une image absente ne casse rien, ne lève aucune erreur et ne se voit que
+ * dans un résultat de recherche tronqué ou un aperçu WhatsApp gris. Les tests
+ * de `tests/seo.test.ts` comptent les caractères et ouvrent chaque fichier.
+ *
+ * Les visuels sont les photos déjà livrées avec le dépôt : le restaurant n'a
+ * pas de visuel de partage dédié, et une photo de plat réelle vaut mieux
+ * qu'une carte générée. Chacune est choisie pour ce que la page raconte, pas
+ * au hasard — une page partagée sans rapport avec son image se fait fermer.
+ *
+ * L'accueil n'y figure pas : sa description est celle du layout racine, qui
+ * sert aussi de repli à toute page qui n'en déclare pas.
+ */
+export const PAGE_META = {
+  "/carte": {
+    description:
+      "Tajines, couscous, thiéboudiène, mafé, yassa, grillades et desserts maison : toute la carte d'Ô 3 Saveurs à Pontault-Combault, en livraison ou à emporter.",
+    share: {
+      // La table entière : c'est la seule photo qui montre l'étendue de la carte.
+      url: "/photos/Couverture-Hero.jpg",
+      width: 1800,
+      height: 1199,
+      alt: "Table dressée de plats Ô 3 Saveurs : tajine, thiéboudiène, brochettes, yassa et cocktails maison",
+    },
+  },
+  "/formules": {
+    description:
+      "Un plat au choix et une boisson maison à prix fixe : nos formules Express, Midi, Gourmande, Sandwich et Menu Enfant, midi et soir à Pontault-Combault.",
+    share: {
+      // Une assiette complète, telle qu'elle arrive quand on prend une formule.
+      url: "/photos/p24.jpg",
+      width: 1600,
+      height: 1066,
+      alt: "Assiette de riz rouge, légumes mijotés et bœuf, servie en formule",
+    },
+  },
+  "/traiteur": {
+    description:
+      "Buffets, plateaux repas et réceptions à Pontault-Combault et en Seine-et-Marne : cuisine africaine et maghrébine préparée maison, devis gratuit sous 24 h.",
+    share: {
+      // Le grand plat à partager : c'est ce qu'on commande pour une réception,
+      // et c'est ce qui distingue la page d'une simple photo d'assiette.
+      url: "/photos/couscous-royal.jpg",
+      width: 1400,
+      height: 933,
+      alt: "Grand plat de couscous royal garni de légumes, poulet, bœuf et merguez, prêt à partager",
+    },
+  },
+  "/a-propos": {
+    description:
+      "Depuis Pontault-Combault, Laila cuisine maison l'Afrique de l'Ouest, le Maghreb et la Méditerranée. L'histoire, les valeurs et les horaires d'Ô 3 Saveurs.",
+    share: {
+      // Le mafé : le plat de famille par lequel la maison se raconte.
+      url: "/photos/p01.jpg",
+      width: 1600,
+      height: 1066,
+      alt: "Mafé de bœuf à la sauce d'arachide, servi sur son riz blanc dans un bol en grès bleu",
+    },
+  },
+  "/contact": {
+    description:
+      "Ô 3 Saveurs — Chez Laila, 38 rue des Prés Saint-Martin à Pontault-Combault : téléphone, horaires d'ouverture, plan d'accès et formulaire pour nous écrire.",
+    share: {
+      // Faute de photo de la devanture, la table dressée : une invitation à
+      // venir, qui vaut mieux qu'un plat isolé sur une page de coordonnées.
+      url: "/photos/p03.jpg",
+      width: 1600,
+      height: 1066,
+      alt: "Table dressée de plats et de cocktails maison du restaurant Ô 3 Saveurs à Pontault-Combault",
+    },
+  },
+  "/allergenes": {
+    description:
+      "Les 14 allergènes réglementaires, plat par plat, chez Ô 3 Saveurs à Pontault-Combault. Un doute avant de commander ? Tout est affiché, règlement UE 1169/2011.",
+    share: {
+      // Amandes et œuf à l'image : deux des quatorze, visibles dans l'assiette.
+      url: "/photos/p11.jpg",
+      width: 1600,
+      height: 1092,
+      alt: "Tajine de veau aux pruneaux, amandes et œuf, servi dans son plat en terre",
+    },
+  },
+  "/mentions-legales": {
+    description:
+      "Éditeur du site, identité et coordonnées de l'entreprise, hébergeur et responsable de la publication : les mentions légales d'Ô 3 Saveurs à Pontault-Combault.",
+    share: SHARE_DEFAUT,
+  },
+  "/cgv": {
+    description:
+      "Commande, prix, livraison, paiement, réclamations et droit de rétractation : les conditions générales de vente d'Ô 3 Saveurs, à lire avant de commander.",
+    share: SHARE_DEFAUT,
+  },
+  "/confidentialite": {
+    description:
+      "Quelles données Ô 3 Saveurs collecte, pourquoi, combien de temps elles sont conservées et comment exercer vos droits. Aucun traceur publicitaire sur ce site.",
+    share: SHARE_DEFAUT,
+  },
+} as const satisfies Record<string, PageMeta>;
+
+/** Chemins dont ce module porte les métadonnées. */
+export type PagePath = keyof typeof PAGE_META;
+
+/**
+ * Métadonnées complètes d'une page publique.
+ *
+ * Deux pièges du dépôt tiennent dans cette fonction, et c'est sa raison d'être.
+ *
+ * · **`openGraph` n'est pas fusionné, il est remplacé.** Next ne complète pas
+ *   l'objet du layout racine : une page qui déclare son propre `openGraph`
+ *   perd d'un coup l'image, le `siteName` et la locale. C'est ce qui faisait
+ *   sortir la Carte, les Formules, le Traiteur, À propos, Contact et les
+ *   Allergènes sans aucun visuel sur WhatsApp et Facebook, alors que le layout
+ *   en déclarait un.
+ *
+ * · **Le canonical se déclare page par page.** Le layout ne doit jamais en
+ *   porter (voir le commentaire de `app/layout.tsx`) : toute page sans
+ *   `alternates` propre hériterait de celui de l'accueil et se déclarerait
+ *   elle-même comme une copie à ne pas indexer. Le passage obligé par cette
+ *   fonction rend l'oubli impossible.
+ */
+export function pageMetadata(input: {
+  path: PagePath;
+  /** Titre court — le layout racine y ajoute « · Ô 3 Saveurs — Chez Laila ». */
+  title: string;
+  /**
+   * Accroche de l'aperçu de partage, quand la description meta — écrite pour
+   * une page de résultats — est trop longue pour une vignette. À défaut, c'est
+   * la description qui sert : deux textes valent mieux qu'un texte coupé.
+   */
+  accroche?: string;
+}): Metadata {
+  const { description, share } = PAGE_META[input.path];
+  const titre = `${input.title} · ${BRAND}`;
+  const accroche = input.accroche ?? description;
+
+  return {
+    title: input.title,
+    description,
+    alternates: { canonical: input.path },
+    openGraph: {
+      type: "website",
+      locale: "fr_FR",
+      siteName: BRAND,
+      title: titre,
+      description: accroche,
+      url: input.path,
+      images: [share],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: titre,
+      description: accroche,
+      images: [share.url],
+    },
+  };
+}
 
 /* ─── Coordonnées du restaurant ─────────────────────────────── */
 
@@ -484,6 +712,84 @@ export function formulasNode(formulas: Formula[]): JsonLdNode {
         },
       },
     })),
+  };
+}
+
+/**
+ * Le service traiteur en nœud `Service`.
+ *
+ * `/traiteur` était la seule page vitrine sans le moindre balisage : elle ne
+ * portait qu'un titre et une description. Or c'est la page qui répond à une
+ * requête à forte intention — « traiteur mariage Seine-et-Marne », « plateaux
+ * repas entreprise Pontault-Combault » — et un `Service` rattaché au nœud
+ * `Restaurant` par `provider` dit ce qu'aucun texte de page ne dit en clair :
+ * qui rend le service, où, et par quel canal on le demande.
+ *
+ * `areaServed` reprend les communes du barème de livraison plutôt qu'une liste
+ * propre : la maison ne se déplace pas plus loin pour un buffet que pour une
+ * commande, et deux listes finiraient par diverger.
+ */
+export function cateringNode(profile: BusinessProfile, zones: Zone[]): JsonLdNode {
+  const cities = [...new Set(zones.flatMap((z) => z.villes))];
+
+  const node: JsonLdNode = {
+    "@type": "Service",
+    "@id": `${SITE_URL}/traiteur#service`,
+    serviceType: "Traiteur",
+    name: `Traiteur ${profile.city} — buffets, plateaux repas et réceptions`,
+    description:
+      `Service traiteur à ${profile.city} et alentours : buffets froids et chauds, ` +
+      "plateaux repas pour réunions de bureau, mariages et réceptions. Cuisine " +
+      "d'Afrique de l'Ouest, du Maghreb et de Méditerranée préparée maison. Devis gratuit.",
+    url: abs("/traiteur"),
+    provider: { "@id": NODE.restaurant },
+    availableChannel: {
+      "@type": "ServiceChannel",
+      serviceUrl: abs("/traiteur"),
+      servicePhone: toE164(profile.phone),
+      availableLanguage: { "@type": "Language", name: "Français", alternateName: "fr" },
+    },
+  };
+
+  if (cities.length > 0) {
+    node.areaServed = cities.map((city) => ({
+      "@type": "City",
+      name: city,
+      address: { "@type": "PostalAddress", addressLocality: city, addressCountry: "FR" },
+    }));
+  }
+
+  return node;
+}
+
+/**
+ * La page « À propos » en `AboutPage`, rattachée à l'organisation.
+ *
+ * La page ne portait qu'un fil d'Ariane, au motif qu'un nœud `Restaurant` de
+ * plus y répéterait celui de l'accueil. Le raisonnement ne tient pas : un
+ * moteur lit **chaque page isolément**, et rien ne lui disait de qui cette
+ * page raconte l'histoire. « Chez Laila » y est partout en toutes lettres sans
+ * qu'aucun balisage ne le relie à l'entreprise — c'est précisément la page qui
+ * devrait consolider l'entité, et c'était la seule à ne rien en dire.
+ *
+ * `about` et `mainEntity` pointent le même nœud à dessein : le premier est ce
+ * que Google lit pour rattacher la page à l'entité, le second est ce que lisent
+ * les moteurs génératifs pour savoir quoi citer. Les deux visent le nœud
+ * `Restaurant` de la page, qui doit donc figurer dans le même graphe.
+ */
+export function aboutPageNode(profile: BusinessProfile): JsonLdNode {
+  const marque = profile.tagline ? `${profile.name} — ${profile.tagline}` : profile.name;
+
+  return {
+    "@type": "AboutPage",
+    "@id": `${SITE_URL}/a-propos#page`,
+    url: abs("/a-propos"),
+    name: `À propos — ${marque}`,
+    description: PAGE_META["/a-propos"].description,
+    inLanguage: "fr-FR",
+    isPartOf: { "@id": NODE.website },
+    about: { "@id": NODE.restaurant },
+    mainEntity: { "@id": NODE.restaurant },
   };
 }
 

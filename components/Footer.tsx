@@ -1,11 +1,80 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Emblem } from "./Brand";
 import { Icon } from "./Icon";
 import { NewsletterForm } from "./NewsletterForm";
-import { info } from "@/lib/menu";
+import { formatPhone, info, telHref } from "@/lib/menu";
+
+/**
+ * Coordonnées affichées au pied de page.
+ *
+ * Elles venaient de `info` (`lib/menu.ts`), une constante du code : le jour où
+ * le restaurant a changé de ligne téléphonique, le site a continué d'afficher
+ * l'ancien numéro sur **toutes** ses pages, alors que l'écran Réglages portait
+ * déjà le bon. Les réglages en base sont donc la source, `info` le repli.
+ *
+ * Pourquoi un appel réseau plutôt qu'une lecture serveur : le pied de page est
+ * monté par `SiteChrome`, un composant client (il lit `usePathname`). Un
+ * composant serveur ne peut pas y être rendu sans faire descendre les réglages
+ * depuis le layout racine, ce qui chargerait la base sur chaque page du site.
+ * Le `GET /api/settings` anonyme ne renvoie que les clés d'affichage.
+ *
+ * Le premier rendu part du repli : le pied de page est complet avant la réponse,
+ * et un appel qui échoue laisse des coordonnées justes à l'écran plutôt qu'un
+ * trou.
+ */
+interface Coordonnees {
+  address: string;
+  phone: string;
+  /** Plateformes de livraison. Vide = la ligne entière disparaît. */
+  partners: string;
+}
+
+const REPLI: Coordonnees = {
+  address: info.address,
+  phone: info.phone,
+  partners: info.partners,
+};
+
+function useCoordonnees(): Coordonnees {
+  const [coords, setCoords] = useState<Coordonnees>(REPLI);
+
+  useEffect(() => {
+    let monte = true;
+
+    fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((data: { settings?: Record<string, string> }) => {
+        if (!monte) return;
+        const s = data.settings ?? {};
+        const rue = (s["restaurant.address"] ?? "").trim();
+        const ville = `${s["restaurant.zip"] ?? ""} ${s["restaurant.city"] ?? ""}`.trim();
+        setCoords({
+          address: [rue, ville].filter(Boolean).join(", ") || REPLI.address,
+          phone: (s["restaurant.phone"] ?? "").trim() || REPLI.phone,
+          /* `??` et non `||` : une chaîne vide est un choix de la maison — ne
+             citer aucune plateforme — et non une valeur manquante. Seule
+             l'absence de la clé fait revenir au repli. */
+          partners: s["restaurant.partners"] ?? REPLI.partners,
+        });
+      })
+      .catch(() => {
+        /* Réglages injoignables : on garde le repli, déjà affiché. */
+      });
+
+    return () => {
+      monte = false;
+    };
+  }, []);
+
+  return coords;
+}
 
 export function Footer() {
-  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(info.address)}`;
+  const { address, phone, partners } = useCoordonnees();
+  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
   return (
     <footer className="bg-footer-bg text-footer-ink">
@@ -90,19 +159,24 @@ export function Footer() {
             <li className="flex items-start gap-2">
               <Icon name="pin" size={18} className="mt-0.5 shrink-0 text-primary" />
               <a href={mapsHref} target="_blank" rel="noopener noreferrer" className="link-underline">
-                {info.address}
+                {address}
               </a>
             </li>
             <li className="flex items-center gap-2">
               <Icon name="phone" size={18} className="shrink-0 text-primary" />
-              <a href={`tel:${info.phone.replace(/\s/g, "")}`} className="link-underline">
-                {info.phone}
+              <a href={telHref(phone)} className="link-underline">
+                {formatPhone(phone)}
               </a>
             </li>
-            <li className="flex items-center gap-2">
-              <Icon name="truck" size={18} className="shrink-0 text-primary" />
-              Livraison & à emporter, mais aussi {info.partners}
-            </li>
+            {/* Aucune plateforme renseignée : aucune ligne. Annoncer une
+                plateforme qui ne prendrait pas la commande coûte plus cher
+                qu'un silence. */}
+            {partners.trim() && (
+              <li className="flex items-center gap-2">
+                <Icon name="truck" size={18} className="shrink-0 text-primary" />
+                Livraison & à emporter, mais aussi {partners}
+              </li>
+            )}
           </ul>
         </div>
 

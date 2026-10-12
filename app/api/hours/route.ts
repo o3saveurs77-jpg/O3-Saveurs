@@ -142,6 +142,23 @@ export async function PUT(req: Request) {
     const dayLabel = WEEKDAY_LABEL[weekday].toLowerCase();
     const closed = bool(day.closed, false);
 
+    /* Un jour fermé ignore ses horaires. Les valider refuserait une fermeture
+     * à cause d'un champ resté à moitié rempli avant qu'on coche « fermé », et
+     * les conserver laisserait en base des heures qu'aucun calcul ne lit
+     * (`servicesOf()` s'arrête à `closed`) mais qu'un écran pourrait réafficher
+     * comme si le service avait lieu. Fermé veut dire : aucun service. */
+    if (closed) {
+      rows.push({
+        weekday,
+        closed: true,
+        lunchOpen: null,
+        lunchClose: null,
+        dinnerOpen: null,
+        dinnerClose: null,
+      });
+      continue;
+    }
+
     const lunch = readService(day.lunchOpen, day.lunchClose, "midi", dayLabel);
     if (!lunch.ok) return badRequest(lunch.error);
     const dinner = readService(day.dinnerOpen, day.dinnerClose, "soir", dayLabel);
@@ -155,7 +172,7 @@ export async function PUT(req: Request) {
 
     // Un jour ouvert sans aucun service est un piège : le client verrait
     // « ouvert » sans qu'aucun créneau ne soit proposable.
-    if (!closed && !lunch.open && !dinner.open) {
+    if (!lunch.open && !dinner.open) {
       return badRequest(
         `${WEEKDAY_LABEL[weekday]} n'est pas marqué fermé mais n'a aucun service : cochez « fermé » ou renseignez au moins un service`,
       );
@@ -163,7 +180,7 @@ export async function PUT(req: Request) {
 
     rows.push({
       weekday,
-      closed,
+      closed: false,
       lunchOpen: lunch.open,
       lunchClose: lunch.close,
       dinnerOpen: dinner.open,

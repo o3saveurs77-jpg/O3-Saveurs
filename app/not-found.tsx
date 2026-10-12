@@ -1,14 +1,22 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Icon } from "@/components/Icon";
-import { info } from "@/lib/menu";
+import { formatPhone, info, telHref } from "@/lib/menu";
 
 export const metadata: Metadata = {
   title: "Page introuvable · Ô 3 Saveurs — Chez Laila",
   robots: { index: false, follow: true },
 };
 
-/** 404 dans la charte, avec les issues utiles plutôt qu'un cul-de-sac. */
+/**
+ * 404 dans la charte, avec les issues utiles plutôt qu'un cul-de-sac.
+ *
+ * Le numéro vient de `info`, pas des réglages : Next pré-rend cette page une
+ * fois pour toutes au build (`/_not-found`), si bien qu'une lecture en base y
+ * resterait figée à la valeur du jour de la compilation — une source de
+ * vérité en apparence seulement. Le pied de page, juste en dessous, affiche
+ * lui le numéro des réglages.
+ */
 export default function NotFound() {
   return (
     <div className="wrap flex flex-col items-center gap-4 py-24 text-center">
@@ -43,10 +51,10 @@ export default function NotFound() {
       <p className="mt-4 text-sm text-ink-2">
         Une commande en cours, une question ?{" "}
         <a
-          href={`tel:${info.phone.replace(/\s/g, "")}`}
+          href={telHref(info.phone)}
           className="font-semibold text-primary hover:underline"
         >
-          {info.phone}
+          {formatPhone(info.phone)}
         </a>
       </p>
     </div>

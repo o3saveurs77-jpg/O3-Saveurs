@@ -3,6 +3,7 @@ import {
   DEFAULT_SECTIONS,
   KIND_META,
   PAGES,
+  PHOTO_ALT_FALLBACK,
   SECTION_KINDS,
   accents,
   isAllowedHref,
@@ -11,6 +12,7 @@ import {
   isSectionKind,
   normalizeContent,
   paragraphs,
+  photoAlt,
   starterContent,
   strongs,
 } from "@/lib/pageSections";
@@ -132,6 +134,39 @@ describe("normalizeContent", () => {
     expect(normalizeContent({ limit: 0 }).limit).toBe(1);
   });
 
+  it("accepte une section déjà en base, qui ne connaît pas les descriptions de photos", () => {
+    /* Les sections écrites avant ce champ doivent s'afficher telles quelles :
+       pas de migration, pas de photo perdue, juste un repli à l'affichage. */
+    const c = normalizeContent({ photos: ["/photos/p03.jpg", "/photos/p11.jpg"] });
+    expect(c.photos).toEqual(["/photos/p03.jpg", "/photos/p11.jpg"]);
+    expect(c.photoAlts).toEqual({});
+  });
+
+  it("garde la description d'une photo présente et oublie celle d'une photo retirée", () => {
+    // Sans élagage, le JSON stocké enflerait de descriptions que personne ne
+    // voit — et une photo remise plus tard récupérerait un texte périmé.
+    const c = normalizeContent({
+      photos: ["/photos/p03.jpg"],
+      photoAlts: {
+        "/photos/p03.jpg": "  Tajine de veau aux pruneaux  ",
+        "/photos/p11.jpg": "Photo retirée de la section",
+        "/photos/p12.jpg": "   ",
+      },
+    });
+    expect(c.photoAlts).toEqual({ "/photos/p03.jpg": "Tajine de veau aux pruneaux" });
+  });
+
+  it("n'accepte comme clé de description qu'un chemin de photo autorisé", () => {
+    const c = normalizeContent({
+      photos: ["/photos/p03.jpg"],
+      photoAlts: { ["__proto__"]: { pollué: true }, "javascript:alert(1)": "x" },
+    });
+    expect(c.photoAlts).toEqual({});
+    expect(({} as Record<string, unknown>).pollué).toBeUndefined();
+    expect(() => normalizeContent({ photoAlts: "pas un objet" })).not.toThrow();
+    expect(normalizeContent({ photoAlts: ["liste"] }).photoAlts).toEqual({});
+  });
+
   it("donne une clé à un élément qui n'en a pas — sinon React remonterait la liste", () => {
     const c = normalizeContent({ items: [{ title: "A" }, { title: "B" }] });
     expect(c.items.map((i) => i.id)).toEqual(["i0", "i1"]);
@@ -211,6 +246,38 @@ describe("contenu par défaut des pages", () => {
         }
       }
     }
+  });
+});
+
+describe("texte alternatif des photos", () => {
+  const SRC = "/photos/p03.jpg";
+
+  it("sert la description saisie au back-office", () => {
+    expect(photoAlt(SRC, { [SRC]: "  Tajine de veau  " })).toBe("Tajine de veau");
+  });
+
+  it("replace la photo dans sa section tant que rien n'est saisi", () => {
+    // Quatorze photos sortaient en `alt=""` : muettes au lecteur d'écran.
+    expect(photoAlt(SRC, {}, { title: "Notre histoire", index: 1, total: 4 })).toBe(
+      "Notre histoire, photo 2",
+    );
+    expect(photoAlt(SRC, {}, { title: "En images", index: 0, total: 1 })).toBe("En images");
+  });
+
+  it("n'annonce pas les astérisques de mise en forme du titre", () => {
+    expect(photoAlt(SRC, {}, { title: "Vos grandes occasions, *sur commande*" })).toBe(
+      "Vos grandes occasions, sur commande",
+    );
+    expect(photoAlt(SRC, {}, { title: "Le voyage\ndes saveurs" })).toBe("Le voyage des saveurs");
+  });
+
+  it("retombe sur la mention de la maison quand la section n'a pas de titre", () => {
+    expect(photoAlt(SRC, {}, { title: "   " })).toBe(PHOTO_ALT_FALLBACK);
+    expect(photoAlt(SRC, {})).toBe(PHOTO_ALT_FALLBACK);
+  });
+
+  it("ne confond pas une propriété héritée avec une description", () => {
+    expect(photoAlt("constructor", {}, { title: "En images" })).toBe("En images");
   });
 });
 

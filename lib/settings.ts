@@ -14,11 +14,23 @@ export const SETTING_DEFAULTS = {
   // Identité
   "restaurant.name": "Ô 3 Saveurs",
   "restaurant.tagline": "Chez Laila",
-  "restaurant.phone": "01 72 84 52 44",
+  /* Le repli portait l'ancien numéro, celui d'avant le changement de ligne.
+   * Un réglage par défaut faux est pire qu'absent : il s'affiche sans jamais
+   * se signaler. */
+  "restaurant.phone": "09 54 83 12 75",
   "restaurant.email": "contact@o3saveurs.fr",
   "restaurant.address": "38 rue des Prés Saint-Martin",
   "restaurant.zip": "77340",
   "restaurant.city": "Pontault-Combault",
+
+  /* Plateformes de livraison citées au pied de page.
+   *
+   * C'était une constante du code (`info.partners`), donc une annonce que
+   * personne ne pouvait corriger : la maison n'est pas sûre que Deliveroo soit
+   * encore actif, et promettre une plateforme qui ne prend pas la commande vaut
+   * moins que de n'en citer aucune. Réglage vide = la ligne entière disparaît
+   * du pied de page. */
+  "restaurant.partners": "Uber Eats & Deliveroo",
 
   // Informations légales — à renseigner par la cliente avant mise en ligne
   "legal.company": "",
@@ -200,11 +212,21 @@ export async function deliveryOrigin(): Promise<LatLng | null> {
   return found;
 }
 
-/** Adresse postale sur une ligne, pour les emails et les factures. */
+/**
+ * Adresse postale sur une ligne, pour les emails et les factures.
+ *
+ * Les espaces sont normalisés : la saisie du back-office arrive avec des
+ * doubles espaces ou une espace traînante, et cette même chaîne sert de clé de
+ * cache au géocodage (`deliveryOrigin()`) — une espace en trop y suffisait à
+ * invalider un cache valide, donc à repayer un appel Google à chaque page.
+ */
 export function formatAddress(s: Settings): string {
-  return [s["restaurant.address"], `${s["restaurant.zip"]} ${s["restaurant.city"]}`.trim()]
+  const rue = (s["restaurant.address"] ?? "").trim();
+  const ville = `${s["restaurant.zip"] ?? ""} ${s["restaurant.city"] ?? ""}`.trim();
+  return [rue, ville]
     .filter(Boolean)
-    .join(", ");
+    .join(", ")
+    .replace(/\s+/g, " ");
 }
 
 /**

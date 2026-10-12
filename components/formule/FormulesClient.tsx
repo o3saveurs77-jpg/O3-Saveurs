@@ -19,7 +19,12 @@ export function FormulesClient({ formulas }: { formulas: Formula[] }) {
   const [open, setOpen] = useState<Formula | null>(null);
 
   /* Un lien « /formules#F3 » venu de l'accueil ouvre directement la bonne
-     formule — le visiteur a déjà choisi, inutile de le faire recommencer. */
+     formule — le visiteur a déjà choisi, inutile de le faire recommencer.
+     Le défilement jusqu'à la carte, lui, est l'affaire du navigateur : chaque
+     article porte son code en identifiant (voir plus bas). Sans cet
+     identifiant, un lien vers une formule *indisponible* n'ouvrait aucun
+     assistant et ne bougeait pas la page : le visiteur atterrissait en haut
+     d'une liste de cinq formules sans savoir laquelle il venait de demander. */
   useEffect(() => {
     const code = decodeURIComponent(window.location.hash.replace(/^#/, "")).toUpperCase();
     if (!code) return;
@@ -42,7 +47,15 @@ export function FormulesClient({ formulas }: { formulas: Formula[] }) {
           const orderable = isFormulaOrderable(f);
           return (
             <Reveal key={f.id} delay={i * 80} className="h-full">
-              <article className="flex h-full flex-col rounded-[var(--radius-card)] border border-line bg-panel p-6 shadow-[var(--shadow-soft)] transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[var(--shadow-lg)]">
+              {/* `id` = le code de la formule, exactement ce que l'accueil met
+                  derrière le dièse (`/formules#${f.code}`, voir
+                  `components/sections/DynamicBlocks.tsx`). `scroll-mt-24`
+                  dégage la barre de navigation collante, sans quoi la carte
+                  visée se retrouve sous elle. */}
+              <article
+                id={f.code}
+                className="flex h-full scroll-mt-24 flex-col rounded-[var(--radius-card)] border border-line bg-panel p-6 shadow-[var(--shadow-soft)] transition duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[var(--shadow-lg)]"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brick font-display text-sm text-white">
                     {f.code}

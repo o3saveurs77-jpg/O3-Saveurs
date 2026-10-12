@@ -57,6 +57,7 @@
     "recharts": "^2.15.4",
     "resend": "^6.17.1",
     "server-only": "^0.0.1",
+    "sharp": "^0.34.5",
     "stripe": "^22.3.0"
   },
   "devDependencies": {
