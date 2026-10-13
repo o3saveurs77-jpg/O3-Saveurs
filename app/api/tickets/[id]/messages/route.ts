@@ -72,17 +72,46 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       },
     });
 
-    await notify(req, author, updated.customerEmail, ticket.subject, message.value, ticket.id);
+    const notification = await notify(
+      req,
+      author,
+      updated.customerEmail,
+      ticket.subject,
+      message.value,
+      ticket.id,
+    );
 
-    return NextResponse.json(rowToTicket(updated), { status: 201 });
+    /* Le sort de la notification voyage avec la réponse.
+     *
+     * L'écran du back-office affichait « Réponse envoyée » dès le 201, alors
+     * que l'email pouvait avoir été refusé par Resend sans que personne ne le
+     * sache : le restaurant croyait avoir répondu, le client n'avait rien reçu,
+     * et la réclamation vieillissait en silence. La forme du ticket est
+     * conservée telle quelle — un champ s'ajoute, rien ne bouge. */
+    return NextResponse.json({ ...rowToTicket(updated), notification }, { status: 201 });
   } catch {
     return serverError("Le message n'a pas pu être enregistré.");
   }
 }
 
+/* Ce que l'écran a besoin de savoir de la notification : est-elle partie, et à
+ * qui. Le type n'est pas exporté — un fichier de route n'expose que ses
+ * gestionnaires ; c'est `components/admin/SavAdmin.tsx` qui déclare la forme
+ * qu'il lit. */
+interface NotificationEnvoi {
+  sent: boolean;
+  to: string | null;
+}
+
 /**
  * Notifie la partie qui n'a pas écrit. Un échec d'email n'annule jamais le
  * message : il est déjà en base et visible dans le fil.
+ *
+ * En revanche il ne se tait plus. Le `catch {}` d'origine avalait tout, et
+ * `sendTicketReply` était typée `Promise<void>` : le refus de Resend — que
+ * `send()` rend pourtant en clair et journalise dans `EmailLog` — était jeté
+ * deux fois. La fonction rend maintenant le verdict, pour que l'écran dise la
+ * vérité à celle qui vient de taper sa réponse.
  */
 async function notify(
   req: Request,
@@ -91,18 +120,24 @@ async function notify(
   subject: string,
   body: string,
   ticketId: string,
-): Promise<void> {
+): Promise<NotificationEnvoi> {
   const origin = originOf(req);
-  try {
-    if (author === "ADMIN") {
-      await sendTicketReply(customerEmail, subject, body, `${origin}/compte?reclamation=${ticketId}`);
-      return;
-    }
-    const notifyTo = process.env.RESTAURANT_NOTIFY_EMAIL;
-    if (notifyTo) {
-      await sendTicketReply(notifyTo, subject, body, `${origin}/admin/sav?ticket=${ticketId}`);
-    }
-  } catch {
-    /* l'email est un accessoire, le message reste enregistré */
+
+  /* Une réponse du restaurant va au client ; un message du client va au
+   * restaurant, s'il a une adresse de notification. */
+  const to = author === "ADMIN" ? customerEmail : (process.env.RESTAURANT_NOTIFY_EMAIL ?? null);
+  if (!to) return { sent: false, to: null };
+
+  const url =
+    author === "ADMIN"
+      ? `${origin}/compte?reclamation=${ticketId}`
+      : `${origin}/admin/sav?ticket=${ticketId}`;
+
+  /* `sendTicketReply` ne lève pas : elle rend `false` et journalise l'échec,
+   * refus de Resend comme erreur de gabarit. Plus rien à rattraper ici. */
+  const sent = await sendTicketReply(to, subject, body, url);
+  if (!sent) {
+    console.error(`[sav] réponse ${ticketId} enregistrée, mais l'email à ${to} n'est pas parti.`);
   }
+  return { sent, to };
 }

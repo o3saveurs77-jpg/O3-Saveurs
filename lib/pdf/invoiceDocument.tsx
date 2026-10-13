@@ -8,7 +8,7 @@
 
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { Order } from "@/lib/types";
-import type { InvoiceSeller } from "@/lib/invoice";
+import { invoiceHeading, settlementLine, type InvoiceSeller } from "@/lib/invoice";
 import { fmtCents, fmtVatRate, vatBreakdownByRate, formatInvoiceNumber } from "@/lib/money";
 import { vatPartsOf } from "@/lib/types";
 
@@ -116,6 +116,19 @@ const styles = StyleSheet.create({
 
   footer: { marginTop: 32, paddingTop: 14, borderTop: `0.5pt solid ${COLOR.line}`, textAlign: "center" },
   footerText: { fontSize: 7.5, color: COLOR.ink2, marginBottom: 3, lineHeight: 1.4 },
+
+  /* Bandeau de non-validité : en tête de page, encadré, dans la couleur des
+     alertes du site. Il doit être lu avant les montants — c'est toute sa
+     fonction. */
+  notice: {
+    borderWidth: 1,
+    borderColor: COLOR.brick,
+    borderStyle: "solid",
+    borderRadius: 4,
+    padding: 8,
+    marginBottom: 16,
+  },
+  noticeText: { fontSize: 8.5, color: COLOR.brick, lineHeight: 1.4 },
 });
 
 /**
@@ -158,9 +171,28 @@ export function InvoiceDocument({
   const number = formatInvoiceNumber(order.invoiceNumber, createdAt);
   const paidAt = order.timeline.confirmedAt ?? order.createdAt;
 
+  /* Titre et avertissement : tant que la dénomination, la forme juridique ou
+     le SIRET manquent en réglages, ce PDF sortait titré « FACTURE » avec un
+     numéro de la séquence comptable et « SIRET : à compléter ». Il se présente
+     désormais pour ce qu'il est — voir `lib/invoice.ts`. */
+  const heading = invoiceHeading(seller, !!creditNote);
+
   return (
-    <Document title={creditNote ? `Avoir ${creditNote.number}` : `Facture ${number}`}>
+    <Document
+      title={
+        heading.valid
+          ? creditNote
+            ? `Avoir ${creditNote.number}`
+            : `Facture ${number}`
+          : `${heading.title} — commande ${order.ref}`
+      }
+    >
       <Page size="A4" style={styles.page}>
+        {heading.notice ? (
+          <View style={styles.notice}>
+            <Text style={styles.noticeText}>{heading.notice}</Text>
+          </View>
+        ) : null}
         <View style={styles.header}>
           <View style={styles.sellerBlock}>
             <View style={styles.logoOuter}>
@@ -190,10 +222,18 @@ export function InvoiceDocument({
             </View>
           </View>
           <View style={styles.titleBlock}>
-            <Text style={styles.title}>{creditNote ? "AVOIR" : "FACTURE"}</Text>
+            {/* `title` fait 18 pt : « JUSTIFICATIF DE COMMANDE » y déborderait
+                de la colonne, d'où la taille réduite quand il remplace
+                « FACTURE ». */}
+            <Text style={[styles.title, heading.valid ? {} : { fontSize: 11 }]}>
+              {heading.title}
+            </Text>
             <Text style={styles.titleMeta}>{creditNote ? creditNote.number : number}</Text>
             <Text style={styles.titleMeta}>
-              Émis{creditNote ? "" : "e"} le {dateFmt.format(creditNote ? creditNote.at : createdAt)}
+              {/* L'accord suit le nom de la pièce : « émise » pour une facture,
+                  « émis » pour un avoir comme pour un justificatif. */}
+              Émis{heading.noun === "facture" ? "e" : ""} le{" "}
+              {dateFmt.format(creditNote ? creditNote.at : createdAt)}
             </Text>
             {/* Un avoir doit renvoyer à la facture qu'il corrige, sans quoi rien
                 ne relie la sortie d'argent à la vente d'origine. */}
@@ -336,12 +376,10 @@ export function InvoiceDocument({
           </Text>
           <Text style={styles.footerText}>
             {creditNote
-              ? `Avoir émis en remboursement de la facture ${number}${
+              ? `${heading.valid ? "Avoir" : "Document"} émis en remboursement de la facture ${number}${
                   creditNote.reason ? ` — motif : ${creditNote.reason}` : ""
                 }. La facture d'origine reste valable et n'est ni annulée ni modifiée.`
-              : order.paid
-                ? "Facture acquittée — aucun règlement complémentaire n'est dû."
-                : "Facture non acquittée à ce jour. Règlement à la remise de la commande."}
+              : settlementLine(heading, order.paid)}
           </Text>
           <Text style={styles.footerText}>
             Les denrées alimentaires périssables ne sont pas soumises au droit de rétractation (art.

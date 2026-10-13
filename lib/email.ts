@@ -14,6 +14,14 @@
  *  · **Un template par étape** du cycle de vie, au lieu d'un seul email de
  *    confirmation réutilisé pour tout.
  *
+ *  · **Le sort de l'envoi revient à l'appelant.** `send()` rend `false` quand
+ *    Resend refuse, mais les fonctions de ce fichier étaient typées
+ *    `Promise<void>` : ce booléen était jeté, et les écrans annonçaient
+ *    « envoyé » pour des emails refusés. Celles dont un humain attend le
+ *    résultat — réponse à une réclamation, accusé de réception, devis
+ *    traiteur — rendent désormais un booléen, et `journalise()` garantit
+ *    qu'aucun échec ne reste muet.
+ *
  * ── Qui reçoit quoi, et quand ───────────────────────────────────────────────
  *
  * Commande, côté client :
@@ -156,6 +164,41 @@ export async function send({
     return true;
   } catch (cause) {
     return echec(cause instanceof Error ? cause.message : "erreur inconnue");
+  }
+}
+
+/**
+ * Enveloppe un envoi dont le **gabarit lui-même** peut échouer.
+ *
+ * `send()` journalise tout ce qu'il tente, refus de Resend compris. Mais ce qui
+ * lève *avant* lui — une lecture de réglages, un rendu de PDF, un formatage de
+ * date — ne laissait aucune trace : l'appelant écrivait `.catch(() => {})` et
+ * l'email n'existait nulle part, ni en succès ni en échec. C'est exactement ce
+ * qu'on a constaté sur le premier devis traiteur : la demande est arrivée en
+ * base le 6 août à 16 h 47, le code d'envoi était en place depuis 13 h 12 le
+ * même jour, et aucun email « traiteur » n'a jamais été journalisé.
+ *
+ * Toute exception devient donc une ligne d'échec dans `EmailLog` et un `false`
+ * rendu à l'appelant, qui peut enfin le dire à l'écran.
+ *
+ * Aucune `dedupeKey` n'est posée sur cette ligne, et c'est volontaire : un
+ * gabarit réparé doit pouvoir repartir, alors qu'une clé de déduplication
+ * interdirait toute nouvelle tentative pour le même objet.
+ */
+async function journalise(
+  kind: EmailKind,
+  to: string,
+  tentative: () => Promise<boolean>,
+): Promise<boolean> {
+  try {
+    return await tentative();
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : "erreur inconnue";
+    console.error(`[email] gabarit « ${kind} » en échec pour ${to} : ${message}`);
+    await prisma.emailLog
+      .create({ data: { kind, to, ok: false, error: `gabarit : ${message}` } })
+      .catch(() => {});
+    return false;
   }
 }
 
@@ -701,6 +744,9 @@ export async function sendPaymentFailed(
  *
  * Le restaurant était prévenu, l'expéditeur non : il ne savait pas si son
  * message était parti, et beaucoup réécrivent ou appellent dans le doute.
+ *
+ * Rend `false` si l'accusé n'est pas parti : la route s'en sert pour ne pas
+ * promettre au visiteur un email qu'il ne recevra pas.
  */
 export async function sendContactReceived(msg: {
   id: string;
@@ -708,21 +754,23 @@ export async function sendContactReceived(msg: {
   email: string;
   subject: string;
   message: string;
-}): Promise<void> {
-  await send({
-    to: msg.email,
-    subject: "Nous avons bien reçu votre message — Ô 3 Saveurs",
-    html: layout(
-      `Merci ${msg.name}, votre message est arrivé`,
-      `<p style="margin:0 0 12px">Nous vous répondons dès que possible, en général sous 24 heures
+}): Promise<boolean> {
+  return journalise("sav", msg.email, () =>
+    send({
+      to: msg.email,
+      subject: "Nous avons bien reçu votre message — Ô 3 Saveurs",
+      html: layout(
+        `Merci ${msg.name}, votre message est arrivé`,
+        `<p style="margin:0 0 12px">Nous vous répondons dès que possible, en général sous 24 heures
          ouvrées.</p>
        ${msg.subject ? `<p style="margin:0 0 6px"><strong>Objet :</strong> ${escapeHtml(msg.subject)}</p>` : ""}
        <p style="margin:0 0 14px;padding:12px;background:#f7e9d2;border-radius:8px;white-space:pre-wrap;font-size:13px">${escapeHtml(msg.message)}</p>
        <p style="margin:0;font-size:13px">Besoin d'une réponse immédiate ? Appelez-nous.</p>`,
-    ),
-    kind: "sav",
-    dedupeKey: `contact-accuse:${msg.id}`,
-  });
+      ),
+      kind: "sav",
+      dedupeKey: `contact-accuse:${msg.id}`,
+    }),
+  );
 }
 
 /**
@@ -814,23 +862,31 @@ export async function sendCampaign(
   });
 }
 
-/** Réponse à une réclamation. */
+/**
+ * Réponse à une réclamation.
+ *
+ * Rend `false` si l'email n'est pas parti. C'est la seule information qui
+ * compte pour la personne qui vient de taper sa réponse : le message reste
+ * dans le fil, mais le client n'en sait rien et il faut l'appeler.
+ */
 export async function sendTicketReply(
   to: string,
   ticketSubject: string,
   body: string,
   ticketUrl: string,
-): Promise<void> {
-  await send({
-    to,
-    subject: `Réponse à votre réclamation — ${ticketSubject}`,
-    html: layout(
-      ticketSubject,
-      `<p style="margin:0 0 14px;white-space:pre-wrap">${escapeHtml(body)}</p>
+): Promise<boolean> {
+  return journalise("sav", to, () =>
+    send({
+      to,
+      subject: `Réponse à votre réclamation — ${ticketSubject}`,
+      html: layout(
+        ticketSubject,
+        `<p style="margin:0 0 14px;white-space:pre-wrap">${escapeHtml(body)}</p>
        <p style="margin:0"><a href="${escapeHtml(ticketUrl)}" style="color:#e8732a;font-weight:bold">Voir la conversation</a></p>`,
-    ),
-    kind: "sav",
-  });
+      ),
+      kind: "sav",
+    }),
+  );
 }
 
 /** Accusé de réception d'une réclamation + alerte au restaurant. */
@@ -872,43 +928,64 @@ const CATERING_EVENT_LABEL: Record<string, string> = {
 
 const dateFmtLong = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
 
-/** Accusé de réception d'une demande de devis traiteur. */
-export async function sendCateringInquiryReceived(inquiry: CateringInquiry): Promise<void> {
+/**
+ * Accusé de réception d'une demande de devis traiteur.
+ *
+ * Rend `false` si l'accusé n'est pas parti : la route le dit alors au visiteur
+ * plutôt que de lui faire attendre un email qui n'arrivera jamais.
+ */
+export async function sendCateringInquiryReceived(inquiry: CateringInquiry): Promise<boolean> {
   const eventLabel = CATERING_EVENT_LABEL[inquiry.eventType] ?? inquiry.eventType;
-  await send({
-    to: inquiry.customerEmail,
-    subject: "Votre demande de devis traiteur — Ô 3 Saveurs",
-    html: layout(
-      `Merci ${escapeHtml(inquiry.customerName)}, votre demande est bien arrivée !`,
-      `<p style="margin:0 0 8px"><strong>${escapeHtml(eventLabel)}</strong></p>
+  return journalise("traiteur", inquiry.customerEmail, () =>
+    send({
+      to: inquiry.customerEmail,
+      subject: "Votre demande de devis traiteur — Ô 3 Saveurs",
+      html: layout(
+        `Merci ${escapeHtml(inquiry.customerName)}, votre demande est bien arrivée !`,
+        `<p style="margin:0 0 8px"><strong>${escapeHtml(eventLabel)}</strong></p>
        <p style="margin:0 0 4px">Lieu : ${escapeHtml(inquiry.location)}</p>
        ${inquiry.eventDate ? `<p style="margin:0 0 4px">Date : ${dateFmtLong.format(inquiry.eventDate)}</p>` : ""}
        ${inquiry.guestCount ? `<p style="margin:0 0 4px">Convives : ${inquiry.guestCount}</p>` : ""}
        <p style="margin:12px 0 0;color:#856a50;font-size:13px">Nous revenons vers vous sous 24 h ouvrées avec un devis chiffré.</p>`,
-    ),
-    kind: "traiteur",
-    dedupeKey: `traiteur-recu:${inquiry.id}`,
-  });
+      ),
+      kind: "traiteur",
+      dedupeKey: `traiteur-recu:${inquiry.id}`,
+    }),
+  );
 }
 
-/** Alerte au restaurant pour une nouvelle demande de devis traiteur. */
-export async function sendCateringInquiryNotify(inquiry: CateringInquiry): Promise<void> {
-  if (!NOTIFY) return;
+/**
+ * Alerte au restaurant pour une nouvelle demande de devis traiteur.
+ *
+ * Rend `false` quand rien n'est parti — y compris quand aucune adresse de
+ * notification n'est configurée. Une demande de devis que le restaurant
+ * n'apprend pas est un client perdu en silence : l'appelant doit pouvoir le
+ * signaler.
+ */
+export async function sendCateringInquiryNotify(inquiry: CateringInquiry): Promise<boolean> {
+  if (!NOTIFY) {
+    console.error(
+      "[email] RESTAURANT_NOTIFY_EMAIL absent : la demande de devis traiteur n'a été annoncée à personne.",
+    );
+    return false;
+  }
   const eventLabel = CATERING_EVENT_LABEL[inquiry.eventType] ?? inquiry.eventType;
-  await send({
-    to: NOTIFY,
-    subject: `💍 Nouvelle demande traiteur — ${eventLabel}`,
-    html: layout(
-      "Nouvelle demande de devis traiteur",
-      `<p style="margin:0 0 4px"><strong>${escapeHtml(inquiry.customerName)}</strong></p>
+  return journalise("traiteur", NOTIFY, () =>
+    send({
+      to: NOTIFY,
+      subject: `💍 Nouvelle demande traiteur — ${eventLabel}`,
+      html: layout(
+        "Nouvelle demande de devis traiteur",
+        `<p style="margin:0 0 4px"><strong>${escapeHtml(inquiry.customerName)}</strong></p>
        <p style="margin:0 0 4px">${escapeHtml(inquiry.customerPhone)} · ${escapeHtml(inquiry.customerEmail)}</p>
        <p style="margin:0 0 4px">${escapeHtml(eventLabel)}</p>
        <p style="margin:0 0 4px">Lieu : ${escapeHtml(inquiry.location)}</p>
        ${inquiry.eventDate ? `<p style="margin:0 0 4px">Date : ${dateFmtLong.format(inquiry.eventDate)}</p>` : ""}
        ${inquiry.guestCount ? `<p style="margin:0 0 4px">Convives : ${inquiry.guestCount}</p>` : ""}
        ${inquiry.message ? `<p style="margin:12px 0 0;white-space:pre-wrap">${escapeHtml(inquiry.message)}</p>` : ""}`,
-    ),
-    kind: "traiteur",
-    dedupeKey: `traiteur-resto:${inquiry.id}`,
-  });
+      ),
+      kind: "traiteur",
+      dedupeKey: `traiteur-resto:${inquiry.id}`,
+    }),
+  );
 }

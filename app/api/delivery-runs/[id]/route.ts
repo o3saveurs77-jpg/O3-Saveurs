@@ -204,8 +204,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       if (found.length !== attach.length) return badRequest("Une des commandes est introuvable");
       const wrong = found.find((o) => o.mode !== "livraison");
       if (wrong) return badRequest(`La commande ${wrong.ref} est à emporter, pas à livrer`);
-      const dead = found.find((o) => o.status === "annulee");
-      if (dead) return badRequest(`La commande ${dead.ref} est annulée`);
+
+      /* Une commande annulée ne se met pas en tournée — mais la refuser quand
+       * elle y est **déjà** gelait la tournée entière : l'écran renvoie la
+       * liste telle qu'il l'affiche, arrêt annulé compris, et plus aucun
+       * réordonnancement ni aucune affectation ne passait. `PATCH
+       * /api/orders/[id]` détache désormais la commande au moment de
+       * l'annulation ; cette tolérance répare en plus les tournées déjà
+       * bloquées en base, en retirant l'arrêt mort au lieu de rejeter l'appel.
+       * Un arrêt annulé venu d'ailleurs reste refusé : rien ne justifie de
+       * faire sonner chez un client qui a annulé. */
+      const dejaDansLaTournee = new Set(current.orders.map((o) => o.id));
+      const annulees = found.filter((o) => o.status === "annulee");
+      const intruse = annulees.find((o) => !dejaDansLaTournee.has(o.id));
+      if (intruse) return badRequest(`La commande ${intruse.ref} est annulée`);
+      if (annulees.length) {
+        const mortes = new Set(annulees.map((o) => o.id));
+        attach = attach.filter((oid) => !mortes.has(oid));
+      }
     }
 
     const kept = new Set(attach);

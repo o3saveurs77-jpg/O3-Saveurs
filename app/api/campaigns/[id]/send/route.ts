@@ -61,11 +61,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   // ─── Envoi test : l'administrateur connecté, et personne d'autre ───
   if (isTest) {
+    /* Le lien de désinscription de l'essai ne porte volontairement aucun
+     * jeton : relire sa propre campagne ne doit pas désinscrire la personne
+     * qui la relit. `etat=test` est là pour que la page le dise — sans lui,
+     * elle afficherait « nous n'avons pas pu vous désinscrire » et on croirait
+     * le lien de la vraie campagne cassé. */
     const ok = await sendCampaign(
       guard.user.email,
       `[TEST] ${campaign.subject}`,
       campaign.html,
-      `${origin}/newsletter/desinscription`,
+      `${origin}/newsletter/desinscription?etat=test`,
     );
     return NextResponse.json({
       ok,

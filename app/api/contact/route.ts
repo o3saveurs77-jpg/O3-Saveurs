@@ -89,11 +89,18 @@ export async function POST(req: Request) {
     return serverError("Votre message n'a pas pu être enregistré. Merci de nous appeler.");
   }
 
-  // La notification est secondaire : le message est déjà en base, un échec
-  // d'envoi ne doit pas faire croire au visiteur qu'il a écrit dans le vide.
+  /* La notification est secondaire : le message est déjà en base, un échec
+   * d'envoi ne doit pas faire croire au visiteur qu'il a écrit dans le vide.
+   *
+   * Secondaire ne veut pas dire silencieux. Le `.catch(() => {})` qui enveloppait
+   * ces deux appels jetait à la fois les exceptions et le booléen que `send()`
+   * rend sur refus de Resend : un message pouvait n'être annoncé à personne
+   * sans qu'aucune trace n'en subsiste. Les deux verdicts sont désormais lus,
+   * journalisés côté serveur, et rendus dans la réponse. */
   const notifyTo = process.env.RESTAURANT_NOTIFY_EMAIL;
+  let notified = false;
   if (notifyTo) {
-    await send({
+    notified = await send({
       to: notifyTo,
       subject: `Message du site — ${subject || "sans objet"}`,
       html: `
@@ -107,23 +114,40 @@ export async function POST(req: Request) {
         </div>`,
       kind: "sav",
       dedupeKey: `contact:${created.id}`,
-    }).catch(() => {});
+    });
+    if (!notified) {
+      console.error(
+        `[contact] message ${created.id} enregistré, mais la notification à ${notifyTo} n'est pas partie.`,
+      );
+    }
+  } else {
+    console.error(
+      "[contact] RESTAURANT_NOTIFY_EMAIL absent : le message n'a été annoncé à personne.",
+    );
   }
 
   /* Accusé de réception à l'expéditeur : sans lui, il ne savait pas si son
    * message était parti, et beaucoup réécrivaient ou appelaient dans le doute. */
-  await sendContactReceived({
+  const acknowledged = await sendContactReceived({
     id: created.id,
     name,
     email,
     subject,
     message,
-  }).catch(() => {});
+  });
 
   return NextResponse.json(
     {
       ok: true,
-      message: "Merci ! Votre message est bien arrivé, nous vous répondons au plus vite.",
+      notified,
+      acknowledged,
+      /* Le message affiché ne promet que ce qui a eu lieu. Annoncer un accusé
+       * de réception qui n'est jamais parti pousse le visiteur à attendre, puis
+       * à réécrire, puis à appeler pour s'entendre dire que son message est
+       * bien là. */
+      message: acknowledged
+        ? "Merci ! Votre message est bien arrivé, nous vous répondons au plus vite."
+        : "Merci ! Votre message est bien arrivé et nous le traitons — mais l'email de confirmation n'a pas pu vous être envoyé. Appelez-nous si c'est urgent.",
     },
     { status: 201 },
   );

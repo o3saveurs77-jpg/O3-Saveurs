@@ -142,6 +142,45 @@ export async function releaseStock(
 }
 
 /**
+ * État d'un plat après un mouvement de stock : la quantité qui en résulte, le
+ * delta à inscrire au journal, et la disponibilité à la vente.
+ *
+ * Pourquoi cette décision vit hors d'`applyMovement` : c'est la seule partie
+ * qui n'a pas besoin de PostgreSQL, et c'était la partie fausse. L'ancien code
+ * écrivait `...(nextStock > 0 ? { available: true } : {})` — il remettait donc
+ * bien un plat en vente au réapprovisionnement, mais ne le retirait **jamais**
+ * quand le stock tombait à 0. Le bouton « Rupture » de l'écran Stocks annonçait
+ * « retiré de la vente » alors que le plat restait sur la carte, interrupteur
+ * « Disponible » allumé dans l'écran Plats, et toujours annoncé sur l'accueil
+ * s'il était rattaché à un plat du jour : la cliente déclarait la rupture et
+ * continuait de recevoir des commandes pour une marmite vide.
+ *
+ * `reserveStock` faisait la bascule correctement depuis le début (`stock <= 0`
+ * ⇒ `available: false`). Une vente retirait le plat, une rupture déclarée à la
+ * main non : on aligne les deux chemins sur la même règle.
+ */
+export function stockApresMouvement({
+  stockActuel,
+  delta,
+  reason,
+  absolute,
+}: {
+  stockActuel: number | null;
+  delta: number;
+  reason: StockReason;
+  /** valeur de stock constatée, pour un inventaire */
+  absolute?: number;
+}): { stock: number; delta: number; available: boolean } {
+  // Un inventaire fixe la valeur constatée ; le delta à journaliser s'en déduit.
+  if (reason === "inventaire" && absolute !== undefined) {
+    const stock = Math.max(0, absolute);
+    return { stock, delta: stock - (stockActuel ?? 0), available: stock > 0 };
+  }
+  const stock = Math.max(0, (stockActuel ?? 0) + delta);
+  return { stock, delta, available: stock > 0 };
+}
+
+/**
  * Mouvement de stock manuel depuis l'administration (réappro, perte, inventaire).
  * `inventaire` fixe la valeur absolue ; les autres motifs ajoutent un delta.
  */
@@ -165,30 +204,30 @@ export async function applyMovement({
     const dish = await tx.dish.findUnique({ where: { id: dishId }, select: { stock: true } });
     if (!dish) throw new Error("Plat introuvable");
 
-    let effectiveDelta = delta;
-    let nextStock: number;
-
-    if (reason === "inventaire" && absolute !== undefined) {
-      nextStock = Math.max(0, absolute);
-      effectiveDelta = nextStock - (dish.stock ?? 0);
-    } else {
-      nextStock = Math.max(0, (dish.stock ?? 0) + delta);
-    }
+    const suite = stockApresMouvement({
+      stockActuel: dish.stock,
+      delta,
+      reason,
+      absolute,
+    });
 
     await tx.dish.update({
       where: { id: dishId },
-      // Une entrée de stock remet le plat en vente : sans cela, la cliente
-      // réapprovisionne et le plat reste invisible sur la carte.
-      data: { stock: nextStock, ...(nextStock > 0 ? { available: true } : {}) },
+      /* `available` est écrit dans les deux sens, toujours. Une entrée de stock
+       * remet le plat en vente — sans quoi la cliente réapprovisionne et le
+       * plat reste invisible sur la carte ; une rupture le retire — sans quoi
+       * l'écran Stocks annonce « retiré de la vente » et le site continue de
+       * le vendre. */
+      data: { stock: suite.stock, available: suite.available },
     });
 
-    if (effectiveDelta !== 0) {
+    if (suite.delta !== 0) {
       await tx.stockMovement.create({
-        data: { dishId, delta: effectiveDelta, reason, note: note ?? null, author },
+        data: { dishId, delta: suite.delta, reason, note: note ?? null, author },
       });
     }
 
-    return { stock: nextStock };
+    return { stock: suite.stock };
   });
 }
 

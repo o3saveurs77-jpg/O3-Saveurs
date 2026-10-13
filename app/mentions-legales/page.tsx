@@ -108,8 +108,12 @@ export default async function MentionsLegalesPage() {
             préalable est interdite.
           </p>
           <p>
-            Les marques et noms de tiers éventuellement cités (Stripe, Uber Eats, Vercel) demeurent
-            la propriété de leurs titulaires respectifs.
+            {/* Vercel était cité ici alors que le site est hébergé par Clever Cloud
+                depuis le changement d'hébergeur : la page nommait un prestataire
+                qui n'intervient plus, juste sous le paragraphe qui doit nommer
+                l'hébergeur réel. */}
+            Les marques et noms de tiers éventuellement cités, tels que Stripe, Uber Eats ou
+            Clever Cloud, demeurent la propriété de leurs titulaires respectifs.
           </p>
         </LegalSection>
 

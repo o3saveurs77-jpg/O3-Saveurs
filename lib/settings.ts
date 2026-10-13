@@ -7,6 +7,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_HOURS, type DayHours } from "@/lib/hours";
+import { formatAddress } from "@/lib/address";
 import type { DeliveryTier } from "@/lib/delivery";
 import type { LatLng } from "@/lib/geo";
 
@@ -219,15 +220,15 @@ export async function deliveryOrigin(): Promise<LatLng | null> {
  * doubles espaces ou une espace traînante, et cette même chaîne sert de clé de
  * cache au géocodage (`deliveryOrigin()`) — une espace en trop y suffisait à
  * invalider un cache valide, donc à repayer un appel Google à chaque page.
+ *
+ * Le calcul lui-même vit dans `lib/address.ts`, qui est **pur** : ce module-ci
+ * ouvre Prisma et tire `lib/geo.ts`, marqué `server-only`. La page de facture
+ * affiche l'identité du vendeur côté navigateur et a besoin de cette mise en
+ * forme ; l'importer d'ici faisait échouer la compilation. Réexport plutôt que
+ * déplacement, pour ne casser aucun import existant — même motif que
+ * `formatInvoiceNumber`, réexporté par `lib/ref.ts`.
  */
-export function formatAddress(s: Settings): string {
-  const rue = (s["restaurant.address"] ?? "").trim();
-  const ville = `${s["restaurant.zip"] ?? ""} ${s["restaurant.city"] ?? ""}`.trim();
-  return [rue, ville]
-    .filter(Boolean)
-    .join(", ")
-    .replace(/\s+/g, " ");
-}
+export { formatAddress };
 
 /**
  * Vrai quand toutes les informations légales obligatoires sont renseignées.

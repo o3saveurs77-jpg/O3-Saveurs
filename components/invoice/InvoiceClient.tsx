@@ -26,7 +26,7 @@ import { fmtCents, fmtVatRate, vatBreakdownByRate } from "@/lib/money";
 import { formatInvoiceNumber } from "@/lib/money";
 import { PAYMENT_STATUS_LABEL, vatPartsOf } from "@/lib/types";
 import type { Order } from "@/lib/types";
-import type { InvoiceSeller } from "@/lib/invoice";
+import { invoiceHeading, settlementLine, type InvoiceSeller } from "@/lib/invoice";
 
 export type { InvoiceSeller };
 
@@ -71,19 +71,25 @@ export function InvoiceClient({
   order,
   seller,
   isAdmin = false,
-  legalOk = true,
   pdfUrl,
 }: {
   order: Order;
   seller: InvoiceSeller;
   /** Vue administration : les avertissements de conformité y sont affichés. */
   isAdmin?: boolean;
-  /** `legalComplete()` — faux tant que les informations légales manquent. */
-  legalOk?: boolean;
   /** Route qui régénère le même document en PDF, prête à télécharger. */
   pdfUrl: string;
 }) {
   const createdAt = new Date(order.createdAt);
+
+  /* Régularité de la pièce. Le prop `legalOk` a disparu : la page le calculait
+     depuis les réglages et n'en faisait qu'un bandeau réservé à l'admin et
+     masqué à l'impression, pendant que le document — titré « FACTURE », avec
+     « SIRET : à compléter » — partait tel quel chez le client. La règle est
+     désormais dérivée du bloc vendeur réellement imprimé, par la même fonction
+     que le PDF (`lib/invoice.ts`) : l'écran et le fichier téléchargé ne
+     peuvent plus dire deux choses différentes. */
+  const heading = invoiceHeading(seller);
 
   /* Ventilation par taux, et non taux unique : la facture d'une formule
      « plat + canette » porte 10 % sur l'un et 5,5 % sur l'autre. Les commandes
@@ -138,22 +144,25 @@ export function InvoiceClient({
         </div>
       </div>
 
-      {/* Avertissements de conformité — administration uniquement, jamais imprimés.
-          Émettre une facture incomplète en silence est le risque à éviter. */}
-      {isAdmin && (!legalOk || order.invoiceNumber === null || !order.paid) && (
+      {/* Avertissements de conformité — administration uniquement, jamais
+          imprimés : ils disent à Laila quoi corriger et où. Ce qui protège le
+          client, lui, est le bandeau porté par le document lui-même, plus bas. */}
+      {isAdmin && (!heading.valid || order.invoiceNumber === null || !order.paid) && (
         <div className="mb-5 space-y-2 print:hidden">
-          {!legalOk && (
+          {!heading.valid && (
             <div className="flex items-start gap-3 rounded-xl border border-brick/40 bg-primary-soft p-4 text-brick">
               <Icon name="warning" size={20} className="mt-0.5 shrink-0" />
               <div className="text-sm">
                 <p className="font-bold">Informations légales incomplètes</p>
                 <p className="mt-1">
-                  Dénomination, forme juridique ou SIRET manquants : cette facture ne comporte pas
-                  toutes les mentions obligatoires (art. 242 nonies A du CGI). À renseigner dans{" "}
+                  Dénomination, forme juridique ou SIRET manquants : les mentions obligatoires de
+                  l&apos;art. 242 nonies A du CGI ne sont pas réunies. Le document est donc émis en{" "}
+                  <strong>justificatif de commande</strong> et non en facture, ici comme dans le PDF
+                  envoyé au client. Renseignez-les dans{" "}
                   <Link href="/admin/reglages" className="font-bold underline">
                     Réglages
                   </Link>{" "}
-                  avant tout envoi au client ou au comptable.
+                  : la facture régulière pourra alors être réémise.
                 </p>
               </div>
             </div>
@@ -189,6 +198,15 @@ export function InvoiceClient({
            La marge d'impression, elle, reste celle du document. */
         className="rounded-[var(--radius-card)] border border-line bg-white p-5 text-ink shadow-[var(--shadow-soft)] sm:p-8 print:p-8"
       >
+        {/* Avertissement de non-validité : **dans** le document et non dans la
+            barre d'actions, pour qu'il soit imprimé, enregistré en PDF et lu
+            par le client. C'est le seul endroit où il protège quelqu'un. */}
+        {heading.notice && (
+          <p className="mb-5 rounded-xl border border-brick bg-brick/5 p-4 text-sm font-semibold text-brick">
+            {heading.notice}
+          </p>
+        )}
+
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line pb-6">
           <div className="flex min-w-0 items-center gap-3">
             <Emblem size={52} />
@@ -217,9 +235,18 @@ export function InvoiceClient({
               le bloc se retrouvait décalé sous le bloc vendeur sans rapport
               visuel avec lui. */}
           <div className="text-left sm:text-right">
-            <h1 className="font-display text-2xl">FACTURE</h1>
+            {/* « JUSTIFICATIF DE COMMANDE » est trois fois plus long que
+                « FACTURE » : à `text-2xl` il chassait le bloc vendeur hors de
+                l'en-tête sous 640 px. */}
+            <h1 className={`font-display ${heading.valid ? "text-2xl" : "text-lg"}`}>
+              {heading.title}
+            </h1>
             <p className="text-sm font-semibold">{number}</p>
-            <p className="text-sm text-ink-2">Émise le {dateFmt.format(createdAt)}</p>
+            {/* L'accord suit le nom de la pièce : « émise » pour une facture,
+                « émis » pour un justificatif. */}
+            <p className="text-sm text-ink-2">
+              Émis{heading.noun === "facture" ? "e" : ""} le {dateFmt.format(createdAt)}
+            </p>
             <p className="text-sm text-ink-2">Commande {order.ref}</p>
           </div>
         </header>
@@ -352,11 +379,7 @@ export function InvoiceClient({
             Montants en euros. Restauration à emporter ou livrée : TVA à 10 % (art. 279 m du CGI).
             Boissons non alcoolisées en contenant fermé : 5,5 % (art. 278-0 bis A).
           </p>
-          <p>
-            {order.paid
-              ? "Facture acquittée — aucun règlement complémentaire n'est dû."
-              : "Facture non acquittée à ce jour. Règlement à la remise de la commande."}
-          </p>
+          <p>{settlementLine(heading, order.paid)}</p>
           <p>
             Les denrées alimentaires périssables ne sont pas soumises au droit de rétractation (art.
             L221-28 3° du code de la consommation). Voir nos conditions générales de vente.

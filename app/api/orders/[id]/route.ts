@@ -130,6 +130,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.deliveryRunId !== undefined) data.deliveryRunId = body.deliveryRunId;
   if (body.runPosition !== undefined) data.runPosition = body.runPosition;
 
+  /* Une commande annulée quitte sa tournée.
+   *
+   * Elle y restait accrochée, et `PATCH /api/delivery-runs/[id]` refuse toute
+   * composition contenant une commande annulée : une fois un arrêt annulé, la
+   * tournée n'acceptait plus ni affectation ni réordonnancement — gelée pour
+   * la soirée, alors que le livreur a encore des arrêts à faire. Le livreur
+   * (`driverId`) reste en place : c'est bien lui qui avait la course en main,
+   * et l'annulation ne compte pas dans sa charge (`lib/dispatch.ts`).
+   *
+   * Placé après la lecture de `deliveryRunId` : si un appel envoyait les deux,
+   * l'annulation tranche. */
+  const detacheDeLaTournee = data.status === "annulee";
+  const tourneeQuittee = detacheDeLaTournee ? current.deliveryRunId : null;
+  if (detacheDeLaTournee) {
+    data.deliveryRunId = null;
+    data.runPosition = null;
+  }
+
   // Encaissement manuel des commandes en espèces : sans cela, tout le chiffre
   // d'affaires en espèces restait invisible dans l'écran Facturation.
   if (body.paid !== undefined) {
@@ -160,6 +178,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data,
     include: { driver: { select: { name: true } } },
   });
+
+  /* Les arrêts restants se resserrent sur 0, 1, 2… Sans cela la tournée garde
+   * un trou dans ses positions, et le prochain `orderIds` renvoyé par l'écran
+   * — qui numérote ce qu'il affiche — réécrirait des positions décalées d'un
+   * cran par rapport à la feuille de route déjà imprimée. */
+  if (tourneeQuittee) {
+    const restants = await prisma.order.findMany({
+      where: { deliveryRunId: tourneeQuittee },
+      orderBy: [{ runPosition: "asc" }, { createdAt: "asc" }],
+      select: { id: true, runPosition: true },
+    });
+    const aRenumeroter = restants
+      .map((o, position) => ({ id: o.id, position, ancienne: o.runPosition }))
+      .filter((o) => o.ancienne !== o.position);
+    if (aRenumeroter.length) {
+      await prisma.$transaction(
+        aRenumeroter.map((o) =>
+          prisma.order.update({ where: { id: o.id }, data: { runPosition: o.position } }),
+        ),
+      );
+    }
+  }
 
   // Une annulation rend les articles au stock.
   if (data.status === "annulee" && current.status !== "annulee") {

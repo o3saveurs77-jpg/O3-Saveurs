@@ -13,10 +13,14 @@
  *  · **Tout champ a un `id` associé à son `label`.** Un `<label>` sans `htmlFor`
  *    ne rend pas le libellé cliquable et n'est pas lu par un lecteur d'écran.
  *
- * L'enregistrement passe par un `fetch` direct plutôt que par les helpers
- * optimistes du contexte : ceux-ci ignorent la réponse du serveur, donc une
- * validation refusée en 400 restait invisible et l'écran affichait une valeur
- * que la base n'avait pas acceptée. Après un enregistrement, `reset()` resynchronise.
+ * L'enregistrement du formulaire complet passe par un `fetch` direct : il a sa
+ * propre validation et son propre message. Les commandes rapides du tableau
+ * (prix, interrupteurs, ordre) passent, elles, par les helpers du contexte —
+ * qui **rendent désormais le refus du serveur** au lieu de l'avaler. C'était le
+ * dernier trou de cet écran : saisir 9,00 € avec une session expirée affichait
+ * 9,00 €, la carte publique gardait 12,00 €, et l'ancien prix revenait au
+ * rechargement sans qu'aucun message n'ait prévenu. Après un enregistrement,
+ * `reset()` resynchronise.
  */
 
 import Image from "next/image";
@@ -163,7 +167,18 @@ function PhotoUploader({
 }
 
 export function PlatsAdmin() {
-  const { dishes, ready, toggleAvailable, togglePopular, update, reset } = useDishes();
+  const {
+    dishes,
+    ready,
+    /* Lire cet indicateur était tout l'enjeu : sans lui, une base injoignable
+       donnait un écran « Aucun plat dans cette catégorie », c'est-à-dire la
+       même chose qu'une carte vide. */
+    error: loadFailed,
+    toggleAvailable,
+    togglePopular,
+    update,
+    reset,
+  } = useDishes();
   const categories = useCategories();
 
   const [editing, setEditing] = useState<Dish | "new" | null>(null);
@@ -231,7 +246,7 @@ export function PlatsAdmin() {
    * Un simple échange des deux valeurs ne suffit pas — des plats importés avec
    * `position = 0` partout ne bougeraient jamais.
    */
-  const move = (dish: Dish, dir: -1 | 1) => {
+  const move = async (dish: Dish, dir: -1 | 1) => {
     const siblings = dishes.filter((d) => d.cat === dish.cat).sort(byPosition);
     const i = siblings.findIndex((d) => d.id === dish.id);
     const j = i + dir;
@@ -242,25 +257,69 @@ export function PlatsAdmin() {
     const b = reordered[j];
     reordered[i] = b;
     reordered[j] = a;
-    reordered.forEach((d, index) => {
-      if (d.position !== index) update(d.id, { position: index });
-    });
+
+    /* Un PATCH par plat voisin, et on **attend** les réponses : partir sans les
+       lire laissait l'ordre bouger à l'écran alors que la carte publique
+       gardait l'ancien, jusqu'au prochain rechargement. */
+    setBusy(true);
+    const errs = await Promise.all(
+      reordered.map((d, index) =>
+        d.position === index ? Promise.resolve<string | null>(null) : update(d.id, { position: index }),
+      ),
+    );
+    setBusy(false);
+
+    const refus = errs.find((e) => e !== null);
+    setNotice(
+      refus
+        ? { kind: "error", text: `L'ordre n'a pas été enregistré : ${refus}` }
+        : { kind: "info", text: `« ${dish.name} » a été déplacé.` },
+    );
   };
 
   /** Prix rapide dans le tableau : euros saisis, centimes enregistrés. */
-  const setPrice = (dish: Dish, raw: string) => {
+  const setPrice = async (dish: Dish, raw: string) => {
     const trimmed = raw.trim();
-    if (trimmed === "") {
-      update(dish.id, { priceCents: null });
-      return;
-    }
-    const cents = toCents(trimmed);
-    if (cents === null || cents < 0) {
+    const cents = trimmed === "" ? null : toCents(trimmed);
+    if (trimmed !== "" && (cents === null || cents < 0)) {
       setNotice({ kind: "error", text: `Prix illisible pour « ${dish.name} » : attendu par exemple 11,97.` });
       return;
     }
     setNotice(null);
-    update(dish.id, { priceCents: cents });
+    const refus = await update(dish.id, { priceCents: cents });
+    setNotice(
+      refus
+        ? { kind: "error", text: `Le prix de « ${dish.name} » n'a pas été enregistré : ${refus}` }
+        : {
+            kind: "info",
+            text:
+              cents === null
+                ? `« ${dish.name} » n'a plus de prix affiché.`
+                : `« ${dish.name} » est passé à ${fmtPrice(cents)}.`,
+          },
+    );
+  };
+
+  /**
+   * Interrupteurs « Populaire » et « Disponible ».
+   *
+   * Masquer un plat épuisé sans que le serveur l'enregistre est le pire des
+   * deux mondes : la gérante croit l'avoir retiré, la carte publique continue
+   * de le vendre. Le refus est donc dit, et la carte resynchronisée par le
+   * contexte — l'interrupteur revient alors à sa position réelle.
+   */
+  const flip = async (dish: Dish, key: "available" | "popular") => {
+    const refus = key === "available" ? await toggleAvailable(dish.id) : await togglePopular(dish.id);
+    setNotice(
+      refus
+        ? {
+            kind: "error",
+            text: `« ${dish.name} » n'a pas changé de ${
+              key === "available" ? "disponibilité" : "mise en avant"
+            } : ${refus}`,
+          }
+        : null,
+    );
   };
 
   const save = async (payload: Omit<Dish, "id">, id: string | null) => {
@@ -311,8 +370,14 @@ export function PlatsAdmin() {
         <div>
           <h1 className="text-3xl">Gestion des plats</h1>
           <p className="text-ink-2">
-            {dishes.length} plats au catalogue · l&apos;ordre d&apos;affichage sur la carte suit
-            l&apos;ordre de ce tableau.
+            {loadFailed ? (
+              "Carte indisponible — la liste des plats n'a pas pu être lue."
+            ) : (
+              <>
+                {dishes.length} plats au catalogue · l&apos;ordre d&apos;affichage sur la carte suit
+                l&apos;ordre de ce tableau.
+              </>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -351,6 +416,32 @@ export function PlatsAdmin() {
         )}
       </div>
 
+      {/* `/api/dishes` en échec : le contexte garde une liste vide — un écran
+          « Aucun plat » sans ce bandeau, alors que la carte existe bel et bien
+          en base. */}
+      {loadFailed && (
+        <p
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brick/30 bg-primary-soft p-4 text-sm text-brick"
+        >
+          <span>
+            <strong>La carte n&apos;a pas pu être lue.</strong> Ce tableau est vide faute de
+            réponse du serveur : n&apos;ajoutez rien avant d&apos;avoir rechargé, vous créeriez
+            des doublons.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setNotice(null);
+              reset();
+            }}
+            className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+          >
+            Réessayer
+          </button>
+        </p>
+      )}
+
       {/* Marque-pages de catégories : ils choisissent la catégorie affichée.
           Le défilement horizontal évite qu'une dizaine d'onglets ne mange
           l'écran d'un téléphone en revenant à la ligne. */}
@@ -369,10 +460,16 @@ export function PlatsAdmin() {
         <p className="py-20 text-center text-ink-2">Chargement…</p>
       ) : groups.length === 0 ? (
         <div className="rounded-[var(--radius-card)] border border-line bg-panel px-4 py-10 text-center">
-          <p className="text-ink-2">Aucun plat dans cette catégorie.</p>
+          <p className="text-ink-2">
+            {loadFailed
+              ? "Rien à afficher : la carte n'a pas pu être lue."
+              : "Aucun plat dans cette catégorie."}
+          </p>
           {/* Une catégorie vide n'a pas d'en-tête, donc pas de « + » : sans ce
-              bouton, elle serait la seule où l'on ne peut rien ajouter d'ici. */}
-          {activeCat !== "all" && (
+              bouton, elle serait la seule où l'on ne peut rien ajouter d'ici.
+              Sur une lecture en échec, on ne propose pas d'ajouter : on ne sait
+              pas ce que la base contient déjà. */}
+          {activeCat !== "all" && !loadFailed && (
             <button
               onClick={() => openNew(activeCat)}
               className="mt-4 inline-flex items-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold hover:bg-panel-2"
@@ -428,18 +525,21 @@ export function PlatsAdmin() {
                     {items.map((d, index) => (
                       <tr key={d.id} className="border-t border-line">
                         <td className="px-4 py-3">
+                          {/* Verrouillés pendant l'enregistrement de l'ordre :
+                              deux déplacements lancés en parallèle se
+                              renumérotent l'un sur l'autre. */}
                           <div className="flex gap-1.5">
                             <button
-                              onClick={() => move(d, -1)}
-                              disabled={index === 0}
+                              onClick={() => void move(d, -1)}
+                              disabled={index === 0 || busy}
                               aria-label={`Monter ${d.name}`}
                               className="grid h-10 w-10 place-items-center rounded-full border border-line hover:bg-panel-2 disabled:opacity-30"
                             >
                               <Icon name="chevDown" size={14} className="rotate-180" />
                             </button>
                             <button
-                              onClick={() => move(d, 1)}
-                              disabled={index === items.length - 1}
+                              onClick={() => void move(d, 1)}
+                              disabled={index === items.length - 1 || busy}
                               aria-label={`Descendre ${d.name}`}
                               className="grid h-10 w-10 place-items-center rounded-full border border-line hover:bg-panel-2 disabled:opacity-30"
                             >
@@ -477,14 +577,14 @@ export function PlatsAdmin() {
                         <td className="px-4 py-3 text-center">
                           <Toggle
                             on={d.popular}
-                            onClick={() => togglePopular(d.id)}
+                            onClick={() => void flip(d, "popular")}
                             label={`Mise en avant de ${d.name}`}
                           />
                         </td>
                         <td className="px-4 py-3 text-center">
                           <Toggle
                             on={d.available}
-                            onClick={() => toggleAvailable(d.id)}
+                            onClick={() => void flip(d, "available")}
                             label={`Disponibilité de ${d.name}`}
                           />
                         </td>

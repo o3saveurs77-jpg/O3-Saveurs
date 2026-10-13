@@ -20,8 +20,20 @@ Helpers dans [lib/money.ts](lib/money.ts) :
 
 - `fmtCents(cents)` → « 11,97 € ». Réexporté sous le nom `fmtPrice` par
   `@/lib/menu`, pour que les composants gardent leur import habituel.
-- `toCents("11,97")` → `1197` — pour lire un champ de saisie admin.
+- **`lireMontant(saisie, champ)`** → la **seule** façon de lire un montant tapé
+  dans le back-office. Rend les centimes, `null` pour un champ vide, ou un
+  message d'erreur en français que l'écran affiche. Accepte la virgule comme le
+  point.
+- `toCents("11,97")` → `1197` — conversion brute, sans message. Préférez
+  `lireMontant` dès qu'un humain saisit la valeur.
 - `toEuros(1197)` → `"11,97"` — pour préremplir un champ.
+
+> ⚠️ **Jamais `toCents(Number(saisie) || 0)`**, ni `<input type="number">` pour
+> un montant. `Number("25,00")` vaut `NaN` — or « 25,00 » est exactement ce que
+> `toEuros` produit, donc ce que tout formulaire préremplit — et le `|| 0` le
+> transforme en montant plausible. Trois écrans ont ainsi remis des minimums de
+> commande et des prix à zéro en silence. Un champ de montant est un
+> `<input type="text" inputMode="decimal">` lu par `lireMontant`.
 - `vatBreakdown(total, rateBp)` → `{ netCents, vatCents, grossCents }`.
 - `applyPercent(cents, percent)`.
 

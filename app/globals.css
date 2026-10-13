@@ -376,3 +376,72 @@ h4 {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* ───────────────────────────────────────────────────────────
+   Impression — ticket de cuisine
+   ───────────────────────────────────────────────────────────
+   « Imprimer le ticket », sur l'écran Commandes, sortait une page qui ne
+   contenait que la barre latérale du back-office. La racine de l'écran portait
+   `print:hidden` — donc `display: none` en média print — et le bloc ticket est
+   l'un de ses descendants : un `display: block` ne ressuscite pas un sous-arbre
+   dont un ancêtre est masqué. Aucune règle d'impression n'existait par ailleurs
+   dans cette feuille, et `AdminShell` n'était pas masqué du tout.
+
+   On prend donc le problème dans l'autre sens, et depuis la feuille globale :
+   quand un ticket est présent dans la page, tout ce qui n'est **ni le ticket,
+   ni l'un de ses ancêtres, ni l'un de ses descendants** est retiré de
+   l'impression. Les ancêtres restent rendus — sans eux rien ne pourrait
+   ressortir — mais dépouillés de leurs marges, cadres et fonds : la feuille
+   commence au numéro d'attente, en haut à gauche.
+
+   Le garde `html:has(.ticket-impression)` n'est pas une précaution de style :
+   sans lui, ces règles videraient aussi l'impression de la carte, d'une facture
+   ou d'une feuille de route, où aucun ticket n'existe. */
+
+/* À l'écran, le ticket n'existe pas : c'est une vue réservée au papier. */
+.ticket-impression {
+  display: none;
+}
+
+/* Pas de règle `@page` ici : elle ne peut pas être conditionnée à la présence
+   d'un ticket et s'appliquerait donc aussi à l'impression d'une facture, dont
+   la mise en page est réglée dans son propre composant. Les marges par défaut
+   du navigateur conviennent à un ticket de passe. */
+@media print {
+  html:has(.ticket-impression),
+  html:has(.ticket-impression) body {
+    background: #fff;
+    color: #000;
+  }
+
+  /* Hors du chemin du ticket : barre latérale, filtres, bandeaux, autres
+     commandes dépliées. Rien de tout cela n'a sa place sur un ticket de passe.
+     Le sélecteur tient sur une ligne, et chaque règle de ce bloc répète le
+     garde : un test relit ce fichier pour s'en assurer. */
+  html:has(.ticket-impression) body *:not(:has(.ticket-impression)):not(.ticket-impression):not(.ticket-impression *) {
+    display: none !important;
+  }
+
+  /* Les ancêtres du ticket : rendus, mais transparents. Leurs cadres arrondis
+     et leurs fonds crème encadreraient le ticket de traits inutiles, et leurs
+     marges le repousseraient au milieu de la feuille. */
+  html:has(.ticket-impression) body *:has(.ticket-impression) {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  html:has(.ticket-impression) .ticket-impression {
+    display: block !important;
+    background: #fff;
+    color: #000;
+  }
+}
