@@ -104,7 +104,13 @@ describe("ce que le document se présente être", () => {
   });
 });
 
-describe("le PDF sort bien, marqué", () => {
+/* Délai relevé à 30 s : fabriquer un PDF prend ici 300 ms à vide, mais jusqu'à
+ * six fois plus quand la suite tourne en entier — `@react-pdf` charge et
+ * mesure ses polices, et se dispute le processeur avec la cinquantaine
+ * d'autres fichiers. Le test échouait donc sur le délai par défaut de 5 s
+ * uniquement en suite complète, jamais seul : un faux négatif, pas une lenteur
+ * de la facture. */
+describe("le PDF sort bien, marqué", { timeout: 30_000 }, () => {
   /* La page HTML et le PDF partagent le même gabarit : un bandeau ou un style
    * refusé par `@react-pdf` ne casserait pas la page mais ferait échouer la
    * route de téléchargement et l'email de facture, là où personne ne regarde. */
