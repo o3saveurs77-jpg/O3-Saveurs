@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:integration": "vitest run tests/integration",
+    "db:jetable": "node scripts/base-jetable.mjs",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "postinstall": "prisma generate",
