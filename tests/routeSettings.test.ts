@@ -4,11 +4,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  *
  * Ce qu'on protège ici, et pourquoi ça mérite des tests d'exécution plutôt
  * qu'une relecture : la table `Setting` alimente les mentions légales, les
- * factures, le balisage envoyé à Google et le jeton de la borne. Une valeur mal
+ * factures et le balisage envoyé à Google. Une valeur mal
  * formée n'échoue pas à l'écriture — elle s'affiche. Un SIRET à treize chiffres
- * part sur une facture, un `vat.rateBp` fantaisiste s'écrit dans les CGV, et un
- * jeton de borne mal recopié n'est découvert qu'au moment où la tablette refuse
- * de commander en pleine salle.
+ * part sur une facture, un `vat.rateBp` fantaisiste s'écrit dans les CGV.
  *
  * Deux propriétés de fond, en plus de la validation clé par clé :
  *  · le lot est **indivisible** — une seule valeur invalide ne doit laisser
@@ -116,8 +114,7 @@ describe("garde de PUT /api/settings", () => {
 });
 
 /* Le `GET` est cloisonné : la page légale a besoin du SIRET, mais rien ne
- * justifie de livrer l'intégralité de la configuration — dont le jeton de la
- * borne — à un appel anonyme. */
+ * justifie de livrer l'intégralité de la configuration à un appel anonyme. */
 describe("cloisonnement de GET /api/settings", () => {
   it("un appel anonyme ne reçoit que les clés d'affichage", async () => {
     sansSession();
@@ -129,8 +126,7 @@ describe("cloisonnement de GET /api/settings", () => {
     const clefs = Object.keys(r.corps.settings);
     expect(clefs).toContain("restaurant.name");
     expect(clefs).toContain("google.reviewLink");
-    // Jeton de la borne, informations légales, seuils de commande : jamais.
-    expect(clefs).not.toContain("borne.token");
+    // Informations légales et seuils de commande : jamais.
     expect(clefs).not.toContain("legal.siret");
     expect(clefs).not.toContain("order.slotCapacity");
     expect(r.corps.legalComplete).toBeUndefined();
@@ -139,7 +135,7 @@ describe("cloisonnement de GET /api/settings", () => {
   it("un CLIENT connecté n'en reçoit pas davantage qu'un anonyme", async () => {
     commeClient();
     const r = await appeler<{ settings: Record<string, string> }>(GET, requete("GET", URL_SET));
-    expect(Object.keys(r.corps.settings)).not.toContain("borne.token");
+    expect(Object.keys(r.corps.settings)).not.toContain("legal.siret");
   });
 
   it("un ADMIN reçoit tous les réglages et l'état de complétude légale", async () => {
@@ -300,32 +296,6 @@ describe("taux de TVA et seuils de commande", () => {
     expect(ecrit()["order.acceptCash"]).toBe("false");
     await put({ "order.acceptCard": "true" });
     expect(ecrit()["order.acceptCard"]).toBe("true");
-    await put({ "borne.enabled": true });
-    expect(ecrit()["borne.enabled"]).toBe("true");
-  });
-});
-
-/* Jeton de la borne. Il est recopié à la main sur la tablette en salle : d'où la
- * forme stricte (lettres et chiffres, sans signe ambigu). Le vide est un choix
- * — aucune tablette n'est alors autorisée à commander. */
-describe("jeton de la borne", () => {
-  it("accepte un jeton alphanumérique de 16 à 64 caractères, normalisé en majuscules", async () => {
-    const r = await put({ "borne.token": "abcdefgh12345678" });
-    expect(r.status).toBe(200);
-    expect(ecrit()["borne.token"]).toBe("ABCDEFGH12345678");
-  });
-
-  it("refuse un jeton trop court, trop long, ou avec des séparateurs", async () => {
-    for (const valeur of ["ABC123", "ABCD-EFGH-1234-5678", "A".repeat(65), "ABCDEFGH 1234 567!"]) {
-      const r = await put({ "borne.token": valeur });
-      expect(r.status, `jeton « ${valeur} »`).toBe(400);
-    }
-  });
-
-  it("accepte un jeton vide — la borne sans tablette autorisée", async () => {
-    const r = await put({ "borne.token": "" });
-    expect(r.status).toBe(200);
-    expect(ecrit()["borne.token"]).toBe("");
   });
 });
 

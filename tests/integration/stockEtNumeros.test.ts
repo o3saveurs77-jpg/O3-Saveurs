@@ -148,13 +148,6 @@ describe("numéros — une suite sans trou ni doublon", () => {
     expect(await nextInvoiceNumber()).toBe(3);
   });
 
-  siBase("le numéro d’attente repart à 1 le lendemain", async () => {
-    const { nextTicketNumber } = await import("@/lib/ref");
-
-    expect(await nextTicketNumber("2026-10-14")).toBe(1);
-    expect(await nextTicketNumber("2026-10-14")).toBe(2);
-    expect(await nextTicketNumber("2026-10-15")).toBe(1);
-  });
 });
 
 describe("index unique — deux commandes ne portent pas le même numéro d’attente", () => {

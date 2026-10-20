@@ -71,7 +71,7 @@ export default async function CgvPage() {
           <p>
             Les présentes conditions générales de vente régissent les ventes de plats préparés
             réalisées à distance sur ce site par l&apos;exploitant du restaurant{" "}
-            <strong>Ô 3 Saveurs — Chez Laila</strong>, dont les informations légales figurent dans
+            <strong>Ô 3 Saveurs</strong>, dont les informations légales figurent dans
             les <Link href="/mentions-legales" className="font-semibold text-brick underline">mentions légales</Link>.
           </p>
           <p>

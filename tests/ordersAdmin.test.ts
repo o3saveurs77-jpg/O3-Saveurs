@@ -86,7 +86,7 @@ describe("filterOrders", () => {
   const livree = order({ id: "livree", status: "livree" });
   const impayee = order({ id: "impayee", status: "confirmee", paid: false });
   const annuleeImpayee = order({ id: "annulee", status: "annulee", paid: false });
-  const borne = order({ id: "borne", status: "livree", ticketNumber: 42 });
+  const dejaLivree = order({ id: "deja-livree", status: "livree" });
   const panierVieux = order({
     id: "vieux",
     status: "en_attente_paiement",
@@ -100,7 +100,7 @@ describe("filterOrders", () => {
     createdAt: NOW - 2 * MIN,
   });
 
-  const tout = [enCuisine, aValider, livree, impayee, annuleeImpayee, borne, panierVieux, panierFrais];
+  const tout = [enCuisine, aValider, livree, impayee, annuleeImpayee, dejaLivree, panierVieux, panierFrais];
   const ids = (filter: Parameters<typeof filterOrders>[1]) =>
     filterOrders(tout, filter, NOW).map((o) => o.id);
 
@@ -116,10 +116,6 @@ describe("filterOrders", () => {
     expect(ids("impayees")).toEqual(["impayee", "vieux", "frais"]);
   });
 
-  it("« Borne » ne garde que les commandes qui portent un numéro d'attente", () => {
-    expect(ids("borne")).toEqual(["borne"]);
-  });
-
   it("« Paniers abandonnés » existe, et ne retient que ceux qui ont dépassé le délai", () => {
     // C'était le cœur du défaut : la clé n'existait pas, donc le lien de
     // l'alerte retombait sur « En cours », où ces paniers ne figurent pas.
@@ -128,7 +124,7 @@ describe("filterOrders", () => {
   });
 
   it("un statut brut filtre sur ce statut", () => {
-    expect(ids("livree")).toEqual(["livree", "borne"]);
+    expect(ids("livree")).toEqual(["livree", "deja-livree"]);
     expect(ids("annulee")).toEqual(["annulee"]);
   });
 });

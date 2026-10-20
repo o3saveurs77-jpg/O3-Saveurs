@@ -541,7 +541,7 @@ export function starterContent(kind: SectionKind): SectionContent {
     case "hero":
       return {
         ...base,
-        eyebrow: "Chez Laila · Cuisine du monde",
+        eyebrow: "Ô 3 Saveurs · Cuisine du monde",
         title: "Le voyage *des saveurs* livré chez vous.",
         body: "Décrivez votre cuisine en une phrase.",
         photos: [photo(3), photo(11)],
@@ -555,7 +555,7 @@ export function starterContent(kind: SectionKind): SectionContent {
       return {
         ...base,
         theme: "sombre",
-        eyebrow: "Chez Laila",
+        eyebrow: "Ô 3 Saveurs",
         title: "Titre de la page",
         subtitle: "Une phrase d'introduction.",
       };
@@ -704,9 +704,9 @@ const it = (
 export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
   accueil: [
     seed("hero", "Bandeau d'ouverture", {
-      eyebrow: "Chez Laila · Cuisine du monde",
+      eyebrow: "Ô 3 Saveurs · Cuisine du monde",
       title: "Le voyage *des saveurs*\nlivré chez vous.",
-      body: "Tajines, thiéboudiène, yassa, mafé, grillades & bowls frais — la cuisine du monde de Chez Laila, préparée maison à Pontault-Combault.",
+      body: "Tajines, thiéboudiène, yassa, mafé, grillades & bowls frais — la cuisine du monde d'Ô 3 Saveurs, préparée maison à Pontault-Combault.",
       photos: [photo(3), photo(11)],
       ctaLabel: "Voir la carte",
       ctaHref: "/carte",
@@ -788,7 +788,7 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
     }),
     seed("texte_images", "Teaser « Notre histoire »", {
       theme: "sombre",
-      eyebrow: "Chez Laila",
+      eyebrow: "Ô 3 Saveurs",
       title: "Une cuisine généreuse, faite maison",
       body: "Ô 3 Saveurs réunit trois cultures dans une même assiette : l'Afrique de l'Ouest, le Maghreb et la Méditerranée. Des recettes familiales, des produits frais, et beaucoup d'amour — à déguster chez vous.",
       photos: [photo(3), photo(11), photo(4), photo(12)],
@@ -802,12 +802,12 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
   "a-propos": [
     seed("entete", "En-tête", {
       theme: "sombre",
-      eyebrow: "Chez Laila",
+      eyebrow: "Ô 3 Saveurs",
       title: "Notre histoire",
       subtitle: "Trois continents, une seule cuisine, faite maison chaque jour à Pontault-Combault.",
     }),
     seed("texte_images", "Le récit", {
-      body: "**Ô 3 Saveurs — Chez Laila** est née d'une envie simple : réunir dans une même assiette les saveurs qui ont bercé notre famille. Trois continents, une seule cuisine, faite maison chaque jour.\n\nDe l'**Afrique de l'Ouest** (thiéboudiène, yassa, mafé), du **Maghreb** (nos tajines mijotés) et de la **Méditerranée** (chakchouka, zaalouk, sardines), chaque plat raconte un voyage.\n\nNous travaillons des produits frais, des épices choisies et des recettes transmises de génération en génération. Le tout livré chez vous ou à emporter, sans rien perdre de la générosité de la maison.",
+      body: "**Ô 3 Saveurs** est née d'une envie simple : réunir dans une même assiette les saveurs qui ont bercé notre famille. Trois continents, une seule cuisine, faite maison chaque jour.\n\nDe l'**Afrique de l'Ouest** (thiéboudiène, yassa, mafé), du **Maghreb** (nos tajines mijotés) et de la **Méditerranée** (chakchouka, zaalouk, sardines), chaque plat raconte un voyage.\n\nNous travaillons des produits frais, des épices choisies et des recettes transmises de génération en génération. Le tout livré chez vous ou à emporter, sans rien perdre de la générosité de la maison.",
       photos: [photo(3), photo(11), photo(4), photo(12)],
       ctaLabel: "Découvrir la carte",
       ctaHref: "/carte",

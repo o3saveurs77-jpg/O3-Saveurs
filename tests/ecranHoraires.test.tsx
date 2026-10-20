@@ -11,7 +11,7 @@ import { DEFAULT_HOURS, type DayHours } from "@/lib/hours";
  * `trierSemaine`, `aEnvoyer`). Il reste que **cet écran n'a jamais été
  * ouvert** : il est derrière Auth0, et son seul moyen d'exister est ce fichier.
  * Or c'est lui qui décide du refus des commandes hors service, des créneaux
- * proposés au client et de l'ouverture de la borne en salle : une fermeture
+ * proposés au client : une fermeture
  * exceptionnelle mal enregistrée, et le site encaisse pour un service qui
  * n'aura pas lieu.
  *

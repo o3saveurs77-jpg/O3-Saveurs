@@ -1,4 +1,4 @@
-/* Ô 3 Saveurs — Chez Laila · types du catalogue et données de seed.
+/* Ô 3 Saveurs · types du catalogue et données de seed.
  *
  * Deux choses cohabitent ici :
  *  · les **types applicatifs** (`Dish`, `Zone`, …), dont les montants sont en
@@ -213,7 +213,7 @@ export function telHref(raw: string): string {
 
 export const info = {
   name: "Ô 3 Saveurs",
-  tag: "Chez Laila",
+  tag: "Cuisine du monde",
   sub: "Cuisine du monde",
   baseline: "Afrique · Maghreb · Méditerranée — préparé maison, livré chez vous.",
   /* ⚠️ Coordonnées de **repli**, pas la source.
@@ -231,10 +231,8 @@ export const info = {
   phone: "09 54 83 12 75",
   address: "38 rue des Prés Saint-Martin, 77340 Pontault-Combault",
   hours: [
-    { d: "Lun – Jeu", h: "11h30 – 14h30  ·  18h00 – 22h45" },
-    { d: "Vendredi", h: "18h00 – 22h45  ·  (fermé le midi)" },
-    { d: "Samedi", h: "11h30 – 14h30  ·  18h00 – 22h45" },
-    { d: "Dimanche", h: "18h00 – 22h45  ·  (fermé le midi)" },
+    { d: "Lun – Sam", h: "11h30 – 14h30  ·  18h00 – 22h30" },
+    { d: "Dimanche", h: "Fermé" },
   ],
   payments: ["Espèces", "Carte Bleue", "Tickets Restaurant"],
   /* Pluriel : la maison est sur plusieurs plateformes, et n'en citer qu'une
@@ -685,7 +683,7 @@ export const seedFormulas: SeedFormula[] = [
     name: "Express",
     desc: "Un plat au choix + une boisson",
     extra: "Formule la plus rapide",
-    price: 12.9,
+    price: 10.9,
     slots: [{ label: "Votre plat", cats: PLAT_CATS }, BOISSON_SLOT],
   },
   {
@@ -693,7 +691,7 @@ export const seedFormulas: SeedFormula[] = [
     name: "Midi",
     desc: "Entrée + plat au choix + dessert",
     extra: "Idéal pour la pause déjeuner",
-    price: 15.9,
+    price: 13.9,
     slots: [
       { label: "Votre entrée", cats: ["entrees"] },
       { label: "Votre plat", cats: PLAT_CATS },
@@ -705,7 +703,7 @@ export const seedFormulas: SeedFormula[] = [
     name: "Gourmande",
     desc: "Entrée + plat + dessert + boisson",
     extra: "La formule complète",
-    price: 18.9,
+    price: 16.9,
     slots: [
       { label: "Votre entrée", cats: ["entrees"] },
       { label: "Votre plat", cats: PLAT_CATS },
@@ -716,9 +714,9 @@ export const seedFormulas: SeedFormula[] = [
   {
     code: "F4",
     name: "Sandwich",
-    desc: "Sandwich + frites maison + boisson",
+    desc: "Merguez ou kefta + frites maison + boisson",
     extra: "Sur le pouce",
-    price: 11.9,
+    price: 9,
     slots: [
       { label: "Votre sandwich", cats: ["sandwichs"] },
       { label: "Votre accompagnement", cats: ["accompagnements"] },
@@ -730,7 +728,7 @@ export const seedFormulas: SeedFormula[] = [
     name: "Menu Enfant",
     desc: "Petit plat + accompagnement + boisson + dessert",
     extra: "Pensé pour les plus jeunes",
-    price: 8.9,
+    price: 6.9,
     slots: [
       { label: "Son plat", cats: ["africaine", "maghreb", "grillades", "sandwichs"] },
       { label: "Son accompagnement", cats: ["accompagnements"] },

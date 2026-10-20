@@ -845,7 +845,7 @@ export function LivraisonsAdmin() {
         <div id="feuille-de-route" className="hidden bg-white text-black print:block">
           <h1 className="text-2xl font-bold">Feuille de route</h1>
           <p className="mt-1 text-sm">
-            Ô 3 Saveurs — Chez Laila · {dayLabel(day)} · créneau {slotLabel(sheet.slot)}
+            Ô 3 Saveurs · {dayLabel(day)} · créneau {slotLabel(sheet.slot)}
           </p>
           <p className="mt-1 text-lg font-bold">Livreur : {sheet.driverName ?? "—"}</p>
 

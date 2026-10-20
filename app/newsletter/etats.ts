@@ -68,7 +68,7 @@ export function panneauConfirmation(etat: string | string[] | undefined): Pannea
       return {
         titre: "C'est confirmé, vous êtes inscrit(e)",
         corps: [
-          "Votre adresse est enregistrée : vous recevrez les nouveautés de Laila, les plats du jour et les offres. Quelques emails, jamais plus.",
+          "Votre adresse est enregistrée : vous recevrez les nouveautés d'Ô 3 Saveurs, les plats du jour et les offres. Quelques emails, jamais plus.",
           "Chaque envoi porte un lien de désinscription qui agit en un seul clic, sans compte ni mot de passe.",
         ],
         ton: "ok",

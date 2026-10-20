@@ -43,7 +43,7 @@ export default async function MentionsLegalesPage() {
       <LegalBody>
         <LegalSection id="editeur" title="1. Éditeur du site">
           <p>
-            Le présent site est édité par l&apos;exploitant du restaurant Ô 3 Saveurs — Chez Laila,
+            Le présent site est édité par l&apos;exploitant du restaurant Ô 3 Saveurs,
             dont les informations légales sont les suivantes :
           </p>
           <LegalNotice settings={s} />

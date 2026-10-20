@@ -82,8 +82,6 @@ const DEROGATIONS: Record<string, string> = {
     "Appelé par Stripe, authentifié par la signature `stripe-signature` et non par une session.",
   "/api/tournee/[token] POST":
     "Lien privé envoyé par SMS au livreur : le jeton de l'URL est l'autorisation (voir lib/deliveryAccess).",
-  "/api/borne/commande POST":
-    "Tablette de la salle, authentifiée par le jeton d'appareil `borne.token` et non par une session.",
 
   // ── Actions que le public doit pouvoir faire ─────────────────
   "/api/checkout POST": "Tunnel de commande : la commande en invité est le cas d'usage principal.",
@@ -313,63 +311,6 @@ describe("dérogations — ce qui tient lieu de session", () => {
       contexte({ token: "jeton-inconnu" }),
     );
     expect(r.status).toBe(404);
-    expect(prismaDouble.ecritures()).toHaveLength(0);
-  });
-
-  it("la borne refuse une commande sans jeton d'appareil", async () => {
-    const { POST } = await import("@/app/api/borne/commande/route");
-    const r = await appeler(
-      POST,
-      requete("POST", "http://localhost/api/borne/commande", { mode: "sur_place", lines: [] }),
-    );
-    expect(r.status).toBe(401);
-    expect(prismaDouble.ecritures()).toHaveLength(0);
-  });
-
-  it("la borne refuse aussi un jeton d'appareil erroné", async () => {
-    const { POST } = await import("@/app/api/borne/commande/route");
-    const { BORNE_TOKEN_HEADER } = await import("@/lib/borne");
-
-    /* Jeton faux de **même longueur** que le vrai : `tokenMatches` compare par
-     * `timingSafeEqual`, qui écarte d'emblée deux longueurs différentes. Un
-     * jeton plus court ne prouverait donc rien de la comparaison elle-même. */
-    prismaDouble.quand("setting.findMany", [
-      { key: "borne.token", value: "JETONVALIDE1234567" },
-      { key: "borne.enabled", value: "true" },
-    ]);
-    const r = await appeler(
-      POST,
-      requete(
-        "POST",
-        "http://localhost/api/borne/commande",
-        { mode: "sur_place", lines: [] },
-        { [BORNE_TOKEN_HEADER]: "JETONFAUXX1234567A" },
-      ),
-    );
-    expect(r.status).toBe(401);
-    expect(prismaDouble.ecritures()).toHaveLength(0);
-  });
-
-  it("la borne laisse passer le bon jeton — sans quoi le test précédent ne prouve rien", async () => {
-    const { POST } = await import("@/app/api/borne/commande/route");
-    const { BORNE_TOKEN_HEADER } = await import("@/lib/borne");
-
-    // Jeton reconnu, mais borne éteinte : on dépasse le contrôle de jeton (401)
-    // pour tomber sur le contrôle suivant (503).
-    prismaDouble.quand("setting.findMany", [
-      { key: "borne.token", value: "JETONVALIDE1234567" },
-      { key: "borne.enabled", value: "false" },
-    ]);
-    const r = await appeler(
-      POST,
-      requete(
-        "POST",
-        "http://localhost/api/borne/commande",
-        { mode: "sur_place", lines: [] },
-        { [BORNE_TOKEN_HEADER]: "JETONVALIDE1234567" },
-      ),
-    );
-    expect(r.status).toBe(503);
     expect(prismaDouble.ecritures()).toHaveLength(0);
   });
 

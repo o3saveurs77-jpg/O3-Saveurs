@@ -12,7 +12,7 @@ import { JsonLd } from "@/components/JsonLd";
 import { graph, menuNode, breadcrumbNode, pageMetadata } from "@/lib/seo";
 
 /* Description, canonique et image de partage : `lib/seo.ts`. Le titre reste
- * court, le layout y ajoute « · Ô 3 Saveurs — Chez Laila ». */
+ * court, le layout y ajoute « · Ô 3 Saveurs ». */
 export const metadata: Metadata = pageMetadata({
   path: "/carte",
   title: "La Carte",

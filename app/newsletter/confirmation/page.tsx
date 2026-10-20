@@ -14,7 +14,7 @@ import { panneauConfirmation } from "../etats";
 export const metadata: Metadata = {
   title: "Inscription à la newsletter",
   description:
-    "Confirmation de votre inscription à la newsletter du restaurant Ô 3 Saveurs — Chez Laila.",
+    "Confirmation de votre inscription à la newsletter du restaurant Ô 3 Saveurs.",
   alternates: { canonical: "/newsletter/confirmation" },
   /* Page de service, atteinte par un lien personnel et sans intérêt dans une
    * page de résultats : l'indexer dépenserait du budget d'exploration au

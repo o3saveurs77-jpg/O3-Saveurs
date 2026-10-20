@@ -207,7 +207,7 @@ async function journalise(
 function layout(title: string, body: string): string {
   return `
   <div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;max-width:560px;margin:auto;color:#2c1d11;background:#f7e9d2;padding:24px;border-radius:16px">
-    <h2 style="margin:0 0 4px;color:#a6243a">Ô 3 Saveurs <span style="font-weight:400">— Chez Laila</span></h2>
+    <h2 style="margin:0 0 4px;color:#a6243a">Ô 3 Saveurs</h2>
     <p style="margin:0 0 20px;color:#856a50;font-size:13px">Cuisine du monde · Pontault-Combault</p>
     <div style="background:#fff;padding:20px;border-radius:12px">
       <h3 style="margin:0 0 14px;font-size:17px">${escapeHtml(title)}</h3>

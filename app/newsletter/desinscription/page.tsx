@@ -19,7 +19,7 @@ import { panneauDesinscription } from "../etats";
 export const metadata: Metadata = {
   title: "Désinscription de la newsletter",
   description:
-    "Confirmation de votre désinscription de la newsletter du restaurant Ô 3 Saveurs — Chez Laila.",
+    "Confirmation de votre désinscription de la newsletter du restaurant Ô 3 Saveurs.",
   alternates: { canonical: "/newsletter/desinscription" },
   /* Page de service atteinte par un lien personnel : rien à indexer, mais les
    * liens continuent de transmettre leur poids. */

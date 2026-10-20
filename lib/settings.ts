@@ -14,7 +14,7 @@ import type { LatLng } from "@/lib/geo";
 export const SETTING_DEFAULTS = {
   // Identité
   "restaurant.name": "Ô 3 Saveurs",
-  "restaurant.tagline": "Chez Laila",
+  "restaurant.tagline": "Cuisine du monde",
   /* Le repli portait l'ancien numéro, celui d'avant le changement de ligne.
    * Un réglage par défaut faux est pire qu'absent : il s'affiche sans jamais
    * se signaler. */

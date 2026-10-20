@@ -121,7 +121,7 @@ export const DISALLOWED_PATHS = [
  * racine, qui porte le même gabarit — cette constante le rend commun au lieu
  * de le laisser recopié dans neuf fichiers.
  */
-export const BRAND = "Ô 3 Saveurs — Chez Laila";
+export const BRAND = "Ô 3 Saveurs";
 
 /** Visuel repris par Facebook, WhatsApp, iMessage et Slack à chaque partage. */
 export interface PageShare {
@@ -214,7 +214,7 @@ export const PAGE_META = {
   },
   "/a-propos": {
     description:
-      "Depuis Pontault-Combault, Laila cuisine maison l'Afrique de l'Ouest, le Maghreb et la Méditerranée. L'histoire, les valeurs et les horaires d'Ô 3 Saveurs.",
+      "Depuis Pontault-Combault, Ô 3 Saveurs cuisine maison l'Afrique de l'Ouest, le Maghreb et la Méditerranée. L'histoire, les valeurs et les horaires de la maison.",
     share: {
       // Le mafé : le plat de famille par lequel la maison se raconte.
       url: "/photos/p01.jpg",
@@ -225,7 +225,7 @@ export const PAGE_META = {
   },
   "/contact": {
     description:
-      "Ô 3 Saveurs — Chez Laila, 38 rue des Prés Saint-Martin à Pontault-Combault : téléphone, horaires d'ouverture, plan d'accès et formulaire pour nous écrire.",
+      "Ô 3 Saveurs, 38 rue des Prés Saint-Martin à Pontault-Combault : téléphone, horaires d'ouverture, plan d'accès et formulaire de contact pour nous écrire.",
     share: {
       // Faute de photo de la devanture, la table dressée : une invitation à
       // venir, qui vaut mieux qu'un plat isolé sur une page de coordonnées.
@@ -286,7 +286,7 @@ export type PagePath = keyof typeof PAGE_META;
  */
 export function pageMetadata(input: {
   path: PagePath;
-  /** Titre court — le layout racine y ajoute « · Ô 3 Saveurs — Chez Laila ». */
+  /** Titre court — le layout racine y ajoute « · Ô 3 Saveurs ». */
   title: string;
   /**
    * Accroche de l'aperçu de partage, quand la description meta — écrite pour
@@ -768,7 +768,7 @@ export function cateringNode(profile: BusinessProfile, zones: Zone[]): JsonLdNod
  * La page ne portait qu'un fil d'Ariane, au motif qu'un nœud `Restaurant` de
  * plus y répéterait celui de l'accueil. Le raisonnement ne tient pas : un
  * moteur lit **chaque page isolément**, et rien ne lui disait de qui cette
- * page raconte l'histoire. « Chez Laila » y est partout en toutes lettres sans
+ * page raconte l'histoire. L'enseigne y est partout en toutes lettres sans
  * qu'aucun balisage ne le relie à l'entreprise — c'est précisément la page qui
  * devrait consolider l'entité, et c'était la seule à ne rien en dire.
  *
@@ -848,7 +848,7 @@ export function faqNode(input: {
   }
 
   qa.push({
-    q: "Quel type de cuisine sert Ô 3 Saveurs — Chez Laila ?",
+    q: "Quel type de cuisine sert Ô 3 Saveurs ?",
     a: "Une cuisine du monde préparée maison : spécialités d'Afrique de l'Ouest (thiéboudiène, mafé, yassa), du Maghreb (tajines, couscous) et de Méditerranée, ainsi que des grillades, sandwichs, salades et desserts maison.",
   });
 

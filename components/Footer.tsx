@@ -87,7 +87,7 @@ export function Footer() {
             <Emblem size={48} />
             <div>
               <p className="font-display text-xl">Ô 3 Saveurs</p>
-              <p className="text-sm text-gold">Chez Laila · Cuisine du monde</p>
+              <p className="text-sm text-gold">Cuisine du monde</p>
             </div>
           </div>
           <p className="mt-4 max-w-sm text-sm opacity-80">{info.baseline}</p>
@@ -219,15 +219,38 @@ export function Footer() {
       </div>
 
       <div className="border-t border-white/10">
-        <div className="wrap flex flex-col items-center justify-between gap-2 py-5 text-center text-xs opacity-70 sm:flex-row sm:text-left">
-          <p>© {new Date().getFullYear()} Ô 3 Saveurs — Chez Laila. Tous droits réservés.</p>
+        <div className="wrap flex flex-col items-center justify-between gap-4 py-5 text-center text-xs sm:flex-row sm:items-center sm:text-left">
+          <p className="opacity-70">© {new Date().getFullYear()} Ô 3 Saveurs. Tous droits réservés.</p>
           {/* `flex-wrap` : plusieurs liens en ligne fixe dépassaient la largeur
               d'un écran de 320 px et créaient un défilement latéral. */}
-          <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+          <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1 opacity-70">
             <Link href="/mentions-legales" className="hover:text-gold">Mentions légales</Link>
             <Link href="/cgv" className="hover:text-gold">CGV</Link>
             <Link href="/confidentialite" className="hover:text-gold">Confidentialité</Link>
           </nav>
+          <a
+            href="https://magar-developpement.fr"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.06] py-1 pl-1 pr-3 transition hover:border-gold/40 hover:bg-white/10"
+          >
+            {/* Fond crème : le monogramme Magar est marine, illisible à même
+                le bordeaux du pied de page. */}
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f7e9d2]">
+              <img
+                src="/magar-developpement.svg"
+                alt=""
+                width={22}
+                height={22}
+              />
+            </span>
+            <span className="text-left leading-tight">
+              <span className="block text-[10px] uppercase tracking-[0.14em] text-gold/80">
+                Réalisé par
+              </span>
+              <span className="font-semibold text-footer-ink">Magar Développement</span>
+            </span>
+          </a>
         </div>
       </div>
     </footer>

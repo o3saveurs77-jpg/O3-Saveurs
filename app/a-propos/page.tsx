@@ -8,7 +8,7 @@ import { graph, aboutPageNode, breadcrumbNode, restaurantNode, websiteNode, page
 /* Description, canonique et image de partage : `lib/seo.ts`. */
 export const metadata: Metadata = pageMetadata({
   path: "/a-propos",
-  title: "À propos — l'histoire de Chez Laila",
+  title: "À propos",
   accroche: "Une cuisine du monde généreuse, préparée maison à Pontault-Combault.",
 });
 
@@ -26,7 +26,7 @@ export default async function AProposPage() {
 
   /* La page n'a longtemps porté qu'un fil d'Ariane, au motif qu'un nœud
    * `Restaurant` de plus y répéterait celui de l'accueil. Un moteur lit
-   * pourtant chaque page pour elle-même : celle-ci écrivait « Chez Laila » en
+   * pourtant chaque page pour elle-même : celle-ci écrivait l'enseigne en
    * toutes lettres sans qu'aucun balisage ne dise de quelle entreprise il
    * s'agit. C'est la page faite pour consolider l'entité — nom, enseigne,
    * adresse, horaires, fiche Google — et c'était la seule à n'en rien dire.

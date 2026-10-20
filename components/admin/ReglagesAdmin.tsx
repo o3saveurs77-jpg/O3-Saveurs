@@ -49,7 +49,7 @@ const SECTIONS: SectionDef[] = [
     desc: "Ce que les clients voient : nom, téléphone, adresse. Repris dans le pied de page, les emails et les factures.",
     fields: [
       { key: "restaurant.name", label: "Nom du restaurant" },
-      { key: "restaurant.tagline", label: "Signature", placeholder: "Chez Laila" },
+      { key: "restaurant.tagline", label: "Signature", placeholder: "Cuisine du monde" },
       { key: "restaurant.phone", label: "Téléphone", type: "tel" },
       { key: "restaurant.email", label: "Email de contact", type: "email" },
       { key: "restaurant.address", label: "Adresse (numéro et rue)" },

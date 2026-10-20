@@ -133,7 +133,7 @@ export default async function ConfidentialitePage() {
         <LegalSection id="responsable" title="1. Qui est responsable du traitement ?">
           <p>
             Le responsable du traitement est l&apos;exploitant du restaurant{" "}
-            <strong>Ô 3 Saveurs — Chez Laila</strong> :{" "}
+            <strong>Ô 3 Saveurs</strong> :{" "}
             <Value value={s["legal.company"]} what="la dénomination sociale" />, dont les
             coordonnées complètes figurent dans les{" "}
             <Link href="/mentions-legales" className="font-semibold text-brick underline">

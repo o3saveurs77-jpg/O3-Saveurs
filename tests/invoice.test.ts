@@ -26,7 +26,7 @@ import type { Order as OrderRow } from "@prisma/client";
 
 const complet: InvoiceSeller = {
   name: "Ô 3 Saveurs",
-  tagline: "Chez Laila",
+  tagline: "Cuisine du monde",
   company: "Ô 3 SAVEURS",
   legalForm: "SARL au capital de 5 000 €",
   address: "12 rue des Lilas, 93200 Saint-Denis",

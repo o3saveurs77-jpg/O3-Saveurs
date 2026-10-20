@@ -546,10 +546,10 @@ describe("coordonnées et mode", () => {
     expect(r.corps.error).toMatch(/moyen de paiement/i);
   });
 
-  /* `sur_place` n'existe que depuis la borne en salle : un client qui commande
+  /* `sur_place` n'est pas proposé sur le tunnel web : un client qui commande
    * depuis son canapé ne mange pas au restaurant, et la TVA ne serait pas la
    * bonne. Le tunnel web ne doit donc pas l'accepter, même forgé. */
-  it("refuse le mode « sur place », réservé à la borne", async () => {
+  it("refuse le mode « sur place » depuis le tunnel web", async () => {
     const r = await commander({ mode: "sur_place" });
     expect(r.statut).toBe(400);
     expect(etat.commandes).toHaveLength(0);

@@ -20,7 +20,7 @@ type State = "idle" | "sending" | "done" | "error";
 export function NewsletterForm({
   source = "footer",
   variant = "light",
-  title = "Les nouveautés de Laila",
+  title = "Les nouveautés d'Ô 3 Saveurs",
   subtitle = "Nouveaux plats, plats du jour et offres. Un email de temps en temps, jamais plus.",
 }: {
   /** Provenance de l'inscription, enregistrée en base. */

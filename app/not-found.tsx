@@ -4,7 +4,7 @@ import { Icon } from "@/components/Icon";
 import { formatPhone, info, telHref } from "@/lib/menu";
 
 export const metadata: Metadata = {
-  title: "Page introuvable · Ô 3 Saveurs — Chez Laila",
+  title: "Page introuvable",
   robots: { index: false, follow: true },
 };
 

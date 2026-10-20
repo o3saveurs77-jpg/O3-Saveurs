@@ -5,8 +5,8 @@
  * `PUT /api/hours` existait, gardé et fonctionnel, mais aucun écran ne
  * l'appelait : les horaires n'étaient modifiables qu'en base. Or ils ne sont
  * pas décoratifs — ils décident du refus des commandes hors service
- * (`app/api/checkout`), des créneaux proposés au client, de l'ouverture de la
- * borne en salle et du balisage Google. Une fermeture exceptionnelle obligeait
+ * (`app/api/checkout`), des créneaux proposés au client
+ * et du balisage Google. Une fermeture exceptionnelle obligeait
  * donc à faire appel à nous ; en attendant, le site continuait d'encaisser pour
  * un service qui n'aurait pas lieu.
  *
@@ -238,7 +238,7 @@ export function HorairesAdmin() {
       </h2>
       <p className="mt-1 text-sm text-ink-2">
         Services du midi et du soir, jour par jour. Ils déterminent les créneaux proposés au client,
-        le refus des commandes hors service, l&apos;ouverture de la borne en salle et les horaires
+        le refus des commandes hors service et les horaires
         affichés par Google. Un service laissé vide signifie « pas de service » : c&apos;est ainsi
         qu&apos;on exprime « fermé le midi », sans fermer la journée.
       </p>

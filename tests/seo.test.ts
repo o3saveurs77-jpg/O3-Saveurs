@@ -57,7 +57,7 @@ function dish(over: Partial<Dish> = {}): Dish {
 
 const PROFILE: BusinessProfile = {
   name: "Ô 3 Saveurs",
-  tagline: "Chez Laila",
+  tagline: "Cuisine du monde",
   phone: "01 72 84 52 44",
   email: "contact@o3saveurs.fr",
   street: "38 rue des Prés Saint-Martin",
@@ -118,8 +118,8 @@ describe("brandAliases", () => {
 
   it("garde le nom du site, l'enseigne et le domaine", () => {
     expect(aliases).toContain("Ô 3 Saveurs");
-    expect(aliases).toContain("Chez Laila");
-    expect(aliases).toContain("O3 Saveurs Chez Laila");
+    expect(aliases).toContain("Cuisine du monde");
+    expect(aliases).toContain("O3 Saveurs Cuisine du monde");
     expect(aliases).toContain("o3saveurs.fr");
   });
 
@@ -136,7 +136,7 @@ describe("brandAliases", () => {
   it("suit le nom des réglages plutôt qu'une liste écrite en dur", () => {
     const autre = brandAliases({ ...PROFILE, name: "Café 7 Épices", tagline: "" });
     expect(autre).toContain("Cafe7 Epices");
-    expect(autre).not.toContain("Chez Laila");
+    expect(autre).not.toContain("Cuisine du monde");
   });
 });
 
@@ -333,7 +333,7 @@ describe("aboutPageNode", () => {
   });
 
   it("nomme l'enseigne, puisque c'est ce que la page raconte", () => {
-    expect(String(node.name)).toContain("Chez Laila");
+    expect(String(node.name)).toContain("Cuisine du monde");
     // Enseigne vide : pas de tiret orphelin dans le nom.
     const sansEnseigne = aboutPageNode({ ...PROFILE, tagline: "" });
     expect(String(sansEnseigne.name)).toBe("À propos — Ô 3 Saveurs");
@@ -641,14 +641,14 @@ describe("pageMetadata", () => {
     expect(meta.openGraph).toMatchObject({
       type: "website",
       locale: "fr_FR",
-      siteName: "Ô 3 Saveurs — Chez Laila",
+      siteName: "Ô 3 Saveurs",
       url: "/traiteur",
     });
   });
 
   it("garde un titre court pour le gabarit du layout, long pour le partage", () => {
     expect(meta.title).toBe("Traiteur à Pontault-Combault");
-    expect(meta.openGraph?.title).toBe("Traiteur à Pontault-Combault · Ô 3 Saveurs — Chez Laila");
+    expect(meta.openGraph?.title).toBe("Traiteur à Pontault-Combault · Ô 3 Saveurs");
   });
 
   it("retombe sur la description quand aucune accroche n'est donnée", () => {

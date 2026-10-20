@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
 
 /** Données personnelles : cette page ne doit jamais être indexée. */
 export const metadata: Metadata = {
-  title: "Facture · Ô 3 Saveurs — Chez Laila",
+  title: "Facture",
   robots: { index: false, follow: false },
 };
 

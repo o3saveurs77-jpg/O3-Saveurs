@@ -16,10 +16,10 @@ export const metadata: Metadata = {
    * on a tendu une carte de visite. Les deux mots-clés restent dans le titre,
    * ils ont simplement cédé la première place. */
   title: {
-    absolute: "Ô 3 Saveurs · Restaurant africain & maghrébin à Pontault-Combault",
+    absolute: "Ô 3 Saveurs · Cuisine du monde à Pontault-Combault",
   },
   description:
-    "Ô 3 Saveurs — Chez Laila : cuisine d'Afrique de l'Ouest, du Maghreb et de Méditerranée préparée maison à Pontault-Combault. Commande en ligne, livraison et à emporter.",
+    "Ô 3 Saveurs : cuisine d'Afrique de l'Ouest, du Maghreb et de Méditerranée préparée maison à Pontault-Combault. Commande en ligne, livraison et à emporter.",
   alternates: { canonical: "/" },
 };
 
