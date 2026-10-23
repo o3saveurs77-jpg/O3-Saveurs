@@ -91,6 +91,12 @@ const SECTIONS: SectionDef[] = [
         help: "Uniquement pour une société. Laisser vide pour une entreprise individuelle.",
       },
       {
+        key: "legal.rcs",
+        label: "Immatriculation RCS",
+        help: "Ville du greffe et SIREN, tels que sur le Kbis.",
+        placeholder: "RCS Melun 131 135 550",
+      },
+      {
         key: "legal.publisher",
         label: "Responsable de la publication",
         help: "Nom et prénom de la personne responsable du contenu du site.",

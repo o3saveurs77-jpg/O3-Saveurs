@@ -26,7 +26,7 @@ import { fmtCents, fmtVatRate, vatBreakdownByRate } from "@/lib/money";
 import { formatInvoiceNumber } from "@/lib/money";
 import { PAYMENT_STATUS_LABEL, vatPartsOf } from "@/lib/types";
 import type { Order } from "@/lib/types";
-import { invoiceHeading, settlementLine, type InvoiceSeller } from "@/lib/invoice";
+import { invoiceHeading, sellerLegalLine, settlementLine, type InvoiceSeller } from "@/lib/invoice";
 
 export type { InvoiceSeller };
 
@@ -219,7 +219,7 @@ export function InvoiceClient({
                   {seller.name} — {seller.tagline}
                 </p>
               )}
-              {seller.legalForm && <p>{seller.legalForm}</p>}
+              {sellerLegalLine(seller) && <p>{sellerLegalLine(seller)}</p>}
               <p>{seller.address}</p>
               <p>
                 {seller.phone}

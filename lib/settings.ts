@@ -39,8 +39,10 @@ export const SETTING_DEFAULTS = {
   "legal.siret": "",
   "legal.vatNumber": "",
   "legal.capital": "",
+  /** « RCS Melun 131 135 550 » — exigé sur le site et les factures d'une société. */
+  "legal.rcs": "",
   "legal.publisher": "",
-  "legal.host": "Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, États-Unis",
+  "legal.host": "Clever Cloud SAS, 3 rue de l'Allier, 44000 Nantes, France",
   "legal.mediator": "",
 
   // Commercial

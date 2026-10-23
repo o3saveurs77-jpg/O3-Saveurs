@@ -21,6 +21,8 @@ export interface InvoiceSeller {
   email: string;
   siret: string;
   vatNumber: string;
+  capital: string;
+  rcs: string;
 }
 
 export function sellerFromSettings(settings: Settings): InvoiceSeller {
@@ -34,7 +36,25 @@ export function sellerFromSettings(settings: Settings): InvoiceSeller {
     email: settings["restaurant.email"],
     siret: settings["legal.siret"],
     vatNumber: settings["legal.vatNumber"],
+    capital: settings["legal.capital"],
+    rcs: settings["legal.rcs"],
   };
+}
+
+/**
+ * Forme, capital et immatriculation sur une ligne : « SASU · Capital de
+ * 500,00 € · RCS Melun 131 135 550 ». Une société doit les porter sur ses
+ * factures (art. R123-237 et R123-238 du code de commerce) ; les morceaux vides
+ * sont omis, pour qu'une entreprise individuelle n'affiche pas « Capital de ».
+ */
+export function sellerLegalLine(seller: InvoiceSeller): string {
+  return [
+    seller.legalForm.trim(),
+    seller.capital.trim() ? `Capital de ${seller.capital.trim()}` : "",
+    seller.rcs.trim(),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /* ── Régularité du document ───────────────────────────────────────────────

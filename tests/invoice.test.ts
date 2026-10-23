@@ -9,6 +9,7 @@ import {
   missingLegalMentions,
   sellerFromSettings,
   sellerLegalComplete,
+  sellerLegalLine,
   settlementLine,
   type InvoiceSeller,
 } from "@/lib/invoice";
@@ -28,12 +29,14 @@ const complet: InvoiceSeller = {
   name: "Ô 3 Saveurs",
   tagline: "Cuisine du monde",
   company: "Ô 3 SAVEURS",
-  legalForm: "SARL au capital de 5 000 €",
+  legalForm: "SARL",
   address: "12 rue des Lilas, 93200 Saint-Denis",
   phone: "01 02 03 04 05",
   email: "contact@o3saveurs.fr",
   siret: "123 456 789 00012",
   vatNumber: "FR12345678900012",
+  capital: "5 000 €",
+  rcs: "RCS Bobigny 123 456 789",
 };
 
 const avec = (champs: Partial<InvoiceSeller>): InvoiceSeller => ({ ...complet, ...champs });
@@ -60,6 +63,18 @@ describe("mentions obligatoires du vendeur", () => {
     // Il ne s'impose pas à tout vendeur ; l'absence ne doit pas disqualifier
     // une facture par ailleurs complète.
     expect(sellerLegalComplete(avec({ vatNumber: "" }))).toBe(true);
+  });
+});
+
+describe("ligne forme, capital et RCS", () => {
+  it("réunit les trois mentions d'une société", () => {
+    expect(sellerLegalLine(complet)).toBe("SARL · Capital de 5 000 € · RCS Bobigny 123 456 789");
+  });
+
+  it("omet le capital d'une entreprise individuelle", () => {
+    expect(sellerLegalLine(avec({ legalForm: "Entreprise individuelle", capital: "", rcs: "" }))).toBe(
+      "Entreprise individuelle",
+    );
   });
 });
 
@@ -122,8 +137,6 @@ describe("le PDF sort bien, marqué", { timeout: 30_000 }, () => {
     id: "o1",
     ref: "#AB12CD",
     invoiceNumber: 4,
-    ticketNumber: null,
-    ticketDate: null,
     userId: null,
     mode: "livraison",
     status: "livree",

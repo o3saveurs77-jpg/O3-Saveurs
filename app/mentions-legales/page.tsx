@@ -78,10 +78,14 @@ export default async function MentionsLegalesPage() {
               why="L'hébergeur doit être identifiable (art. 6-III 1° c de la LCEN)."
             />
           )}
+          {/* Neon (États-Unis) était cité ici : la base a quitté Neon pour Clever
+              Cloud le 3 septembre 2026, et la page annonçait un transfert hors UE
+              qui n'avait plus lieu. */}
           <p>
-            La base de données est opérée par Neon Inc. (États-Unis) et les paiements par carte par
-            Stripe Payments Europe, Ltd. (Irlande). Les transferts de données hors Union européenne
-            et les garanties associées sont détaillés dans notre{" "}
+            La base de données et les photos du site sont hébergées par ce même prestataire, en
+            France. Les paiements par carte sont traités par Stripe Payments Europe, Ltd. (Irlande).
+            Les transferts de données hors Union européenne et les garanties associées sont
+            détaillés dans notre{" "}
             <Link href="/confidentialite">politique de confidentialité</Link>.
           </p>
         </LegalSection>

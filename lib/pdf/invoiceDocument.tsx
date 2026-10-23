@@ -8,7 +8,7 @@
 
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer";
 import type { Order } from "@/lib/types";
-import { invoiceHeading, settlementLine, type InvoiceSeller } from "@/lib/invoice";
+import { invoiceHeading, sellerLegalLine, settlementLine, type InvoiceSeller } from "@/lib/invoice";
 import { fmtCents, fmtVatRate, vatBreakdownByRate, formatInvoiceNumber } from "@/lib/money";
 import { vatPartsOf } from "@/lib/types";
 
@@ -209,7 +209,9 @@ export function InvoiceDocument({
                   {seller.name} — {seller.tagline}
                 </Text>
               ) : null}
-              {seller.legalForm ? <Text style={styles.sellerLine}>{seller.legalForm}</Text> : null}
+              {sellerLegalLine(seller) ? (
+                <Text style={styles.sellerLine}>{sellerLegalLine(seller)}</Text>
+              ) : null}
               <Text style={styles.sellerLine}>{seller.address}</Text>
               <Text style={styles.sellerLine}>
                 {seller.phone}
