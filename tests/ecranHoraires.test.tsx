@@ -2,7 +2,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { HorairesAdmin } from "@/components/admin/HorairesAdmin";
-import { DEFAULT_HOURS, type DayHours } from "@/lib/hours";
+import type { DayHours } from "@/lib/hours";
+import { SEMAINE_TYPE } from "./aide/semaineType";
 
 /**
  * L'écran des horaires, rendu pour de vrai.
@@ -23,7 +24,7 @@ import { DEFAULT_HOURS, type DayHours } from "@/lib/hours";
 
 /* ─── Le serveur, tel que l'écran l'attend ──────────────────────────────── */
 
-const semaineOuverte = (): DayHours[] => DEFAULT_HOURS.map((j) => ({ ...j }));
+const semaineOuverte = (): DayHours[] => SEMAINE_TYPE.map((j) => ({ ...j }));
 
 function etat(hours: DayHours[] = semaineOuverte()) {
   return {

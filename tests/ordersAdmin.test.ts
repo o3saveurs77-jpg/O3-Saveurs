@@ -25,8 +25,6 @@ function order(p: Partial<Order> & { id: string }): Order {
     id: p.id,
     ref: p.ref ?? `#${p.id}`,
     invoiceNumber: null,
-    ticketNumber: p.ticketNumber ?? null,
-    ticketDate: null,
     lines: [],
     mode: "livraison",
     zoneIdx: 0,

@@ -31,17 +31,18 @@ export const WEEKDAY_LABEL = [
   "Samedi",
 ] as const;
 
-/** Horaires de référence (spec §1), utilisés pour le seed initial. */
+/** Horaires de référence (dépliant 2026), utilisés pour le seed initial :
+ * du lundi au samedi, midi (11h30–14h30) et soir (18h00–22h30) ; fermé le
+ * dimanche. */
 export const DEFAULT_HOURS: DayHours[] = [
-  // Dimanche : fermé le midi
-  { weekday: 0, closed: false, lunchOpen: null, lunchClose: null, dinnerOpen: "18:00", dinnerClose: "22:45" },
-  { weekday: 1, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:45" },
-  { weekday: 2, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:45" },
-  { weekday: 3, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:45" },
-  { weekday: 4, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:45" },
-  // Vendredi : fermé le midi
-  { weekday: 5, closed: false, lunchOpen: null, lunchClose: null, dinnerOpen: "18:00", dinnerClose: "22:45" },
-  { weekday: 6, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:45" },
+  // Dimanche : fermé toute la journée
+  { weekday: 0, closed: true, lunchOpen: null, lunchClose: null, dinnerOpen: null, dinnerClose: null },
+  { weekday: 1, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:30" },
+  { weekday: 2, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:30" },
+  { weekday: 3, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:30" },
+  { weekday: 4, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:30" },
+  { weekday: 5, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:30" },
+  { weekday: 6, closed: false, lunchOpen: "11:30", lunchClose: "14:30", dinnerOpen: "18:00", dinnerClose: "22:30" },
 ];
 
 /** "19:30" → 1170 minutes depuis minuit. */

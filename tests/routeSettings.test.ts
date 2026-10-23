@@ -125,7 +125,6 @@ describe("cloisonnement de GET /api/settings", () => {
     expect(r.status).toBe(200);
     const clefs = Object.keys(r.corps.settings);
     expect(clefs).toContain("restaurant.name");
-    expect(clefs).toContain("google.reviewLink");
     // Informations légales et seuils de commande : jamais.
     expect(clefs).not.toContain("legal.siret");
     expect(clefs).not.toContain("order.slotCapacity");
@@ -299,7 +298,7 @@ describe("taux de TVA et seuils de commande", () => {
   });
 });
 
-/* Liens sortants. Ceux des réseaux sociaux et de la fiche Google partent dans
+/* Liens sortants. Ceux des réseaux sociaux partent dans
  * le balisage `sameAs`/`hasMap` de chaque page : y déclarer n'importe quoi
  * n'est pas une faute d'affichage mais une affirmation fausse envoyée à Google. */
 describe("liens de réseaux sociaux", () => {
@@ -328,47 +327,10 @@ describe("liens de réseaux sociaux", () => {
   });
 });
 
-describe("liens de la fiche Google", () => {
-  it("accepte les formes réellement produites par la fiche", async () => {
-    for (const lien of [
-      "https://g.page/o3saveurs",
-      "https://maps.app.goo.gl/abcDEF123",
-      "https://www.google.com/maps/place/O+3+Saveurs",
-      "https://google.fr/maps/place/O+3+Saveurs",
-      "https://search.google.com/local/writereview?placeid=X",
-    ]) {
-      const r = await put({ "google.businessProfile": lien });
-      expect(r.status, lien).toBe(200);
-    }
-  });
-
-  it("refuse un domaine étranger à la fiche", async () => {
-    for (const lien of [
-      "https://exemple.fr/avis",
-      "https://google.exemple.fr/maps",
-      "https://notgoogle.com/maps",
-      "javascript:alert(1)",
-      "maps.google.com/place",
-    ]) {
-      const r = await put({ "google.reviewLink": lien });
-      expect(r.status, lien).toBe(400);
-      expect(prismaDouble.ecritures()).toHaveLength(0);
-    }
-  });
-
-  /* Observation : la liste blanche porte sur l'hôte, donc un sous-domaine de
-   * contenu utilisateur de Google passe. `sites.google.com/view/…` est une page
-   * que n'importe qui publie — le garde-fou « ce lien vient bien de la fiche »
-   * ne l'arrête pas. Même remarque pour tout TLD de deux ou trois lettres sous
-   * `google.`. Portée limitée (la route est réservée à l'administration), mais
-   * la vérification ne tient pas la promesse de son commentaire. */
-  it("laisse aujourd'hui passer une page Google de contenu utilisateur", async () => {
-    expect((await put({ "google.reviewLink": "https://sites.google.com/view/faux" })).status).toBe(
-      200,
-    );
-    expect((await put({ "google.businessProfile": "https://google.xyz/piege" })).status).toBe(200);
-  });
-});
+/* Les tests de la fiche Google (google.reviewLink, google.businessProfile)
+ * sont partis : ces réglages arrivaient avec la borne et ont quitté le dépôt
+ * avec elle au rebase d'octobre. Restés seuls, ils échouaient, ou passaient
+ * pour une mauvaise raison (clé inconnue → 400 « aucun réglage »). */
 
 // ─── Clés inconnues ────────────────────────────────────
 

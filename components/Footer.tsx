@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Emblem } from "./Brand";
 import { Icon } from "./Icon";
@@ -237,12 +238,7 @@ export function Footer() {
             {/* Fond crème : le monogramme Magar est marine, illisible à même
                 le bordeaux du pied de page. */}
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f7e9d2]">
-              <img
-                src="/magar-developpement.svg"
-                alt=""
-                width={22}
-                height={22}
-              />
+              <Image src="/magar-developpement.svg" alt="" width={22} height={22} unoptimized />
             </span>
             <span className="text-left leading-tight">
               <span className="block text-[10px] uppercase tracking-[0.14em] text-gold/80">

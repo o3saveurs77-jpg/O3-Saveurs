@@ -26,8 +26,6 @@ function order(p: {
     id: p.id,
     ref: `#${p.id}`,
     invoiceNumber: null,
-    ticketNumber: null,
-    ticketDate: null,
     lines: [],
     mode: "livraison",
     zoneIdx: 0,

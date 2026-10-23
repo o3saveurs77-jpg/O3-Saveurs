@@ -5,7 +5,7 @@ import {
   reordered,
   stopIds,
 } from "@/components/admin/LivraisonsAdmin";
-import { PAYMENT_AT_COUNTER, type OrderStatus } from "@/lib/types";
+import type { OrderStatus } from "@/lib/types";
 
 /**
  * Règles de l'écran Livraisons. Deux d'entre elles touchent à de l'argent et à
@@ -31,7 +31,7 @@ const arret = (champs: {
 describe("argent à recevoir sur un arrêt", () => {
   it("compte le montant quand il se règle en main propre", () => {
     expect(cashDueCents(arret({}))).toBe(2450);
-    expect(cashDueCents(arret({ paymentMethod: PAYMENT_AT_COUNTER }))).toBe(2450);
+    expect(cashDueCents(arret({ paymentMethod: "Espèces sur place" }))).toBe(2450);
   });
 
   it("ne compte rien sur un paiement par carte non abouti", () => {
@@ -42,14 +42,14 @@ describe("argent à recevoir sur un arrêt", () => {
 
   it("ne compte rien sur une commande déjà payée", () => {
     expect(cashDueCents(arret({ paid: true }))).toBe(0);
-    expect(cashDueCents(arret({ paid: true, paymentMethod: PAYMENT_AT_COUNTER }))).toBe(0);
+    expect(cashDueCents(arret({ paid: true, paymentMethod: "Espèces sur place" }))).toBe(0);
   });
 });
 
 describe("qui peut être marqué « encaissé »", () => {
   it("accepte l'argent reçu en main propre", () => {
     expect(peutEncaisser(arret({}))).toBe(true);
-    expect(peutEncaisser(arret({ paymentMethod: PAYMENT_AT_COUNTER }))).toBe(true);
+    expect(peutEncaisser(arret({ paymentMethod: "Espèces sur place" }))).toBe(true);
   });
 
   it("refuse une commande par carte", () => {

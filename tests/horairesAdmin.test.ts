@@ -6,7 +6,8 @@ import {
   erreurJour,
   trierSemaine,
 } from "@/components/admin/HorairesAdmin";
-import { DEFAULT_HOURS, type DayHours } from "@/lib/hours";
+import type { DayHours } from "@/lib/hours";
+import { SEMAINE_TYPE } from "./aide/semaineType";
 
 /* Les règles de l'éditeur d'horaires, isolées du rendu.
  *
@@ -30,18 +31,18 @@ const jour = (patch: Partial<DayHours> = {}): DayHours => ({
 describe("ordre d'affichage", () => {
   it("commence le lundi et finit le dimanche", () => {
     expect([...ORDRE_SEMAINE]).toEqual([1, 2, 3, 4, 5, 6, 0]);
-    expect(trierSemaine(DEFAULT_HOURS).map((j) => j.weekday)).toEqual([1, 2, 3, 4, 5, 6, 0]);
+    expect(trierSemaine(SEMAINE_TYPE).map((j) => j.weekday)).toEqual([1, 2, 3, 4, 5, 6, 0]);
   });
 
   it("rend toujours sept lignes, même si la base en renvoie moins", () => {
-    const partiel = DEFAULT_HOURS.filter((j) => j.weekday === 1 || j.weekday === 5);
+    const partiel = SEMAINE_TYPE.filter((j) => j.weekday === 1 || j.weekday === 5);
     expect(trierSemaine(partiel)).toHaveLength(7);
   });
 });
 
 describe("erreurJour", () => {
   it("accepte les horaires de référence du restaurant", () => {
-    for (const j of DEFAULT_HOURS) expect(erreurJour(j)).toBeNull();
+    for (const j of SEMAINE_TYPE) expect(erreurJour(j)).toBeNull();
   });
 
   it("accepte un jour fermé le midi, service du soir seul", () => {
@@ -110,7 +111,7 @@ describe("aEnvoyer", () => {
 
 describe("appliquerATouteLaSemaine", () => {
   it("recopie la ligne sur les sept jours sans écraser les `weekday`", () => {
-    const semaine = appliquerATouteLaSemaine(DEFAULT_HOURS, 1);
+    const semaine = appliquerATouteLaSemaine(SEMAINE_TYPE, 1);
     expect(semaine.map((j) => j.weekday)).toEqual([0, 1, 2, 3, 4, 5, 6]);
     for (const j of semaine) {
       expect(j.lunchOpen).toBe("11:30");
@@ -120,14 +121,14 @@ describe("appliquerATouteLaSemaine", () => {
 
   it("propage aussi la fermeture", () => {
     const semaine = appliquerATouteLaSemaine(
-      DEFAULT_HOURS.map((j) => (j.weekday === 2 ? { ...j, closed: true } : j)),
+      SEMAINE_TYPE.map((j) => (j.weekday === 2 ? { ...j, closed: true } : j)),
       2,
     );
     expect(semaine.every((j) => j.closed)).toBe(true);
   });
 
   it("ne touche à rien si le jour modèle est absent", () => {
-    const partiel = DEFAULT_HOURS.filter((j) => j.weekday !== 4);
+    const partiel = SEMAINE_TYPE.filter((j) => j.weekday !== 4);
     expect(appliquerATouteLaSemaine(partiel, 4)).toEqual(partiel);
   });
 });

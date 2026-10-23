@@ -102,8 +102,6 @@ interface LigneCommande {
   id: string;
   ref: string;
   invoiceNumber: number | null;
-  ticketNumber: number | null;
-  ticketDate: string | null;
   userId: string | null;
   lines: string;
   mode: string;
@@ -157,8 +155,6 @@ function commande(over: Partial<LigneCommande> = {}): LigneCommande {
     id: "cmd-1",
     ref: "#7K2QF9",
     invoiceNumber: null,
-    ticketNumber: null,
-    ticketDate: null,
     userId: null,
     lines: LIGNES_FIGEES,
     mode: "livraison",

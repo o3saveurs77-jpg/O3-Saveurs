@@ -12,6 +12,7 @@ import {
   toMinutes,
   type DayHours,
 } from "@/lib/hours";
+import { SEMAINE_TYPE } from "./aide/semaineType";
 
 /* `lib/hours.ts` est pur et central : c'est lui qui décide si une commande est
  * acceptée, quels créneaux sont proposés et quel jour d'exploitation porte une
@@ -35,7 +36,7 @@ const VENDREDI_23H = new Date("2026-07-24T21:00:00Z");
 const DIMANCHE_12H = new Date("2026-07-26T10:00:00Z");
 
 /** Tous les jours fermés, pour les cas dégénérés. */
-const TOUT_FERME: DayHours[] = DEFAULT_HOURS.map((d) => ({
+const TOUT_FERME: DayHours[] = SEMAINE_TYPE.map((d) => ({
   ...d,
   closed: true,
   lunchOpen: null,
@@ -95,24 +96,24 @@ describe("parisStartOfDay", () => {
 
 describe("isOpenAt", () => {
   it("ouvre le midi un jour de service complet", () => {
-    expect(isOpenAt(DEFAULT_HOURS, MERCREDI_12H)).toBe(true);
+    expect(isOpenAt(SEMAINE_TYPE, MERCREDI_12H)).toBe(true);
   });
 
   it("reste fermé entre les deux services", () => {
-    expect(isOpenAt(DEFAULT_HOURS, MERCREDI_15H)).toBe(false);
+    expect(isOpenAt(SEMAINE_TYPE, MERCREDI_15H)).toBe(false);
   });
 
   it("est fermé le midi le vendredi et le dimanche", () => {
-    expect(isOpenAt(DEFAULT_HOURS, VENDREDI_12H)).toBe(false);
-    expect(isOpenAt(DEFAULT_HOURS, DIMANCHE_12H)).toBe(false);
+    expect(isOpenAt(SEMAINE_TYPE, VENDREDI_12H)).toBe(false);
+    expect(isOpenAt(SEMAINE_TYPE, DIMANCHE_12H)).toBe(false);
   });
 
   it("ouvre bien le soir ces mêmes jours", () => {
-    expect(isOpenAt(DEFAULT_HOURS, VENDREDI_19H)).toBe(true);
+    expect(isOpenAt(SEMAINE_TYPE, VENDREDI_19H)).toBe(true);
   });
 
   it("est fermé avant l'ouverture du midi", () => {
-    expect(isOpenAt(DEFAULT_HOURS, LUNDI_11H)).toBe(false);
+    expect(isOpenAt(SEMAINE_TYPE, LUNDI_11H)).toBe(false);
   });
 
   it("est fermé quand la semaine entière est fermée", () => {
@@ -123,7 +124,7 @@ describe("isOpenAt", () => {
 describe("availableSlots", () => {
   it("respecte le délai de préparation et exclut les créneaux passés", () => {
     // 12:00 + 35 min de préparation → premier créneau à 13:00.
-    const slots = availableSlots(DEFAULT_HOURS, { at: MERCREDI_12H });
+    const slots = availableSlots(SEMAINE_TYPE, { at: MERCREDI_12H });
     expect(slots).not.toContain("11:30");
     expect(slots).not.toContain("12:00");
     expect(slots).not.toContain("12:30");
@@ -132,7 +133,7 @@ describe("availableSlots", () => {
   });
 
   it("s'arrête un pas avant la fermeture", () => {
-    const slots = availableSlots(DEFAULT_HOURS, { at: MERCREDI_12H });
+    const slots = availableSlots(SEMAINE_TYPE, { at: MERCREDI_12H });
     // Midi ferme à 14:30 → dernier créneau du midi à 14:00.
     expect(slots).not.toContain("14:30");
     // Soir ferme à 22:45, pas de 30 min depuis 18:00 → dernier créneau à 22:00.
@@ -140,21 +141,21 @@ describe("availableSlots", () => {
   });
 
   it("ne propose pas un créneau avant l'ouverture, même sans délai", () => {
-    const slots = availableSlots(DEFAULT_HOURS, { at: MERCREDI_11H, leadTimeMinutes: 0 });
+    const slots = availableSlots(SEMAINE_TYPE, { at: MERCREDI_11H, leadTimeMinutes: 0 });
     expect(slots[0]).toBe("11:30");
-    const avecDelai = availableSlots(DEFAULT_HOURS, { at: MERCREDI_11H });
+    const avecDelai = availableSlots(SEMAINE_TYPE, { at: MERCREDI_11H });
     // 11:00 + 35 min = 11:35 → le créneau de 11:30 n'est plus tenable.
     expect(avecDelai[0]).toBe("12:00");
   });
 
   it("ne propose que le soir un jour fermé le midi", () => {
-    const slots = availableSlots(DEFAULT_HOURS, { at: VENDREDI_12H });
+    const slots = availableSlots(SEMAINE_TYPE, { at: VENDREDI_12H });
     expect(slots[0]).toBe("18:00");
     expect(slots.some((s) => s < "15:00")).toBe(false);
   });
 
   it("ne propose plus rien après le dernier service", () => {
-    expect(availableSlots(DEFAULT_HOURS, { at: VENDREDI_23H })).toEqual([]);
+    expect(availableSlots(SEMAINE_TYPE, { at: VENDREDI_23H })).toEqual([]);
   });
 
   it("ne propose rien un jour fermé", () => {
@@ -162,7 +163,7 @@ describe("availableSlots", () => {
   });
 
   it("suit le pas demandé", () => {
-    const slots = availableSlots(DEFAULT_HOURS, {
+    const slots = availableSlots(SEMAINE_TYPE, {
       at: MERCREDI_11H,
       stepMinutes: 15,
       leadTimeMinutes: 0,
@@ -173,35 +174,35 @@ describe("availableSlots", () => {
 
 describe("isSlotAcceptable", () => {
   it("refuse 12:00 un vendredi (fermé le midi)", () => {
-    expect(isSlotAcceptable(DEFAULT_HOURS, "12:00", { at: VENDREDI_12H })).toBe(false);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "12:00", { at: VENDREDI_12H })).toBe(false);
   });
 
   it("accepte 19:30 un vendredi", () => {
-    expect(isSlotAcceptable(DEFAULT_HOURS, "19:30", { at: VENDREDI_12H })).toBe(true);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "19:30", { at: VENDREDI_12H })).toBe(true);
   });
 
   it("refuse un créneau déjà passé", () => {
-    expect(isSlotAcceptable(DEFAULT_HOURS, "12:00", { at: MERCREDI_12H })).toBe(false);
-    expect(isSlotAcceptable(DEFAULT_HOURS, "13:30", { at: MERCREDI_12H })).toBe(true);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "12:00", { at: MERCREDI_12H })).toBe(false);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "13:30", { at: MERCREDI_12H })).toBe(true);
   });
 
   it("refuse un créneau hors grille ou fantaisiste", () => {
-    expect(isSlotAcceptable(DEFAULT_HOURS, "13:07", { at: MERCREDI_12H })).toBe(false);
-    expect(isSlotAcceptable(DEFAULT_HOURS, "04:00", { at: MERCREDI_12H })).toBe(false);
-    expect(isSlotAcceptable(DEFAULT_HOURS, "n'importe quoi", { at: MERCREDI_12H })).toBe(false);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "13:07", { at: MERCREDI_12H })).toBe(false);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "04:00", { at: MERCREDI_12H })).toBe(false);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "n'importe quoi", { at: MERCREDI_12H })).toBe(false);
   });
 
   it("n'accepte « asap » que pendant le service", () => {
-    expect(isSlotAcceptable(DEFAULT_HOURS, "asap", { at: MERCREDI_12H })).toBe(true);
-    expect(isSlotAcceptable(DEFAULT_HOURS, "asap", { at: MERCREDI_15H })).toBe(false);
-    expect(isSlotAcceptable(DEFAULT_HOURS, "asap", { at: DIMANCHE_12H })).toBe(false);
-    expect(isSlotAcceptable(DEFAULT_HOURS, "asap", { at: VENDREDI_23H })).toBe(false);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "asap", { at: MERCREDI_12H })).toBe(true);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "asap", { at: MERCREDI_15H })).toBe(false);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "asap", { at: DIMANCHE_12H })).toBe(false);
+    expect(isSlotAcceptable(SEMAINE_TYPE, "asap", { at: VENDREDI_23H })).toBe(false);
   });
 });
 
 describe("nextService", () => {
   it("annonce le service du soir depuis l'entre-deux-services", () => {
-    expect(nextService(DEFAULT_HOURS, MERCREDI_15H)).toEqual({
+    expect(nextService(SEMAINE_TYPE, MERCREDI_15H)).toEqual({
       weekday: 3,
       label: "soir",
       opensAt: "18:00",
@@ -209,7 +210,7 @@ describe("nextService", () => {
   });
 
   it("saute le midi fermé du dimanche", () => {
-    expect(nextService(DEFAULT_HOURS, DIMANCHE_12H)).toEqual({
+    expect(nextService(SEMAINE_TYPE, DIMANCHE_12H)).toEqual({
       weekday: 0,
       label: "soir",
       opensAt: "18:00",
@@ -218,7 +219,7 @@ describe("nextService", () => {
 
   it("passe au jour suivant en fin de service", () => {
     // Vendredi 23:00 : le soir est terminé → samedi midi.
-    expect(nextService(DEFAULT_HOURS, VENDREDI_23H)).toEqual({
+    expect(nextService(SEMAINE_TYPE, VENDREDI_23H)).toEqual({
       weekday: 6,
       label: "midi",
       opensAt: "11:30",
@@ -226,7 +227,7 @@ describe("nextService", () => {
   });
 
   it("annonce le midi du jour avant l'ouverture", () => {
-    expect(nextService(DEFAULT_HOURS, LUNDI_11H)).toEqual({
+    expect(nextService(SEMAINE_TYPE, LUNDI_11H)).toEqual({
       weekday: 1,
       label: "midi",
       opensAt: "11:30",
@@ -240,15 +241,26 @@ describe("nextService", () => {
 
 describe("formatDayHours", () => {
   it("affiche les deux services", () => {
-    expect(formatDayHours(DEFAULT_HOURS[3])).toContain("11:30 – 14:30");
-    expect(formatDayHours(DEFAULT_HOURS[3])).toContain("18:00 – 22:45");
+    expect(formatDayHours(SEMAINE_TYPE[3])).toContain("11:30 – 14:30");
+    expect(formatDayHours(SEMAINE_TYPE[3])).toContain("18:00 – 22:45");
   });
 
   it("signale le midi fermé", () => {
-    expect(formatDayHours(DEFAULT_HOURS[5])).toContain("fermé le midi");
+    expect(formatDayHours(SEMAINE_TYPE[5])).toContain("fermé le midi");
   });
 
   it("affiche « Fermé » pour un jour sans service", () => {
     expect(formatDayHours(TOUT_FERME[2])).toBe("Fermé");
+  });
+});
+
+describe("horaires par défaut", () => {
+  /* Ceux du dépliant 2026, qui servent au seed et à `npm run db:depliant`. */
+  it("ouvrent du lundi au samedi, midi et soir, et ferment le dimanche", () => {
+    expect(formatDayHours(DEFAULT_HOURS[0])).toBe("Fermé");
+    for (const jour of DEFAULT_HOURS.slice(1)) {
+      expect(formatDayHours(jour)).toContain("11:30 – 14:30");
+      expect(formatDayHours(jour)).toContain("18:00 – 22:30");
+    }
   });
 });

@@ -10,7 +10,6 @@ import {
   restaurantNode,
   menuNode,
   formulasNode,
-  cateringNode,
   aboutPageNode,
   breadcrumbNode,
   faqNode,
@@ -25,8 +24,9 @@ import {
   type BusinessProfile,
   type PagePath,
 } from "@/lib/seo";
-import { DEFAULT_HOURS } from "@/lib/hours";
+
 import type { Category, Dish, Formula, Zone } from "@/lib/menu";
+import { SEMAINE_TYPE } from "./aide/semaineType";
 
 // ─── Fabriques ─────────────────────────────────────────
 
@@ -144,7 +144,7 @@ describe("brandAliases", () => {
 
 describe("openingHoursSpecification", () => {
   it("émet une entrée par service, midi et soir séparés", () => {
-    const lundi = DEFAULT_HOURS.filter((d) => d.weekday === 1);
+    const lundi = SEMAINE_TYPE.filter((d) => d.weekday === 1);
     const spec = openingHoursSpecification(lundi);
     expect(spec).toHaveLength(2);
     expect(spec[0]).toMatchObject({ dayOfWeek: "https://schema.org/Monday", opens: "11:30", closes: "14:30" });
@@ -154,7 +154,7 @@ describe("openingHoursSpecification", () => {
   it("n'annonce pas le midi les jours fermés le midi", () => {
     // Vendredi (5) et dimanche (0) : service du soir seulement.
     for (const weekday of [0, 5]) {
-      const spec = openingHoursSpecification(DEFAULT_HOURS.filter((d) => d.weekday === weekday));
+      const spec = openingHoursSpecification(SEMAINE_TYPE.filter((d) => d.weekday === weekday));
       expect(spec).toHaveLength(1);
       expect(spec[0].opens).toBe("18:00");
     }
@@ -168,7 +168,7 @@ describe("openingHoursSpecification", () => {
   });
 
   it("couvre les sept jours de la semaine de référence", () => {
-    const spec = openingHoursSpecification(DEFAULT_HOURS);
+    const spec = openingHoursSpecification(SEMAINE_TYPE);
     // 5 jours à deux services + 2 jours à un seul = 12
     expect(spec).toHaveLength(12);
   });
@@ -235,7 +235,7 @@ describe("priceRange", () => {
 describe("restaurantNode", () => {
   const node = restaurantNode({
     profile: PROFILE,
-    hours: DEFAULT_HOURS,
+    hours: SEMAINE_TYPE,
     zones: ZONES,
     dishes: [dish({ priceCents: 900 }), dish({ priceCents: 1600 })],
     acceptsCash: true,
@@ -271,7 +271,7 @@ describe("restaurantNode", () => {
     // de la rue. Elles viennent de la Base Adresse Nationale, sans clé Google.
     const situe = restaurantNode({
       profile: { ...PROFILE, lat: 48.796343, lng: 2.609933 },
-      hours: DEFAULT_HOURS,
+      hours: SEMAINE_TYPE,
       zones: ZONES,
       dishes: [dish({ priceCents: 900 })],
       acceptsCash: true,
@@ -287,7 +287,7 @@ describe("restaurantNode", () => {
   it("ajoute les coordonnées une fois le géocodage fait", () => {
     const geocoded = restaurantNode({
       profile: { ...PROFILE, lat: 48.7969, lng: 2.6103 },
-      hours: DEFAULT_HOURS,
+      hours: SEMAINE_TYPE,
       zones: ZONES,
       dishes: [],
       acceptsCash: true,
@@ -299,7 +299,7 @@ describe("restaurantNode", () => {
   it("n'annonce pas de moyen de paiement désactivé au back-office", () => {
     const sansEspeces = restaurantNode({
       profile: PROFILE,
-      hours: DEFAULT_HOURS,
+      hours: SEMAINE_TYPE,
       zones: ZONES,
       dishes: [],
       acceptsCash: false,
@@ -444,7 +444,7 @@ describe("faqNode", () => {
   const node = faqNode({
     profile: PROFILE,
     zones: ZONES,
-    hours: DEFAULT_HOURS,
+    hours: SEMAINE_TYPE,
     leadTimeMinutes: 35,
     acceptsCash: true,
     acceptsCard: true,
@@ -471,7 +471,7 @@ describe("faqNode", () => {
     const sansCarte = faqNode({
       profile: PROFILE,
       zones: ZONES,
-      hours: DEFAULT_HOURS,
+      hours: SEMAINE_TYPE,
       leadTimeMinutes: 35,
       acceptsCash: true,
       acceptsCard: false,

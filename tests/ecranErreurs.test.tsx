@@ -71,8 +71,6 @@ function commande(p: Partial<Order> & { id: string }): Order {
     id: p.id,
     ref: p.ref ?? `#${p.id}`,
     invoiceNumber: p.invoiceNumber ?? 142,
-    ticketNumber: null,
-    ticketDate: null,
     lines: p.lines ?? [ligne()],
     mode: "livraison",
     zoneIdx: 0,
