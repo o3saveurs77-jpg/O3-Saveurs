@@ -128,6 +128,8 @@ vi.mock("@/lib/stock", () => ({
 vi.mock("@/lib/geo", () => ({
   isGeoConfigured: () => false,
   roadDistanceKm: async () => null,
+  measureDelivery: async () => ({ kind: "unknown" }),
+  zipMismatchMessage: () => "",
   geocode: async () => null,
 }));
 
