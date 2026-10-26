@@ -1,6 +1,7 @@
 import "server-only";
 
 import { haversineKm } from "@/lib/delivery";
+import { extractZip } from "@/lib/zones";
 
 /* Accès aux API Google Maps — **serveur uniquement**.
  *
@@ -240,4 +241,128 @@ export function distanceIsPlausible(
   if (!origin || !dest) return true; // rien à comparer
   // 2 % de tolérance : les deux API n'arrondissent pas au même endroit.
   return roadKm >= haversineKm(origin, dest) * 0.98;
+}
+
+/** Point de livraison tel que Google le comprend. */
+interface GeocodedPlace extends LatLng {
+  zip: string | null;
+  city: string | null;
+  /** Faux quand Google n'a trouvé qu'un à-peu-près : la commune, ou une partie de la saisie. */
+  precise: boolean;
+}
+
+const placeCache = new Map<string, GeocodedPlace>();
+
+/**
+ * Géocode la destination : par son `place_id` quand le client a choisi une
+ * suggestion, sinon par le texte saisi.
+ */
+async function geocodeDestination(dest: {
+  placeId?: string | null;
+  address?: string | null;
+}): Promise<GeocodedPlace | null> {
+  const params = new URLSearchParams({ key: KEY(), language: "fr", region: "fr" });
+  if (dest.placeId) params.set("place_id", dest.placeId);
+  else if (dest.address?.trim()) params.set("address", dest.address.trim());
+  else return null;
+
+  const cacheKey = dest.placeId ? `p:${dest.placeId}` : `a:${dest.address!.trim().toLowerCase()}`;
+  const cached = placeCache.get(cacheKey);
+  if (cached) return cached;
+
+  const data = await fetchJson(`https://maps.googleapis.com/maps/api/geocode/json?${params}`);
+  if (!data || data.status !== "OK") return null;
+
+  const first = (Array.isArray(data.results) ? data.results[0] : undefined) as
+    | {
+        partial_match?: boolean;
+        geometry?: { location?: LatLng; location_type?: string };
+        address_components?: { long_name?: string; types?: string[] }[];
+      }
+    | undefined;
+  const loc = first?.geometry?.location;
+  if (!first || !loc || !Number.isFinite(loc.lat) || !Number.isFinite(loc.lng)) return null;
+
+  const part = (type: string) =>
+    first.address_components?.find((c) => c.types?.includes(type))?.long_name ?? null;
+
+  return remember(placeCache, cacheKey, {
+    lat: loc.lat,
+    lng: loc.lng,
+    zip: part("postal_code"),
+    city: part("locality"),
+    /* Une suggestion choisie dans la liste désigne une adresse exacte. Une
+     * saisie libre, elle, peut n'être reconnue qu'en partie — Google se rabat
+     * alors sur le centre de la commune, et la distance mesurée ne dit plus
+     * rien du trajet réel. */
+    precise:
+      !!dest.placeId ||
+      (!first.partial_match && first.geometry?.location_type !== "APPROXIMATE"),
+  });
+}
+
+export type DeliveryMeasure =
+  /** Distance mesurée et vérifiée : c'est elle qui facture. */
+  | { kind: "ok"; km: number }
+  /** Pas de mesure fiable (API muette, adresse floue, résultat incohérent) : replier sur les zones. */
+  | { kind: "unknown" }
+  /** L'adresse et le code postal saisis désignent deux endroits différents. */
+  | { kind: "zip_mismatch"; zip: string; city: string | null };
+
+/**
+ * Distance de livraison **vérifiée** — le seul point d'entrée de la facturation
+ * à la distance.
+ *
+ * La distance routière seule ne suffisait pas. Trois façons de facturer une
+ * course au mauvais palier passaient sans bruit :
+ *
+ *  · **Adresse et code postal discordants** — le client choisit une
+ *    suggestion puis retouche le code postal, ou l'inverse. Le tarif était
+ *    calculé sur l'une, le livreur envoyé vers l'autre ;
+ *  · **Saisie floue** — une rue inconnue de Google était ramenée au centre de
+ *    la commune, et facturée comme telle ;
+ *  · **Point aberrant** — une rue homonyme dans une autre région donnait une
+ *    distance routière plus courte que le vol d'oiseau. `distanceIsPlausible`
+ *    existait pour ça, mais n'était appelé nulle part.
+ *
+ * Seule la discordance est un refus : c'est une erreur de saisie que le client
+ * peut corriger. Les deux autres replient sur les zones, comme une panne.
+ */
+export async function measureDelivery(
+  origin: LatLng,
+  dest: { placeId?: string | null; address?: string | null; zip?: string | null },
+): Promise<DeliveryMeasure> {
+  if (!isGeoConfigured()) return { kind: "unknown" };
+
+  const place = await geocodeDestination(dest);
+  if (!place) return { kind: "unknown" };
+
+  const typedZip = extractZip(dest.zip ?? "");
+  if (typedZip && place.zip && typedZip !== place.zip) {
+    return { kind: "zip_mismatch", zip: place.zip, city: place.city };
+  }
+  if (!place.precise) return { kind: "unknown" };
+
+  // Le trajet est mesuré vers le point vérifié ci-dessus, pas vers le texte
+  // brut : les deux mesures portent ainsi sur le même endroit.
+  const km = await roadDistanceKm(origin, {
+    placeId: dest.placeId ?? null,
+    address: `${place.lat},${place.lng}`,
+  });
+  if (km === null) return { kind: "unknown" };
+
+  if (!distanceIsPlausible(km, origin, place)) {
+    console.warn(
+      `[geo] distance incohérente écartée : ${km} km par la route, ${haversineKm(origin, place).toFixed(2)} km à vol d'oiseau.`,
+    );
+    return { kind: "unknown" };
+  }
+  return { kind: "ok", km };
+}
+
+/** Message affiché au client quand l'adresse et le code postal se contredisent. */
+export function zipMismatchMessage(m: { zip: string; city: string | null }): string {
+  return `Le code postal ne correspond pas à cette adresse, que nous situons au ${m.zip}${
+    m.city ? ` ${m.city}` : ""
+  }. Corrigez le code postal, ou choisissez l'adresse dans la liste proposée.`;
 }

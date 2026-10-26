@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { rowToZone } from "@/lib/serialize";
 import { resolveZone } from "@/lib/zones";
 import { formatKm, maxDeliveryKm, tierForDistance } from "@/lib/delivery";
-import { isGeoConfigured, roadDistanceKm } from "@/lib/geo";
+import { isGeoConfigured, measureDelivery, zipMismatchMessage } from "@/lib/geo";
 import { deliveryOrigin, getDeliveryTiers, getSetting } from "@/lib/settings";
 import { readJson, badRequest } from "@/lib/guard";
 import { hit, clientKey, tooManyRequests, LIMITS } from "@/lib/rateLimit";
@@ -62,12 +62,26 @@ export async function POST(req: Request) {
         .filter(Boolean)
         .join(", ");
 
-      const km = await roadDistanceKm(origin, {
+      const measure = await measureDelivery(origin, {
         placeId: body.placeId ?? null,
         address: address || null,
+        zip: body.zip,
       });
 
-      if (km !== null) {
+      if (measure.kind === "zip_mismatch") {
+        return NextResponse.json<DeliveryQuote>({
+          via: "distance",
+          deliverable: false,
+          distanceKm: null,
+          feeCents: null,
+          minimumCents: null,
+          maxKm: maxDeliveryKm(tiers),
+          message: zipMismatchMessage(measure),
+        });
+      }
+
+      if (measure.kind === "ok") {
+        const km = measure.km;
         const tier = tierForDistance(tiers, km);
         const maxKm = maxDeliveryKm(tiers);
 

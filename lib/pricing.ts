@@ -18,7 +18,7 @@ import { rowToDish, rowToZone } from "@/lib/serialize";
 import { applyPercent, VAT_RATE_BP } from "@/lib/money";
 import { resolveZone } from "@/lib/zones";
 import { formatKm, maxDeliveryKm, tierForDistance } from "@/lib/delivery";
-import { isGeoConfigured, roadDistanceKm } from "@/lib/geo";
+import { isGeoConfigured, measureDelivery, zipMismatchMessage } from "@/lib/geo";
 import { deliveryOrigin, getDeliveryTiers, getSetting } from "@/lib/settings";
 import { priceFormula, rowToFormula, type RawPick } from "@/lib/formulas";
 import { cartLeadTimeHours } from "@/lib/preorder";
@@ -547,12 +547,16 @@ async function deliveryCharge(
       const origin = await deliveryOrigin();
       if (origin) {
         const address = [input.address, input.zip, input.city].filter(Boolean).join(", ");
-        const km = await roadDistanceKm(origin, {
+        const measure = await measureDelivery(origin, {
           placeId: input.placeId ?? null,
           address: address || null,
+          zip: input.zip,
         });
 
-        if (km !== null) {
+        if (measure.kind === "zip_mismatch") return err(zipMismatchMessage(measure));
+
+        if (measure.kind === "ok") {
+          const km = measure.km;
           const tier = tierForDistance(tiers, km);
           if (tier) {
             return ok({

@@ -164,6 +164,15 @@ export function CheckoutClient() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  /* Retoucher le code postal ou la ville change l'endroit où le livreur ira :
+   * la suggestion choisie plus tôt ne le désigne plus. La garder ferait
+   * facturer un point et livrer un autre — même règle que la frappe dans le
+   * champ adresse (`AddressAutocomplete`). */
+  const setLocality = (k: "zip" | "city") => (e: React.ChangeEvent<HTMLInputElement>) => {
+    set(k)(e);
+    setPlaceId(null);
+  };
+
   /* Bandeau de retour d'un paiement abandonné. `clear()` était appelé **avant**
    * la redirection vers Stripe : le client qui renonçait revenait sur un panier
    * vide, sans explication. `window.location` plutôt que `useSearchParams()`
@@ -1039,7 +1048,7 @@ export function CheckoutClient() {
                     maxLength={5}
                     className={inputCls}
                     value={form.zip}
-                    onChange={set("zip")}
+                    onChange={setLocality("zip")}
                     placeholder="77185"
                     required
                   />
@@ -1054,7 +1063,7 @@ export function CheckoutClient() {
                     autoComplete="address-level2"
                     className={inputCls}
                     value={form.city}
-                    onChange={set("city")}
+                    onChange={setLocality("city")}
                     placeholder="Pontault-Combault"
                     required
                   />
