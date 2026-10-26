@@ -231,9 +231,11 @@ clever env set SHARP_IGNORE_GLOBAL_LIBVIPS 1
 > L'image de build embarque une libvips système. `sharp` la détecte, renonce à
 > son binaire précompilé (pourtant présent dans `package-lock.json`) et tente de
 > se compiler contre elle, sans les outils pour. La variable lui fait ignorer
-> la libvips système. Ne pas « corriger » en ajoutant `node-addon-api` : la
-> compilation demanderait aussi les en-têtes de libvips, et rallongerait chaque
-> build. Avant le 13 octobre, `sharp` n'était qu'une dépendance optionnelle de
+> la libvips système. Filet de sécurité depuis le 2026-10-26 : `node-addon-api`
+> et `node-gyp` sont en dépendances de développement, pour que la compilation
+> aboutisse si la variable manque — au prix d'un build plus long et d'un `sharp`
+> lié à la libvips de l'image plutôt qu'au binaire testé par ses auteurs. La
+> variable reste la bonne réponse. Avant le 13 octobre, `sharp` n'était qu'une dépendance optionnelle de
 > Next, dont l'échec passait inaperçu — les images partaient alors non converties.
 
 ---

@@ -79,6 +79,8 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "^15.5.21",
     "jsdom": "^25.0.1",
+    "node-addon-api": "^8.9.2",
+    "node-gyp": "^11.5.0",
     "prisma": "^6.19.3",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.22.4",
