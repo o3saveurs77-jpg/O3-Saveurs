@@ -213,6 +213,29 @@ directory`. Le site ne démarre pas du tout.
 > la mémoire physique de l'instance : autoriser un tas plus grand que la machine
 > ne fait qu'avancer le moment où le noyau intervient.
 
+Enfin, une variable pour `sharp`, qui convertit les images (AVIF, WebP) :
+
+```bash
+clever env set SHARP_IGNORE_GLOBAL_LIBVIPS 1
+```
+
+> **Sans elle** (constaté le 2026-10-26, image de build `node-20261021a`) :
+> `npm install` s'arrête au bout d'une demi-minute sur
+>
+> ```
+> npm error path …/node_modules/sharp
+> sharp: Attempting to build from source via node-gyp
+> sharp: Please add node-addon-api to your dependencies
+> ```
+>
+> L'image de build embarque une libvips système. `sharp` la détecte, renonce à
+> son binaire précompilé (pourtant présent dans `package-lock.json`) et tente de
+> se compiler contre elle, sans les outils pour. La variable lui fait ignorer
+> la libvips système. Ne pas « corriger » en ajoutant `node-addon-api` : la
+> compilation demanderait aussi les en-têtes de libvips, et rallongerait chaque
+> build. Avant le 13 octobre, `sharp` n'était qu'une dépendance optionnelle de
+> Next, dont l'échec passait inaperçu — les images partaient alors non converties.
+
 ---
 
 ## 5. Premier déploiement
