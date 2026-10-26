@@ -36,6 +36,7 @@ const promo = (patch: Partial<Form> = {}): Form => ({
   valeur: "10",
   code: "BIENVENUE",
   minSubtotal: "25,00",
+  mode: "",
   startsAt: "",
   endsAt: "",
   maxUses: "",

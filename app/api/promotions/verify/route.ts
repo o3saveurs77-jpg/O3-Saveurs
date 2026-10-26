@@ -148,7 +148,7 @@ export async function POST(req: Request) {
   const promo = await prisma.promotion.findUnique({ where: { code } });
   if (!promo) return NextResponse.json({ ok: false, error: "Code promotionnel inconnu" });
 
-  const eligible = promotionEligible(promo, subtotalCents, new Date());
+  const eligible = promotionEligible(promo, subtotalCents, new Date(), mode);
   if (!eligible.ok) return NextResponse.json({ ok: false, error: eligible.error });
 
   if (promo.oncePerCustomer) {

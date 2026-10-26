@@ -122,6 +122,7 @@ export const isFormulaLine = <T extends { formulaId?: string | null }>(l: T): bo
   Boolean(l.formulaId);
 
 export type OrderMode = "livraison" | "emporter";
+export const ORDER_MODES: readonly OrderMode[] = ["livraison", "emporter"];
 
 /**
  * Vrai quand l'argent est reçu en main propre par le restaurant — donc quand

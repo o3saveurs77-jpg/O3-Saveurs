@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { fmtCents, lireMontant, toEuros } from "@/lib/money";
 import { MAX_AMOUNT_DISCOUNT_CENTS } from "@/lib/promotionValidation";
 import { PROMOTION_KINDS, PROMOTION_KIND_LABEL } from "@/lib/types";
-import type { PromotionKind } from "@/lib/types";
+import type { OrderMode, PromotionKind } from "@/lib/types";
 import { WEEKDAY_LABEL } from "@/lib/hours";
 import { Icon } from "@/components/Icon";
 
@@ -38,6 +38,7 @@ interface PromotionView {
   usedCount: number;
   oncePerCustomer: boolean;
   weekday: number | null;
+  mode: OrderMode | null;
   auto: boolean;
   active: boolean;
   description: string;
@@ -57,6 +58,8 @@ export interface Form {
   endsAt: string;
   maxUses: string;
   weekday: string;
+  /** "" = livraison et à emporter */
+  mode: "" | OrderMode;
   oncePerCustomer: boolean;
   auto: boolean;
   active: boolean;
@@ -74,6 +77,7 @@ export interface CorpsPromotion {
   endsAt: string | null;
   maxUses: number | null;
   weekday: number | null;
+  mode: OrderMode | null;
   oncePerCustomer: boolean;
   auto: boolean;
   active: boolean;
@@ -96,6 +100,7 @@ const VIDE: Form = {
   endsAt: "",
   maxUses: "",
   weekday: "",
+  mode: "",
   oncePerCustomer: false,
   auto: false,
   active: true,
@@ -120,6 +125,7 @@ function versForm(p: PromotionView): Form {
     endsAt: versInput(p.endsAt),
     maxUses: p.maxUses === null ? "" : String(p.maxUses),
     weekday: p.weekday === null ? "" : String(p.weekday),
+    mode: p.mode ?? "",
     oncePerCustomer: p.oncePerCustomer,
     auto: p.auto,
     active: p.active,
@@ -276,6 +282,7 @@ export function lirePromotion(form: Form): { ok: true; corps: CorpsPromotion } |
       endsAt: fin.iso,
       maxUses: utilisations.maxUses,
       weekday: form.weekday === "" ? null : Number(form.weekday),
+      mode: form.mode === "" ? null : form.mode,
       oncePerCustomer: form.oncePerCustomer,
       auto: form.auto,
       active: form.active,
@@ -521,6 +528,19 @@ export function PromotionsAdmin() {
                     {l}
                   </option>
                 ))}
+              </select>
+            </Champ>
+
+            <Champ id={`${baseId}-mode`} label="Mode de commande">
+              <select
+                id={`${baseId}-mode`}
+                value={form.mode}
+                onChange={(e) => set({ mode: e.target.value as Form["mode"] })}
+                className={inputCls}
+              >
+                <option value="">Livraison et à emporter</option>
+                <option value="emporter">À emporter uniquement</option>
+                <option value="livraison">Livraison uniquement</option>
               </select>
             </Champ>
 

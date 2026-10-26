@@ -240,6 +240,7 @@ export interface PromotionView {
   usedCount: number;
   oncePerCustomer: boolean;
   weekday: number | null;
+  mode: OrderMode | null;
   auto: boolean;
   active: boolean;
 }
@@ -258,6 +259,7 @@ export function rowToPromotion(r: PromotionRow): PromotionView {
     usedCount: r.usedCount,
     oncePerCustomer: r.oncePerCustomer,
     weekday: r.weekday,
+    mode: r.mode === "livraison" || r.mode === "emporter" ? r.mode : null,
     auto: r.auto,
     active: r.active,
   };

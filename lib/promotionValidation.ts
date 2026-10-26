@@ -17,7 +17,14 @@
  */
 
 import { bool, err, int, isoDate, num, ok, oneOf, str, type Result } from "@/lib/validate";
-import { PROMOTION_KINDS, type PromotionKind, BUDGET_CATEGORIES, type BudgetCategory } from "@/lib/types";
+import {
+  ORDER_MODES,
+  PROMOTION_KINDS,
+  type OrderMode,
+  type PromotionKind,
+  BUDGET_CATEGORIES,
+  type BudgetCategory,
+} from "@/lib/types";
 import { fmtCents } from "@/lib/money";
 import { PARIS_TZ, WEEKDAY_LABEL } from "@/lib/hours";
 import { isStorageUrl } from "@/lib/storageHost";
@@ -141,6 +148,7 @@ export interface PromotionInput {
   maxUses: number | null;
   oncePerCustomer: boolean;
   weekday: number | null;
+  mode: OrderMode | null;
   auto: boolean;
   active: boolean;
 }
@@ -212,6 +220,14 @@ export function validatePromotionInput(body: Record<string, unknown>): Result<Pr
   const weekday = optionalInt(body.weekday, "Le jour de la semaine", { min: 0, max: 6 });
   if (!weekday.ok) return weekday;
 
+  // Vide = valable en livraison comme à emporter.
+  let mode: OrderMode | null = null;
+  if (body.mode !== null && body.mode !== undefined && body.mode !== "") {
+    const m = oneOf(body.mode, ORDER_MODES, "Le mode de commande");
+    if (!m.ok) return m;
+    mode = m.value;
+  }
+
   // Par défaut : pas de code ⇒ promotion automatique.
   const auto = bool(body.auto, code.value === null);
 
@@ -249,6 +265,7 @@ export function validatePromotionInput(body: Record<string, unknown>): Result<Pr
     maxUses: maxUses.value,
     oncePerCustomer: bool(body.oncePerCustomer, false),
     weekday: weekday.value,
+    mode,
     auto,
     active: bool(body.active, true),
   });
@@ -266,6 +283,7 @@ export interface PromotionDescribable {
   maxUses: number | null;
   oncePerCustomer: boolean;
   weekday: number | null;
+  mode?: OrderMode | null;
 }
 
 const dayFmt = new Intl.DateTimeFormat("fr-FR", {
@@ -300,6 +318,8 @@ export function describePromotion(p: PromotionDescribable): string {
   if (p.weekday !== null && WEEKDAY_LABEL[p.weekday]) {
     parts.push(`le ${WEEKDAY_LABEL[p.weekday].toLowerCase()} uniquement`);
   }
+  if (p.mode === "emporter") parts.push("à emporter uniquement");
+  else if (p.mode === "livraison") parts.push("en livraison uniquement");
 
   const start = asDate(p.startsAt);
   const end = asDate(p.endsAt);

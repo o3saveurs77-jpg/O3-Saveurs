@@ -49,6 +49,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     maxUses: current.maxUses,
     oncePerCustomer: current.oncePerCustomer,
     weekday: current.weekday,
+    mode: current.mode,
     auto: current.auto,
     active: current.active,
     ...body,

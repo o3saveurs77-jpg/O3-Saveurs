@@ -342,6 +342,8 @@ model Promotion {
   oncePerCustomer  Boolean @default(false)
   /// restreint à un jour de la semaine (0 = dimanche), null = tous les jours
   weekday          Int?
+  /// restreint à un mode de commande (livraison | emporter), null = les deux
+  mode             String?
   /// true = appliquée automatiquement sans que le client saisisse un code
   auto             Boolean @default(false)
   active           Boolean @default(true)

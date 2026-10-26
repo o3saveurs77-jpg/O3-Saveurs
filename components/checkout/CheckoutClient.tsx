@@ -13,6 +13,14 @@ import { Icon } from "@/components/Icon";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import type { DeliveryQuote } from "@/app/api/delivery-quote/route";
 import type { OrderMode } from "@/lib/types";
+import { applyPercent } from "@/lib/money";
+
+/** Remise automatique à emporter, telle que l'annonce `/api/delivery-info`. */
+interface PickupDiscount {
+  label: string;
+  percent: number;
+  minSubtotalCents: number;
+}
 
 /** Doit rester aligné sur `PAYMENT_METHODS` de `app/api/checkout/route.ts`. */
 const PAYMENTS = ["Carte bancaire", "Apple Pay", "Google Pay", "PayPal", "Espèces sur place"] as const;
@@ -102,6 +110,7 @@ export function CheckoutClient() {
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [slots, setSlots] = useState<SlotsResponse | null>(null);
   const [freeDeliveryThresholdCents, setFreeDeliveryThresholdCents] = useState<number | null>(null);
+  const [pickupDiscount, setPickupDiscount] = useState<PickupDiscount | null>(null);
 
   /* Plats sur commande : le panier porte le délai de chaque plat, et c'est le
    * plus long qui commande — un gigot à 48 h et des pastels partent ensemble,
@@ -196,9 +205,16 @@ export function CheckoutClient() {
     let alive = true;
     fetch("/api/delivery-info", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("delivery-info"))))
-      .then((data: { freeDeliveryThresholdCents: number | null }) => {
-        if (alive) setFreeDeliveryThresholdCents(data.freeDeliveryThresholdCents);
-      })
+      .then(
+        (data: {
+          freeDeliveryThresholdCents: number | null;
+          pickupDiscount?: PickupDiscount | null;
+        }) => {
+          if (!alive) return;
+          setFreeDeliveryThresholdCents(data.freeDeliveryThresholdCents);
+          setPickupDiscount(data.pickupDiscount ?? null);
+        },
+      )
       .catch(() => alive && setFreeDeliveryThresholdCents(null));
     return () => {
       alive = false;
@@ -381,7 +397,17 @@ export function CheckoutClient() {
   // barème réellement appliqué (distance ou zones).
   const feeCents =
     mode === "livraison" && !freeDeliveryReached ? quote?.feeCents ?? zone?.feeCents ?? 0 : 0;
-  const totalCents = subtotalCents + feeCents;
+  /* Remise automatique à emporter, en aperçu. Un code saisi la remplace côté
+   * serveur (`computeOrder()` n'applique qu'une promotion) : on ne l'affiche
+   * donc pas dans ce cas, pour ne pas annoncer une remise qui ne viendra pas. */
+  const pickupDiscountCents =
+    mode === "emporter" &&
+    pickupDiscount &&
+    !promoCode.trim() &&
+    subtotalCents >= pickupDiscount.minSubtotalCents
+      ? applyPercent(subtotalCents, pickupDiscount.percent)
+      : 0;
+  const totalCents = subtotalCents + feeCents - pickupDiscountCents;
   const belowMin =
     mode === "livraison" && (!!quote?.deliverable || !!zone) && subtotalCents < minimumCents;
 
@@ -1179,6 +1205,12 @@ export function CheckoutClient() {
                       : fmtPrice(zone.feeCents)}
               </dd>
             </div>
+            {pickupDiscountCents > 0 && pickupDiscount && (
+              <div className="flex justify-between text-brick">
+                <dt>{pickupDiscount.label}</dt>
+                <dd className="font-semibold">−{fmtPrice(pickupDiscountCents)}</dd>
+              </div>
+            )}
           </dl>
 
           <div className="my-4 h-px bg-line" />
