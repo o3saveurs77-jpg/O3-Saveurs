@@ -9,21 +9,16 @@ import { loadDailySpecial } from "@/lib/dailySpecial";
 import { Icon } from "@/components/Icon";
 import { cats } from "@/lib/menu";
 import { JsonLd } from "@/components/JsonLd";
-import { graph, menuNode, breadcrumbNode } from "@/lib/seo";
+import { graph, menuNode, breadcrumbNode, pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  // Titre court : le layout y ajoute « · Ô 3 Saveurs — Chez Laila ».
+/* Description, canonique et image de partage : `lib/seo.ts`. Le titre reste
+ * court, le layout y ajoute « · Ô 3 Saveurs ». */
+export const metadata: Metadata = pageMetadata({
+  path: "/carte",
   title: "La Carte",
-  description:
-    "Toute la carte d'Ô 3 Saveurs à Pontault-Combault : tajines, couscous, thiéboudiène, mafé, yassa, grillades, sandwichs, salades, boissons maison et desserts. Livraison et à emporter.",
-  alternates: { canonical: "/carte" },
-  openGraph: {
-    title: "La Carte · Ô 3 Saveurs — Chez Laila",
-    description:
-      "Tajines, couscous, thiéboudiène, mafé, grillades et desserts maison — commandez en livraison ou à emporter.",
-    url: "/carte",
-  },
-};
+  accroche:
+    "Tajines, couscous, thiéboudiène, mafé, grillades et desserts maison — commandez en livraison ou à emporter.",
+});
 
 /* Même cadence que l'accueil : la carte change au rythme des réglages du
  * back-office, pas à celui des visites. */

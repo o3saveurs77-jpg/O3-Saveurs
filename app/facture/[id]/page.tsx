@@ -15,7 +15,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { canAccess, optionalUser } from "@/lib/guard";
 import { rowToOrder } from "@/lib/serialize";
-import { getSettings, legalComplete } from "@/lib/settings";
+import { getSettings } from "@/lib/settings";
 import { sellerFromSettings } from "@/lib/invoice";
 import { InvoiceClient } from "@/components/invoice/InvoiceClient";
 
@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
 
 /** Données personnelles : cette page ne doit jamais être indexée. */
 export const metadata: Metadata = {
-  title: "Facture · Ô 3 Saveurs — Chez Laila",
+  title: "Facture",
   robots: { index: false, follow: false },
 };
 
@@ -41,12 +41,15 @@ export default async function FacturePage({ params }: { params: Promise<{ id: st
 
   const settings = await getSettings();
 
+  /* `legalOk={legalComplete(settings)}` ne descend plus d'ici : cette page
+   * calculait la conformité, le document l'ignorait et se titrait « FACTURE »
+   * quand même. Elle est maintenant déduite du bloc vendeur par `InvoiceClient`
+   * et par le PDF, avec la même fonction — un seul jugement, trois rendus. */
   return (
     <InvoiceClient
       order={rowToOrder(row)}
       seller={sellerFromSettings(settings)}
       isAdmin={user.role === "ADMIN"}
-      legalOk={legalComplete(settings)}
       pdfUrl={`/api/facture/${id}/pdf`}
     />
   );

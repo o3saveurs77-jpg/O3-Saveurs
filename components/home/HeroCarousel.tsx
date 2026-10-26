@@ -27,9 +27,23 @@ const DELAY_MS = 4500;
 export function HeroCarousel({
   slides,
   children,
+  prioritaire = false,
 }: {
   slides: HeroSlide[];
   children?: ReactNode;
+  /**
+   * Cette vitrine est-elle la plus grande image de la page ?
+   *
+   * Faux par défaut, et c'est le point. Elle préchargeait systématiquement sa
+   * première photo, alors qu'elle vit dans un conteneur `hidden lg:block` : un
+   * visiteur sur téléphone téléchargeait en priorité une image qu'il ne verra
+   * jamais, pendant que la vraie image d'en-tête attendait son tour. Deux
+   * images préchargées sur une même page, c'est aussi aucune priorité réelle.
+   *
+   * À passer à `true` seulement si cette vitrine devient l'image principale,
+   * c'est-à-dire si l'en-tête n'a plus de fond photographique.
+   */
+  prioritaire?: boolean;
 }) {
   const [index, setIndex] = useState(0);
   /* Une photo seule n'est pas un carrousel : ni minuterie, ni pastilles, ni
@@ -118,11 +132,13 @@ export function HeroCarousel({
               src={slide.src}
               alt={slide.label || "Spécialité de la maison"}
               fill
-              /* La première porte le `priority` — c'est la seule que le
-                 `<head>` a le droit de précharger. Les autres attendent
-                 `preloadRest` (voir plus haut) : différées, jamais oubliées. */
-              priority={i === 0}
-              loading={i === 0 ? undefined : preloadRest ? "eager" : "lazy"}
+              /* Seule la première peut être préchargée, et seulement si cette
+                 vitrine est déclarée image principale de la page — ce qu'elle
+                 n'est pas sur l'accueil, où l'en-tête a déjà sa photo de fond.
+                 Les autres attendent `preloadRest` : différées, jamais
+                 oubliées. */
+              priority={prioritaire && i === 0}
+              loading={prioritaire && i === 0 ? undefined : preloadRest ? "eager" : "lazy"}
               sizes="(min-width: 1024px) 38vw, 90vw"
               className="object-cover"
             />

@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { fmtCents, toCents, toEuros } from "@/lib/money";
+import { fmtCents, lireMontant, toEuros } from "@/lib/money";
+import { MAX_AMOUNT_DISCOUNT_CENTS } from "@/lib/promotionValidation";
 import { PROMOTION_KINDS, PROMOTION_KIND_LABEL } from "@/lib/types";
-import type { PromotionKind } from "@/lib/types";
+import type { OrderMode, PromotionKind } from "@/lib/types";
 import { WEEKDAY_LABEL } from "@/lib/hours";
 import { Icon } from "@/components/Icon";
 
@@ -15,11 +16,13 @@ import { Icon } from "@/components/Icon";
  * back-office pointait donc vers `/admin/promotions`, qui renvoyait une 404 :
  * aucune remise n'était administrable autrement qu'en base.
  *
- * Deux règles du validateur sont reprises telles quelles dans le formulaire,
- * pour que l'erreur se voie avant l'envoi plutôt qu'au retour du serveur :
+ * Les règles du validateur sont reprises dans `lirePromotion`, pour que
+ * l'erreur se voie avant l'envoi plutôt qu'au retour du serveur :
  *  - une promotion sans code doit être automatique, et inversement ;
  *  - une remise en montant fixe ne peut pas dépasser le minimum de commande,
- *    sans quoi le panier tomberait à zéro.
+ *    sans quoi le panier tomberait à zéro ;
+ *  - les montants et le pourcentage doivent être *lisibles* : plus aucune
+ *    saisie n'est convertie d'office en 0 (voir `lirePromotion`).
  */
 
 interface PromotionView {
@@ -35,6 +38,7 @@ interface PromotionView {
   usedCount: number;
   oncePerCustomer: boolean;
   weekday: number | null;
+  mode: OrderMode | null;
   auto: boolean;
   active: boolean;
   description: string;
@@ -43,7 +47,7 @@ interface PromotionView {
   revenueCents: number;
 }
 
-interface Form {
+export interface Form {
   label: string;
   kind: PromotionKind;
   /** Pourcentage (1–100) ou euros saisis, selon `kind`. */
@@ -54,10 +58,37 @@ interface Form {
   endsAt: string;
   maxUses: string;
   weekday: string;
+  /** "" = livraison et à emporter */
+  mode: "" | OrderMode;
   oncePerCustomer: boolean;
   auto: boolean;
   active: boolean;
 }
+
+/** Corps attendu par `validatePromotionInput`, côté serveur. */
+export interface CorpsPromotion {
+  label: string;
+  kind: PromotionKind;
+  /** pourcentage (1–100) pour `percent`, centimes pour `amount`, 0 sinon */
+  value: number;
+  code: string | null;
+  minSubtotalCents: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  maxUses: number | null;
+  weekday: number | null;
+  mode: OrderMode | null;
+  oncePerCustomer: boolean;
+  auto: boolean;
+  active: boolean;
+}
+
+type Refus = { ok: false; error: string };
+
+/** Même borne que `validatePromotionInput` côté serveur. */
+const MINIMUM_MAX_CENTS = 1_000_00;
+/** Même borne que `optionalInt(body.maxUses, …)` côté serveur. */
+const MAX_USES_MAX = 100_000;
 
 const VIDE: Form = {
   label: "",
@@ -69,6 +100,7 @@ const VIDE: Form = {
   endsAt: "",
   maxUses: "",
   weekday: "",
+  mode: "",
   oncePerCustomer: false,
   auto: false,
   active: true,
@@ -86,16 +118,175 @@ function versForm(p: PromotionView): Form {
   return {
     label: p.label,
     kind: p.kind,
-    valeur: p.kind === "amount" ? String(toEuros(p.value)) : String(p.value),
+    valeur: p.kind === "amount" ? toEuros(p.value) : String(p.value),
     code: p.code ?? "",
-    minSubtotal: String(toEuros(p.minSubtotalCents)),
+    minSubtotal: toEuros(p.minSubtotalCents),
     startsAt: versInput(p.startsAt),
     endsAt: versInput(p.endsAt),
     maxUses: p.maxUses === null ? "" : String(p.maxUses),
     weekday: p.weekday === null ? "" : String(p.weekday),
+    mode: p.mode ?? "",
     oncePerCustomer: p.oncePerCustomer,
     auto: p.auto,
     active: p.active,
+  };
+}
+
+/**
+ * Un pourcentage de remise : entier de 1 à 100.
+ *
+ * `Number(form.valeur) || 0` rendait 0 sur tout ce qui n'était pas un nombre
+ * — y compris un champ vidé pour être retapé. Le serveur refusait ensuite une
+ * remise de 0 %, mais l'écran ne savait pas dire laquelle des deux saisies
+ * était en cause.
+ */
+export function lirePourcentage(
+  saisie: string,
+  champ = "La remise en pourcentage",
+): { ok: true; pourcent: number } | Refus {
+  const texte = saisie.replace(/[\s %]/g, "");
+  if (texte === "") return { ok: false, error: `${champ} est requise.` };
+  if (!/^\d{1,3}$/.test(texte)) {
+    return { ok: false, error: `${champ} doit être un entier, par exemple 10.` };
+  }
+  const pourcent = Number(texte);
+  if (pourcent < 1 || pourcent > 100) {
+    return { ok: false, error: `${champ} doit être comprise entre 1 et 100.` };
+  }
+  return { ok: true, pourcent };
+}
+
+/**
+ * `datetime-local` → ISO.
+ *
+ * Une date invalide faisait lever `toISOString()` au milieu de la construction
+ * du corps : l'enregistrement s'arrêtait sans aucun message à l'écran.
+ */
+export function lireInstant(saisie: string, champ: string): { ok: true; iso: string | null } | Refus {
+  if (saisie.trim() === "") return { ok: true, iso: null };
+  const d = new Date(saisie);
+  if (Number.isNaN(d.getTime())) return { ok: false, error: `${champ} n'est pas une date valide.` };
+  return { ok: true, iso: d.toISOString() };
+}
+
+/** Nombre maximum d'utilisations : entier ≥ 1, ou vide pour illimité. */
+export function lireUtilisations(saisie: string): { ok: true; maxUses: number | null } | Refus {
+  const texte = saisie.replace(/[\s ]/g, "");
+  if (texte === "") return { ok: true, maxUses: null };
+  if (!/^\d+$/.test(texte)) {
+    return {
+      ok: false,
+      error:
+        "Le nombre maximum d'utilisations doit être un entier, ou vide pour une promotion illimitée.",
+    };
+  }
+  const maxUses = Number(texte);
+  if (maxUses < 1 || maxUses > MAX_USES_MAX) {
+    return {
+      ok: false,
+      error: `Le nombre maximum d'utilisations doit être compris entre 1 et ${MAX_USES_MAX}.`,
+    };
+  }
+  return { ok: true, maxUses };
+}
+
+/**
+ * Lit le formulaire et rend le corps à envoyer, ou le **premier** refus, en
+ * français, tel qu'il s'affiche à l'écran.
+ *
+ * Les règles doublent celles de `validatePromotionInput` — qui reste
+ * l'autorité. L'intérêt de les rejouer ici n'est pas d'économiser un
+ * aller-retour : c'est qu'aucune saisie illisible ne soit *convertie* en
+ * montant. `toCents(Number(form.minSubtotal) || 0)` sur le `"25,00"` dont le
+ * formulaire est prérempli donnait 0 : rouvrir « −10 % dès 25 € » pour changer
+ * sa date de fin la réenregistrait « dès le premier euro ». Pour une remise en
+ * montant fixe, la valeur tombait aussi à 0, le serveur refusait, et la
+ * promotion devenait inéditable.
+ */
+export function lirePromotion(form: Form): { ok: true; corps: CorpsPromotion } | Refus {
+  const label = form.label.trim();
+  if (label.length < 3) {
+    return { ok: false, error: "Le libellé doit comporter au moins 3 caractères." };
+  }
+
+  const code = form.code.trim().toUpperCase();
+  if (!code && !form.auto) {
+    return {
+      ok: false,
+      error:
+        "Sans code, la promotion doit être automatique — ajoutez un code ou cochez « appliquée automatiquement ».",
+    };
+  }
+  if (code && form.auto) {
+    return { ok: false, error: "Une promotion automatique ne peut pas exiger la saisie d'un code." };
+  }
+
+  // 0 € est un minimum légitime (« dès le premier euro ») : il doit être
+  // *saisi*, pas déduit d'un champ qu'on n'a pas su lire.
+  const mini = lireMontant(form.minSubtotal, "Le minimum de commande", {
+    min: 0,
+    max: MINIMUM_MAX_CENTS,
+  });
+  if (!mini.ok) return mini;
+  const minSubtotalCents = mini.cents ?? 0;
+
+  let value = 0;
+  if (form.kind === "percent") {
+    const pct = lirePourcentage(form.valeur);
+    if (!pct.ok) return pct;
+    value = pct.pourcent;
+  } else if (form.kind === "amount") {
+    // Même libellé que `validatePromotionValue` côté serveur, pour que la
+    // cliente lise la même phrase d'où que vienne le refus.
+    const remise = lireMontant(form.valeur, "Le montant de la remise", {
+      min: 1,
+      max: MAX_AMOUNT_DISCOUNT_CENTS,
+    });
+    if (!remise.ok) return remise;
+    value = remise.cents ?? 0;
+    // Reprise du validateur serveur : au-delà du minimum, le panier tombe à 0 €.
+    if (value > minSubtotalCents) {
+      return {
+        ok: false,
+        error: `Une remise de ${fmtCents(value)} exige un minimum de commande d'au moins ${fmtCents(
+          value,
+        )}, sinon la commande peut tomber à 0 €.`,
+      };
+    }
+  }
+
+  const debut = lireInstant(form.startsAt, "Le début");
+  if (!debut.ok) return debut;
+  const fin = lireInstant(form.endsAt, "La fin");
+  if (!fin.ok) return fin;
+  if (debut.iso && fin.iso && fin.iso <= debut.iso) {
+    return { ok: false, error: "La fin de la promotion doit être postérieure à son début." };
+  }
+
+  const utilisations = lireUtilisations(form.maxUses);
+  if (!utilisations.ok) return utilisations;
+
+  return {
+    ok: true,
+    corps: {
+      label,
+      kind: form.kind,
+      value,
+      code: code || null,
+      minSubtotalCents,
+      // L'API attend une date ISO (`isoDate()` dans lib/validate.ts fait
+      // `new Date(String(v))`, qui échoue sur un timestamp numérique) : envoyer
+      // les millisecondes ici faisait échouer l'enregistrement de toute
+      // promotion à laquelle on donnait un début ou une fin.
+      startsAt: debut.iso,
+      endsAt: fin.iso,
+      maxUses: utilisations.maxUses,
+      weekday: form.weekday === "" ? null : Number(form.weekday),
+      mode: form.mode === "" ? null : form.mode,
+      oncePerCustomer: form.oncePerCustomer,
+      auto: form.auto,
+      active: form.active,
+    },
   };
 }
 
@@ -127,57 +318,19 @@ export function PromotionsAdmin() {
 
   const set = (patch: Partial<Form>) => setForm((f) => (f ? { ...f, ...patch } : f));
 
-  /* Même contrôle que le serveur, joué à la frappe : le validateur refuse une
-   * promotion sans code non automatique, et l'inverse. */
-  const incoherence = useMemo(() => {
-    if (!form) return null;
-    const aCode = form.code.trim().length > 0;
-    if (!aCode && !form.auto) {
-      return "Sans code, la promotion doit être automatique — ajoutez un code ou cochez « appliquée automatiquement ».";
-    }
-    if (aCode && form.auto) {
-      return "Une promotion automatique ne peut pas exiger la saisie d'un code.";
-    }
-    if (form.kind === "amount") {
-      // `toCents` renvoie `null` sur une saisie inexploitable : on ne bloque
-      // pas là-dessus, le serveur rendra un message précis.
-      const remise = toCents(Number(form.valeur) || 0) ?? 0;
-      const mini = toCents(Number(form.minSubtotal) || 0) ?? 0;
-      if (remise > mini) {
-        return "Une remise en montant fixe ne peut pas dépasser le minimum de commande : le panier tomberait à zéro.";
-      }
-    }
-    return null;
-  }, [form]);
+  /* Lecture du formulaire rejouée à chaque frappe : le même résultat sert à
+   * afficher le refus sous le formulaire, à désactiver le bouton, et à
+   * construire le corps envoyé. Une seule lecture, donc aucun écart possible
+   * entre ce qui est reproché à l'écran et ce qui part au serveur. */
+  const lu = useMemo(() => (form ? lirePromotion(form) : null), [form]);
+  const incoherence = lu && !lu.ok ? lu.error : null;
 
   const enregistrer = async () => {
-    if (!form || incoherence) return;
+    if (!form || !lu?.ok) return;
     setBusy(true);
     setMessage(null);
 
-    const corps = {
-      label: form.label.trim(),
-      kind: form.kind,
-      value:
-        form.kind === "amount"
-          ? (toCents(Number(form.valeur) || 0) ?? 0)
-          : form.kind === "percent"
-            ? Number(form.valeur) || 0
-            : 0,
-      code: form.code.trim() ? form.code.trim().toUpperCase() : null,
-      minSubtotalCents: toCents(Number(form.minSubtotal) || 0) ?? 0,
-      // L'API attend une date ISO (`isoDate()` dans lib/validate.ts fait
-      // `new Date(String(v))`, qui échoue sur un timestamp numérique) : envoyer
-      // les millisecondes ici faisait échouer l'enregistrement de toute
-      // promotion à laquelle on donnait un début ou une fin.
-      startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
-      endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
-      maxUses: form.maxUses.trim() ? Number(form.maxUses) : null,
-      weekday: form.weekday === "" ? null : Number(form.weekday),
-      oncePerCustomer: form.oncePerCustomer,
-      auto: form.auto,
-      active: form.active,
-    };
+    const corps = lu.corps;
 
     try {
       const res = await fetch(editId ? `/api/promotions/${editId}` : "/api/promotions", {
@@ -315,12 +468,15 @@ export function PromotionsAdmin() {
                 id={`${baseId}-val`}
                 label={form.kind === "percent" ? "Remise (%)" : "Remise (€)"}
               >
+                {/* Champ texte et non `type="number"` : le navigateur refuse la
+                    virgule décimale dans un champ numérique et affiche un champ
+                    *vide* alors que React garde « 25,00 » en mémoire. On ne
+                    voyait donc pas que la valeur était là, et elle partait
+                    convertie en 0. */}
                 <input
                   id={`${baseId}-val`}
-                  type="number"
-                  min={form.kind === "percent" ? 1 : 0.01}
-                  max={form.kind === "percent" ? 100 : undefined}
-                  step={form.kind === "percent" ? 1 : 0.5}
+                  inputMode={form.kind === "percent" ? "numeric" : "decimal"}
+                  placeholder={form.kind === "percent" ? "10" : "5,00"}
                   value={form.valeur}
                   onChange={(e) => set({ valeur: e.target.value })}
                   className={inputCls}
@@ -338,12 +494,11 @@ export function PromotionsAdmin() {
               />
             </Champ>
 
-            <Champ id={`${baseId}-min`} label="Minimum de commande (€)">
+            <Champ id={`${baseId}-min`} label="Minimum de commande (€ — 0 pour aucun)">
               <input
                 id={`${baseId}-min`}
-                type="number"
-                min={0}
-                step={0.5}
+                inputMode="decimal"
+                placeholder="25,00"
                 value={form.minSubtotal}
                 onChange={(e) => set({ minSubtotal: e.target.value })}
                 className={inputCls}
@@ -353,8 +508,7 @@ export function PromotionsAdmin() {
             <Champ id={`${baseId}-max`} label="Utilisations max (vide = illimité)">
               <input
                 id={`${baseId}-max`}
-                type="number"
-                min={1}
+                inputMode="numeric"
                 value={form.maxUses}
                 onChange={(e) => set({ maxUses: e.target.value })}
                 className={inputCls}
@@ -374,6 +528,19 @@ export function PromotionsAdmin() {
                     {l}
                   </option>
                 ))}
+              </select>
+            </Champ>
+
+            <Champ id={`${baseId}-mode`} label="Mode de commande">
+              <select
+                id={`${baseId}-mode`}
+                value={form.mode}
+                onChange={(e) => set({ mode: e.target.value as Form["mode"] })}
+                className={inputCls}
+              >
+                <option value="">Livraison et à emporter</option>
+                <option value="emporter">À emporter uniquement</option>
+                <option value="livraison">Livraison uniquement</option>
               </select>
             </Champ>
 
@@ -422,7 +589,7 @@ export function PromotionsAdmin() {
             <button
               type="button"
               onClick={enregistrer}
-              disabled={busy || !!incoherence || form.label.trim().length < 3}
+              disabled={busy || !!incoherence}
               className="rounded-full bg-primary px-5 py-2.5 font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? "Enregistrement…" : editId ? "Enregistrer" : "Créer"}

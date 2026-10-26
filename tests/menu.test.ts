@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fmtPrice, items, cats, zones } from "@/lib/menu";
+import { cats, fmtPrice, formatPhone, info, items, telHref, zones } from "@/lib/menu";
 
 /**
  * `Intl.NumberFormat` insère une espace insécable étroite (U+202F) avant le
@@ -77,5 +77,61 @@ describe("zones de seed", () => {
         expect(zip).toMatch(/^\d{5}$/);
       }
     }
+  });
+});
+
+/**
+ * Coordonnées de repli et mise en forme du téléphone.
+ *
+ * Le pied de page, les pages d'erreur, le tunnel de commande et le balisage
+ * lisaient `info` au lieu des réglages : le restaurant a changé de ligne et
+ * tout le site a continué d'afficher l'ancien numéro, sans que rien ne le
+ * signale. Les réglages sont désormais la source et `info` le repli — mais un
+ * repli faux reste un numéro faux, d'où le numéro nommé ici : le jour où la
+ * ligne change, ce test rappelle qu'il y a une constante à suivre.
+ */
+describe("coordonnées de repli", () => {
+  it("portent la ligne téléphonique en service", () => {
+    expect(info.phone).toBe("09 54 83 12 75");
+  });
+
+  it("portent l'adresse complète, avec code postal et commune", () => {
+    expect(info.address).toBe("38 rue des Prés Saint-Martin, 77340 Pontault-Combault");
+  });
+});
+
+describe("formatPhone", () => {
+  /* Le réglage est saisi à la main au back-office : il arrive collé, ponctué ou
+     en indicatif international. L'affichage ne doit pas en dépendre. */
+  it("met en forme un numéro quelle que soit sa saisie", () => {
+    expect(formatPhone("0954831275")).toBe("09 54 83 12 75");
+    expect(formatPhone("09 54 83 12 75")).toBe("09 54 83 12 75");
+    expect(formatPhone("09.54.83.12.75")).toBe("09 54 83 12 75");
+    expect(formatPhone(" +33 9 54 83 12 75 ")).toBe("09 54 83 12 75");
+    expect(formatPhone("0033954831275")).toBe("09 54 83 12 75");
+  });
+
+  /* Mieux vaut un format inhabituel qu'un numéro mutilé : une valeur qu'on ne
+     reconnaît pas ressort telle quelle. */
+  it("laisse intacte une valeur non reconnue", () => {
+    expect(formatPhone("poste 42")).toBe("poste 42");
+    expect(formatPhone("")).toBe("");
+  });
+});
+
+describe("telHref", () => {
+  /* Un lien d'appel sans indicatif ne joint personne depuis un téléphone réglé
+     sur un autre pays — et la cible cassait dès que le réglage contenait un
+     point ou un tiret. */
+  it("compose une cible E.164", () => {
+    expect(telHref("0954831275")).toBe("tel:+33954831275");
+    expect(telHref("09 54 83 12 75")).toBe("tel:+33954831275");
+    expect(telHref("09.54.83.12.75")).toBe("tel:+33954831275");
+    expect(telHref("+33 9 54 83 12 75")).toBe("tel:+33954831275");
+    expect(telHref("0033954831275")).toBe("tel:+33954831275");
+  });
+
+  it("ne garde que les chiffres d'une valeur inattendue", () => {
+    expect(telHref("poste 42")).toBe("tel:42");
   });
 });

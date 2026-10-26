@@ -14,6 +14,15 @@ import { PUBLIC_ROUTES, abs } from "@/lib/seo";
  * date de `/carte`, et Google revient. Une date figée à l'heure de compilation
  * aurait l'effet inverse — toutes les pages « modifiées » à chaque
  * déploiement, donc plus aucun signal exploitable.
+ *
+ * Seulement, la base ne sait dater que ce qu'elle contient : les plats, les
+ * formules et les pages à sections. Traiteur, Contact, Allergènes et les trois
+ * pages légales sont écrites dans le dépôt — elles sortaient donc **sans
+ * aucune date**, c'est-à-dire sans le signal qui déclenche une réexploration.
+ * Elles retombent désormais sur la date de révision déclarée dans
+ * `PUBLIC_ROUTES`, tenue à la main. La base reste prioritaire là où elle sait
+ * répondre : une date écrite dans le dépôt ne doit jamais masquer un
+ * changement fait au back-office.
  */
 
 // La revalidation évite de rejouer les requêtes à chaque passage de robot.
@@ -52,7 +61,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return PUBLIC_ROUTES.map((route) => ({
     url: abs(route.path),
-    lastModified: dates[route.path],
+    lastModified: dates[route.path] ?? new Date(route.revised),
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }));

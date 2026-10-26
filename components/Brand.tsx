@@ -55,7 +55,7 @@ export function Logo({ size = 1 }: { size?: number }) {
           className="hidden truncate font-bold uppercase text-primary min-[400px]:block lg:hidden xl:block"
           style={{ fontSize: 9.5 * size, letterSpacing: "0.18em" }}
         >
-          Chez Laila · Cuisine du monde
+          Cuisine du monde
         </span>
       </span>
     </span>

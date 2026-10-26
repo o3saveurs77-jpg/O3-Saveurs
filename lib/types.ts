@@ -122,6 +122,19 @@ export const isFormulaLine = <T extends { formulaId?: string | null }>(l: T): bo
   Boolean(l.formulaId);
 
 export type OrderMode = "livraison" | "emporter";
+export const ORDER_MODES: readonly OrderMode[] = ["livraison", "emporter"];
+
+/**
+ * Vrai quand l'argent est reçu en main propre par le restaurant — donc quand
+ * l'admin doit pouvoir marquer la commande « encaissée » à la main. Une carte
+ * non aboutie n'en fait pas partie : le livreur n'a pas de terminal.
+ *
+ * Arrivée avec la borne (« Au comptoir »), retirée avec elle par le rebase
+ * d'octobre alors que l'écran Livraisons s'en servait toujours.
+ */
+export function paidAtCounter(paymentMethod: string): boolean {
+  return paymentMethod.toLowerCase().includes("espèce");
+}
 
 /**
  * Statuts de suivi.

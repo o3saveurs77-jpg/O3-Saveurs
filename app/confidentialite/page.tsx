@@ -2,15 +2,16 @@
  *
  * Point vérifié lors de l'audit et volontairement expliqué ici : le site
  * n'embarque **aucun traceur tiers** (ni Google Analytics, ni pixel Meta, ni
- * Matomo), et les polices sont auto-hébergées par `next/font`. Les deux seuls
- * stockages côté client — le cookie de session et le panier en `localStorage` —
- * sont strictement nécessaires au service demandé, donc exemptés de consentement
+ * Matomo), et les polices sont auto-hébergées par `next/font`. Les stockages
+ * côté client — cookie de session, panier en `localStorage`, commande en cours
+ * en `sessionStorage`, bandeaux fermés — sont strictement nécessaires au service demandé, donc exemptés de consentement
  * (art. 82 de la loi Informatique et Libertés). C'est pourquoi il n'y a pas de
  * bandeau cookies : en ajouter un serait inutile et nuirait à la conversion.
  */
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMetadata } from "@/lib/seo";
 import {
   LEGAL_UPDATED,
   LegalBody,
@@ -22,12 +23,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+/* Description, canonique et image de partage : `lib/seo.ts`. */
+export const metadata: Metadata = pageMetadata({
+  path: "/confidentialite",
   title: "Politique de confidentialité",
-  description:
-    "Quelles données nous collectons, pourquoi, combien de temps nous les conservons, et comment exercer vos droits.",
-  alternates: { canonical: "/confidentialite" },
-};
+});
 
 /** Un tableau vaut mieux qu'un paragraphe pour l'art. 13 : chaque finalité a sa base légale. */
 const TRAITEMENTS = [
@@ -98,15 +98,12 @@ const SOUS_TRAITANTS = [
     role: "Autocomplétion des adresses de livraison et calcul de la distance routière",
     lieu: "Irlande, avec transferts encadrés par clauses contractuelles types",
   },
+  /* Neon et Vercel figuraient ici : le site, la base (depuis le 3 septembre
+   * 2026) et les photos (Cellar) sont chez Clever Cloud. */
   {
-    nom: "Neon, Inc.",
-    role: "Hébergement de la base de données",
-    lieu: "Union européenne (région Europe)",
-  },
-  {
-    nom: "Vercel, Inc.",
-    role: "Hébergement du site et stockage des photos",
-    lieu: "États-Unis — clauses contractuelles types",
+    nom: "Clever Cloud SAS",
+    role: "Hébergement du site, de la base de données et des photos",
+    lieu: "France",
   },
   {
     nom: "Resend, Inc.",
@@ -133,7 +130,7 @@ export default async function ConfidentialitePage() {
         <LegalSection id="responsable" title="1. Qui est responsable du traitement ?">
           <p>
             Le responsable du traitement est l&apos;exploitant du restaurant{" "}
-            <strong>Ô 3 Saveurs — Chez Laila</strong> :{" "}
+            <strong>Ô 3 Saveurs</strong> :{" "}
             <Value value={s["legal.company"]} what="la dénomination sociale" />, dont les
             coordonnées complètes figurent dans les{" "}
             <Link href="/mentions-legales" className="font-semibold text-brick underline">
@@ -235,7 +232,7 @@ export default async function ConfidentialitePage() {
             social, ni régie publicitaire. Les polices de caractères sont hébergées sur notre propre
             serveur : votre navigateur ne contacte aucun service externe pour les charger.
           </p>
-          <p>Deux éléments seulement sont stockés dans votre navigateur :</p>
+          <p>Seuls les éléments suivants sont stockés dans votre navigateur :</p>
           <ul className="list-disc space-y-1 pl-5">
             <li>
               <strong>Un cookie de session</strong>, déposé uniquement si vous vous connectez à
@@ -248,9 +245,18 @@ export default async function ConfidentialitePage() {
               le perdre si vous fermez l&apos;onglet. Il ne quitte votre appareil qu&apos;au moment
               de la commande.
             </li>
+            <li>
+              <strong>Le suivi de la commande en cours</strong>, gardé le temps de l&apos;onglet
+              (<code className="rounded bg-panel-2 px-1 text-xs">sessionStorage</code>) pour
+              retrouver votre commande au retour du paiement.
+            </li>
+            <li>
+              <strong>Les bandeaux d&apos;annonce que vous avez fermés</strong>, pour ne pas vous
+              les présenter à nouveau.
+            </li>
           </ul>
           <p>
-            Ces deux éléments sont <strong>strictement nécessaires</strong> au service que vous
+            Ces éléments sont <strong>strictement nécessaires</strong> au service que vous
             demandez. À ce titre, ils sont exemptés de consentement préalable au sens de
             l&apos;article 82 de la loi Informatique et Libertés et des lignes directrices de la
             CNIL. C&apos;est la raison pour laquelle aucun bandeau cookies ne vous est présenté. Si
@@ -314,10 +320,12 @@ export default async function ConfidentialitePage() {
 
         <LegalSection id="securite" title="7. Sécurité">
           <p>
-            Les échanges avec ce site sont chiffrés (HTTPS). Les mots de passe sont stockés sous
-            forme d&apos;empreinte irréversible. L&apos;accès aux données de commande est cloisonné :
-            un client ne peut consulter que ses propres commandes et ses propres factures, et
-            l&apos;administration du restaurant est protégée par une authentification distincte.
+            Les échanges avec ce site sont chiffrés (HTTPS). Les mots de passe ne sont pas stockés
+            par le restaurant : ils sont conservés par notre prestataire d&apos;authentification,
+            sous forme d&apos;empreinte irréversible. L&apos;accès aux données de commande est
+            cloisonné : un client ne peut consulter que ses propres commandes et ses propres
+            factures, et l&apos;administration n&apos;est ouverte qu&apos;aux comptes auxquels le
+            restaurant a attribué un rôle.
           </p>
         </LegalSection>
       </LegalBody>

@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { AccountClient } from "@/components/account/AccountClient";
 
 export const metadata: Metadata = {
-  title: "Mon compte · Ô 3 Saveurs — Chez Laila",
+  title: "Mon compte",
 };
 
 /* La page lit la session : elle ne peut pas être prérendue au build. */

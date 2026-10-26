@@ -128,6 +128,21 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   });
   if (!existing) return notFound("Formule introuvable");
 
+  /* Une formule **mise en vente** ne peut pas coûter zéro.
+   *
+   * Le contrôle est ici, et non dans `collect` plus haut, parce qu'il dépend de
+   * l'état réel de la formule : le corps peut très bien ne pas renvoyer
+   * `active`, auquel cas c'est la valeur déjà en base qui tranche. Zéro reste
+   * permis sur une formule masquée, seul cas légitime — un tarif pas encore
+   * arbitré, qu'on prépare sans l'exposer. */
+  const seraActive = bool(body.active, existing.active);
+  if (seraActive && fields.value.priceCents < 1) {
+    return badRequest(
+      "Une formule proposée à la vente ne peut pas être à 0,00 €. " +
+        "Donnez-lui un prix, ou masquez-la le temps de le fixer.",
+    );
+  }
+
   // Les plats cités doivent exister : un identifiant inventé créerait un
   // créneau qui ne propose rien et une formule impossible à commander.
   const dishIds = [...new Set(slots.value.flatMap((s) => s.choices.map((c) => c.dishId)))];

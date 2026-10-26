@@ -5,22 +5,17 @@ import { JsonLd } from "@/components/JsonLd";
 import { ALLERGENES_PAR_PLAT } from "@/lib/allergenes";
 import { cats } from "@/lib/menu";
 import { prisma } from "@/lib/prisma";
-import { graph, breadcrumbNode } from "@/lib/seo";
+import { graph, breadcrumbNode, pageMetadata } from "@/lib/seo";
 import { rowToDish } from "@/lib/serialize";
 import type { Dish } from "@/lib/menu";
 import { ALLERGEN_LABEL, ALLERGEN_SHORT, ALLERGENS } from "@/lib/types";
 
-export const metadata: Metadata = {
+/* Description, canonique et image de partage : `lib/seo.ts`. */
+export const metadata: Metadata = pageMetadata({
+  path: "/allergenes",
   title: "Tableau des allergènes",
-  description:
-    "Les 14 allergènes réglementaires plat par plat chez Ô 3 Saveurs — Chez Laila à Pontault-Combault. Information obligatoire au titre du règlement (UE) 1169/2011.",
-  alternates: { canonical: "/allergenes" },
-  openGraph: {
-    title: "Tableau des allergènes · Ô 3 Saveurs — Chez Laila",
-    description: "Les 14 allergènes réglementaires, plat par plat.",
-    url: "/allergenes",
-  },
-};
+  accroche: "Les 14 allergènes réglementaires, plat par plat.",
+});
 
 /* Même cadence que la carte : la cuisine corrige ses recettes depuis
  * *Admin → Plats*, et une correction d'allergène ne doit pas attendre. */

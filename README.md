@@ -1,10 +1,16 @@
 # Ô 3 Saveurs — Chez Laila
 
 Site de commande à domicile (livraison + à emporter) pour un restaurant de **cuisine du monde**
-(Afrique de l'Ouest · Maghreb · Asie) à Lognes.
+(Afrique de l'Ouest · Maghreb · Méditerranée) à **Pontault-Combault** (77340).
+
+> Le dépôt a longtemps dit « à Lognes » : c'est l'adresse d'origine, antérieure à l'enseigne
+> actuelle. Plusieurs valeurs par défaut en traînaient encore — téléphone, horaires, point de
+> départ des livraisons — et se retrouvaient affichées sur le site. Si vous en croisez d'autres,
+> ce sont des restes de cette époque, pas des valeurs à conserver.
 
 **Stack** : Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS v4 · Prisma 6 ·
-**PostgreSQL (Neon)** · NextAuth v5 · Stripe Checkout · Resend · Vercel Blob · Recharts · Vitest.
+**PostgreSQL** · NextAuth v5 (Auth0) · Stripe Checkout · Resend · Recharts · Vitest.
+Hébergement **Clever Cloud**, photos sur **Cellar** (stockage objet S3).
 
 | Document | Contenu |
 | --- | --- |

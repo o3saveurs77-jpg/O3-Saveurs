@@ -1,21 +1,36 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useOrders } from "@/components/providers/OrdersContext";
 import { STATUS_LABEL, STATUS_NEXT, PAYMENT_STATUS_LABEL } from "@/lib/types";
 import type { Order, OrderLine, OrderStatus } from "@/lib/types";
+import { MAX_FETCHED_ORDERS, isAbandoned } from "@/lib/analytics";
 import { fmtPrice } from "@/lib/menu";
 import { formatPreorderSchedule } from "@/lib/preorder";
 import { Icon } from "@/components/Icon";
 import { StatusPill } from "./StatusPill";
 import { RefundOrder } from "./RefundOrder";
 
-const FILTERS: { k: OrderStatus | "all" | "actives" | "impayees"; label: string }[] = [
+/** Clés de filtre reconnues — ce sont aussi les valeurs admises dans `?filtre=`. */
+export type OrdersFilter =
+  | OrderStatus
+  | "all"
+  | "actives"
+  | "impayees"
+  | "abandonnes";
+
+export const FILTERS: { k: OrdersFilter; label: string }[] = [
   { k: "actives", label: "En cours" },
   // Placé haut : une commande sur commande non validée est de l'argent encaissé
   // sur une promesse que personne n'a encore tenue.
   { k: "en_attente_validation", label: "À valider" },
   { k: "impayees", label: "Non payées" },
+  /* Les paniers abandonnés étaient annoncés par une alerte du tableau de bord
+   * dont le lien « Voir » renvoyait vers un filtre qui n'existait pas : on
+   * atterrissait sur « En cours », où ils ne figurent pas, et l'alerte passait
+   * pour fausse. */
+  { k: "abandonnes", label: "Paniers abandonnés" },
   { k: "all", label: "Toutes" },
   { k: "en_attente_paiement", label: "Attente paiement" },
   { k: "confirmee", label: "Confirmées" },
@@ -29,6 +44,34 @@ const FILTERS: { k: OrderStatus | "all" | "actives" | "impayees"; label: string 
  * demandent une action, et les enterrer sous « Toutes » revenait à ne les voir
  * que si on pensait à les chercher. */
 const ACTIVE: OrderStatus[] = ["en_attente_validation", "confirmee", "cuisine", "route"];
+
+/**
+ * Filtre demandé par l'URL, ou `null` si elle n'en demande aucun de connu.
+ *
+ * Les alertes de la vue d'ensemble renvoient ici avec `?filtre=impayees` ou
+ * `?filtre=abandonnes` : la valeur doit donc exister dans `FILTERS`, sinon le
+ * lien mène à un écran qui montre autre chose que ce que l'alerte annonçait.
+ * Une valeur inconnue est ignorée plutôt que de vider la liste.
+ */
+export function parseOrdersFilter(raw: string | null | undefined): OrdersFilter | null {
+  if (!raw) return null;
+  return FILTERS.some((f) => f.k === raw) ? (raw as OrdersFilter) : null;
+}
+
+/**
+ * Sélection affichée. Fonction pure, et testée : c'est elle qui décide si une
+ * alerte du tableau de bord retombe sur les bonnes commandes.
+ *
+ * `now` est passé en paramètre — « abandonné » dépend de l'heure, et un
+ * `Date.now()` caché ici rendrait la fonction intestable.
+ */
+export function filterOrders(orders: Order[], filter: OrdersFilter, now: number): Order[] {
+  if (filter === "all") return orders;
+  if (filter === "actives") return orders.filter((o) => ACTIVE.includes(o.status));
+  if (filter === "impayees") return orders.filter((o) => !o.paid && o.status !== "annulee");
+  if (filter === "abandonnes") return orders.filter((o) => isAbandoned(o, now));
+  return orders.filter((o) => o.status === filter);
+}
 
 /** Les lignes de commande n'ont pas de `key` : elle est dérivée du contenu. */
 const lineKey = (l: OrderLine) => `${l.dishId}-${l.formule ?? ""}-${JSON.stringify(l.opts)}`;
@@ -50,10 +93,33 @@ const lineKey = (l: OrderLine) => `${l.dishId}-${l.formule ?? ""}-${JSON.stringi
  *    jamais payées. Les commandes en espèces disposent d'un bouton
  *    « Encaissé », sans lequel tout ce chiffre d'affaires restait invisible en
  *    facturation.
+ *
+ * Deux corrections plus récentes :
+ *
+ *  · Une **panne de lecture** s'affichait comme une absence de commandes. Le
+ *    contexte, quand `/api/orders` échoue, remplit la liste avec un tableau
+ *    vide : l'écran annonçait donc « aucune commande dans cette catégorie » en
+ *    plein service. `error` et `truncated` sont désormais lus et dits.
+ *
+ *  · Le filtre vient de l'URL quand elle en porte un : les alertes de la vue
+ *    d'ensemble renvoient ici avec `?filtre=impayees`, et le `useState` figé
+ *    sur « En cours » faisait atterrir sur une liste où les commandes
+ *    annoncées ne figuraient pas.
  */
 export function OrdersAdmin() {
-  const { orders, ready, refresh } = useOrders();
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]["k"]>("actives");
+  const {
+    orders,
+    total,
+    ready,
+    /* Renommé : le composant a déjà un `error` à lui, qui parle des mutations.
+       Celui-ci dit que la lecture elle-même a échoué. */
+    error: loadFailed,
+    truncated,
+    refresh,
+  } = useOrders();
+  const params = useSearchParams();
+  const urlFilter = parseOrdersFilter(params.get("filtre"));
+  const [filter, setFilter] = useState<OrdersFilter>(() => urlFilter ?? "actives");
   const [openId, setOpenId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,12 +127,18 @@ export function OrdersAdmin() {
      rien à l'écran ne dirait si l'argent est bien parti. */
   const [notice, setNotice] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    if (filter === "all") return orders;
-    if (filter === "actives") return orders.filter((o) => ACTIVE.includes(o.status));
-    if (filter === "impayees") return orders.filter((o) => !o.paid && o.status !== "annulee");
-    return orders.filter((o) => o.status === filter);
-  }, [orders, filter]);
+  /* Arriver sur l'écran déjà monté — depuis une alerte du tableau de bord, par
+     exemple — doit déplacer le filtre. La dépendance est la valeur lue dans
+     l'URL, pas l'objet de recherche : cliquer ensuite sur un autre onglet ne
+     se fait donc pas annuler au rendu suivant. */
+  useEffect(() => {
+    if (urlFilter) setFilter(urlFilter);
+  }, [urlFilter]);
+
+  /* `Date.now()` est relu à chaque recalcul — donc à chaque changement de
+     filtre et après chaque `refresh()` — et non figé au montage : « panier
+     abandonné » est une question d'heure. */
+  const filtered = useMemo(() => filterOrders(orders, filter, Date.now()), [orders, filter]);
 
   const patch = async (id: string, body: Record<string, unknown>) => {
     setBusyId(id);
@@ -127,30 +199,73 @@ export function OrdersAdmin() {
   const toValidate = orders.filter((o) => o.status === "en_attente_validation").length;
 
   return (
-    <div className="space-y-5 print:hidden">
+    /* Plus de `print:hidden` ici : il masquait l'ancêtre du ticket, donc le
+       ticket lui-même. L'impression est désormais pilotée depuis
+       `app/globals.css`, qui ne garde sur le papier que `.ticket-impression`. */
+    <div className="space-y-5">
       <div>
         <h1 className="text-3xl">Commandes</h1>
+        {/* Dire « 0 commande affichée » quand on n'a rien pu lire est un
+            mensonge : on l'écrit seulement quand on sait. */}
         <p className="text-ink-2">
-          {filtered.length} commande{filtered.length > 1 ? "s" : ""} affichée
-          {filtered.length > 1 ? "s" : ""}
-          {unpaid > 0 && (
+          {loadFailed ? (
+            "Liste indisponible — les commandes n'ont pas pu être lues."
+          ) : (
             <>
-              {" · "}
-              <strong className="text-brick">
-                {unpaid} non payée{unpaid > 1 ? "s" : ""}
-              </strong>
-            </>
-          )}
-          {toValidate > 0 && (
-            <>
-              {" · "}
-              <strong className="text-[#7a5f00]">
-                {toValidate} à valider
-              </strong>
+              {filtered.length} commande{filtered.length > 1 ? "s" : ""} affichée
+              {filtered.length > 1 ? "s" : ""}
+              {unpaid > 0 && (
+                <>
+                  {" · "}
+                  <strong className="text-brick">
+                    {unpaid} non payée{unpaid > 1 ? "s" : ""}
+                  </strong>
+                </>
+              )}
+              {toValidate > 0 && (
+                <>
+                  {" · "}
+                  <strong className="text-[#7a5f00]">
+                    {toValidate} à valider
+                  </strong>
+                </>
+              )}
             </>
           )}
         </p>
       </div>
+
+      {/* Panne de lecture. Le contexte met la liste à vide puis annonce qu'elle
+          est prête : sans ce bandeau, un service entier pouvait passer pour un
+          écran « aucune commande ». */}
+      {loadFailed && (
+        <p
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brick/30 bg-primary-soft p-4 text-sm text-brick"
+        >
+          <span>
+            <strong>Les commandes n&apos;ont pas pu être lues.</strong> Cette liste est vide parce
+            que le serveur n&apos;a pas répondu, pas parce qu&apos;il n&apos;y a pas de commande.
+          </span>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+          >
+            Réessayer
+          </button>
+        </p>
+      )}
+
+      {/* Liste coupée par le plafond de sécurité : les compteurs d'en-tête ne
+          portent alors que sur ce qui a été chargé, et le dire évite de croire
+          qu'il n'y a plus d'impayé au-delà. */}
+      {truncated && (
+        <p className="rounded-xl border border-line bg-panel-2 p-3 text-xs text-ink-2">
+          {total} commandes existent : seules les {MAX_FETCHED_ORDERS} plus récentes sont chargées
+          ici, et les compteurs ci-dessus ne portent que sur celles-là.
+        </p>
+      )}
 
       <div aria-live="polite" className="min-h-6 space-y-2">
         {error && (
@@ -202,7 +317,9 @@ export function OrdersAdmin() {
             }}
           />
         ))}
-        {filtered.length === 0 && (
+        {/* L'état vide n'a de sens que si la lecture a réussi : sinon le
+            bandeau d'erreur ci-dessus dit déjà ce qu'il faut savoir. */}
+        {filtered.length === 0 && !loadFailed && (
           <p className="rounded-[var(--radius-card)] border border-line bg-panel py-16 text-center text-ink-2">
             Aucune commande dans cette catégorie.
           </p>
@@ -434,7 +551,7 @@ function OrderRow({
               refuser lui rend l'intégralité de la somme et lui explique
               pourquoi. Aucune des deux ne se fait en silence. */}
           {toValidate && (
-            <div className="mt-4 rounded-xl border border-[#7a5f00]/30 bg-gold/15 p-4 text-sm print:hidden">
+            <div className="mt-4 rounded-xl border border-[#7a5f00]/30 bg-gold/15 p-4 text-sm">
               <p className="font-bold text-[#7a5f00]">
                 Plat sur commande — votre accord est attendu
               </p>
@@ -486,7 +603,7 @@ function OrderRow({
           {/* Ce que le client a écrit en demandant l'annulation : la décision
               revient au restaurant, encore faut-il lui donner le motif. */}
           {order.cancelRequestedAt !== null && order.status !== "annulee" && (
-            <div className="mt-3 rounded-xl bg-gold/15 p-3 text-sm print:hidden">
+            <div className="mt-3 rounded-xl bg-gold/15 p-3 text-sm">
               <p>
                 <strong>Annulation demandée par le client.</strong>{" "}
                 {order.cancelReason || "Aucun motif précisé."}
@@ -516,18 +633,22 @@ function OrderRow({
           )}
 
           {/* Remboursement — le panneau se retire de lui-même sur une commande
-              jamais encaissée. */}
-          <div className="print:hidden">
-            <RefundOrder order={order} onDone={onRefunded} />
-          </div>
+              jamais encaissée. Les `print:hidden` de ce panneau et des deux
+              blocs ci-dessus ont sauté : ils ne servaient que du temps où
+              l'impression se réglait classe par classe. Les règles globales
+              écartent maintenant tout ce qui n'est pas le ticket. */}
+          <RefundOrder order={order} onDone={onRefunded} />
 
           {/*
-            Ticket de cuisine. `window.print()` imprimait toute la page
-            d'administration — sidebar, filtres et commandes ouvertes comprises.
-            Ce bloc est le seul visible à l'impression, l'interface étant masquée
-            par le `print:hidden` de la racine.
+            Ticket de cuisine — le seul bloc qui part sur le papier.
+            `window.print()` imprimait d'abord toute la page d'administration ;
+            on a alors masqué la racine du composant en média print, ce qui a
+            emporté le ticket avec elle : on n'imprimait plus que la barre
+            latérale. La classe `.ticket-impression` est le point d'accroche des
+            règles `@media print` de `app/globals.css`, qui masquent tout ce qui
+            n'est pas sur le chemin de ce bloc — barre latérale comprise.
           */}
-          <div className="hidden print:block print:p-0">
+          <div className="ticket-impression">
             <h2 className="text-xl font-bold">Ô 3 Saveurs — {order.ref}</h2>
             <p className="text-sm">
               {time} · {order.mode === "livraison" ? "Livraison" : "À emporter"} ·{" "}

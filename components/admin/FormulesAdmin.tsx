@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { cats, fmtPrice } from "@/lib/menu";
+import { lireMontant, toEuros } from "@/lib/money";
 import type { Dish, Formula } from "@/lib/menu";
 
 /**
@@ -13,8 +14,13 @@ import type { Dish, Formula } from "@/lib/menu";
  * définition entière (`PUT /api/formules/[id]`), qui conserve l'identifiant des
  * créneaux existants pour ne pas invalider les paniers en cours.
  *
- * Les montants sont saisis en euros et convertis en centimes à l'envoi : la
- * base ne connaît que des entiers de centimes.
+ * Les montants sont saisis en euros et convertis en centimes **à l'envoi
+ * seulement** : la base ne connaît que des entiers de centimes, mais le
+ * brouillon garde la chaîne telle que tapée. Auparavant le champ était
+ * recalculé à chaque frappe (`value={toEuros(draft.priceCents)}` alimenté par
+ * un `toCents` qui rendait 0 sur toute saisie inexploitable) : effacer le prix
+ * pour le retaper affichait aussitôt « 0,00 », et la formule pouvait repartir
+ * en vente à 0,00 €.
  */
 
 // ─── Modèle d'édition ─────────────────────────────────────────
@@ -22,12 +28,13 @@ import type { Dish, Formula } from "@/lib/menu";
 // directement l'objet venu du serveur : tant que l'enregistrement n'a pas
 // réussi, l'écran doit pouvoir revenir en arrière.
 
-interface DraftChoice {
+export interface DraftChoice {
   dishId: string;
-  supplementCents: number;
+  /** Euros saisis, tels que tapés — convertis en centimes à l'envoi. */
+  supplement: string;
 }
 
-interface DraftSlot {
+export interface DraftSlot {
   /** null pour un créneau qui n'existe pas encore en base */
   id: string | null;
   label: string;
@@ -35,13 +42,14 @@ interface DraftSlot {
   choices: DraftChoice[];
 }
 
-interface Draft {
+export interface Draft {
   id: string;
   code: string;
   name: string;
   desc: string;
   extra: string;
-  priceCents: number;
+  /** Euros saisis, tels que tapés. */
+  prix: string;
   active: boolean;
   slots: DraftSlot[];
 }
@@ -52,23 +60,98 @@ const toDraft = (f: Formula): Draft => ({
   name: f.name,
   desc: f.desc,
   extra: f.extra,
-  priceCents: f.priceCents,
+  prix: toEuros(f.priceCents),
   active: f.active,
   slots: f.slots.map((s) => ({
     id: s.id,
     label: s.label,
     required: s.required,
-    choices: s.choices.map((c) => ({ dishId: c.dishId, supplementCents: c.supplementCents })),
+    choices: s.choices.map((c) => ({ dishId: c.dishId, supplement: toEuros(c.supplementCents) })),
   })),
 });
 
-/** Euros saisis → centimes. Tolère la virgule décimale française. */
-const toCents = (v: string): number => {
-  const n = Number(v.replace(",", "."));
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : 0;
-};
+/** Corps attendu par `PUT /api/formules/[id]`. */
+export interface CorpsFormule {
+  code: string;
+  name: string;
+  desc: string;
+  extra: string;
+  priceCents: number;
+  active: boolean;
+  slots: { id?: string; label: string; required: boolean; choices: { dishId: string; supplementCents: number }[] }[];
+}
 
-const toEuros = (cents: number): string => (cents / 100).toFixed(2).replace(".", ",");
+/** Plafond d'un prix de formule, aligné sur `int(body.priceCents, …)` côté serveur. */
+const PRIX_FORMULE_MAX_CENTS = 100_000;
+
+/**
+ * Lit le brouillon et rend le corps à envoyer, ou la raison du refus.
+ *
+ * Deux garde-fous qui n'existaient nulle part :
+ *
+ *  · **une formule en vente ne peut pas être à 0,00 €.** Le `toCents` local
+ *    rendait 0 sur toute saisie inexploitable — champ vide compris — et
+ *    `POST`/`PUT /api/formules` acceptent un prix à partir de 0 : il suffisait
+ *    d'effacer le prix pour mettre la formule en vente gratuitement. 0 reste
+ *    accepté pour une formule **masquée**, parce que c'est l'état normal d'une
+ *    formule qu'on prépare et dont le tarif n'est pas encore arbitré ;
+ *  · **un supplément doit être lisible.** 0 y est en revanche parfaitement
+ *    légitime : la plupart des plats d'un créneau n'ont pas de supplément.
+ *
+ * `nomPlat` sert uniquement à nommer le plat fautif dans le message : sans lui,
+ * la cliente lit un identifiant de base et ne sait pas quelle pastille
+ * corriger.
+ */
+export function lireFormule(
+  draft: Draft,
+  nomPlat: (dishId: string) => string = (id) => id,
+): { ok: true; corps: CorpsFormule } | { ok: false; error: string } {
+  const code = draft.code.trim().toUpperCase();
+  if (code.length < 1 || code.length > 8) {
+    return { ok: false, error: "Le code doit comporter de 1 à 8 caractères." };
+  }
+  const name = draft.name.trim();
+  if (name.length < 2) {
+    return { ok: false, error: "Le nom de la formule doit comporter au moins 2 caractères." };
+  }
+
+  const prix = lireMontant(draft.prix, "Le prix de la formule", {
+    min: 0,
+    max: PRIX_FORMULE_MAX_CENTS,
+  });
+  if (!prix.ok) return prix;
+  const priceCents = prix.cents ?? 0;
+  if (priceCents === 0 && draft.active) {
+    return {
+      ok: false,
+      error:
+        "Une formule proposée sur le site ne peut pas être à 0,00 € : elle serait commandable gratuitement. Donnez-lui un prix, ou décrochez « Proposée sur le site » le temps de la préparer.",
+    };
+  }
+
+  const slots: CorpsFormule["slots"] = [];
+  for (const slot of draft.slots) {
+    const label = slot.label.trim();
+    if (label.length < 1) {
+      return { ok: false, error: "Chaque créneau doit avoir un libellé." };
+    }
+    const choices: { dishId: string; supplementCents: number }[] = [];
+    for (const choice of slot.choices) {
+      const sup = lireMontant(choice.supplement, `Le supplément de « ${nomPlat(choice.dishId)} »`, {
+        min: 0,
+        max: PRIX_FORMULE_MAX_CENTS,
+      });
+      if (!sup.ok) return sup;
+      choices.push({ dishId: choice.dishId, supplementCents: sup.cents ?? 0 });
+    }
+    slots.push({ ...(slot.id ? { id: slot.id } : {}), label, required: slot.required, choices });
+  }
+
+  return {
+    ok: true,
+    corps: { code, name, desc: draft.desc, extra: draft.extra, priceCents, active: draft.active, slots },
+  };
+}
 
 export function FormulesAdmin() {
   const [formulas, setFormulas] = useState<Formula[]>([]);
@@ -117,10 +200,24 @@ export function FormulesAdmin() {
       .filter((g) => g.list.length > 0);
   }, [dishes]);
 
+  /* Lecture du brouillon rejouée à la frappe : le même résultat sert au prix
+   * annoncé sous le champ, au message d'erreur, à l'état du bouton et au corps
+   * envoyé. */
+  const lu = useMemo(
+    () => (draft ? lireFormule(draft, (id) => dishById.get(id)?.name ?? "ce plat") : null),
+    [draft, dishById],
+  );
+
   /** Prix affiché « à partir de » : la formule seule, suppléments en sus. */
-  const draftTotalHint = draft
-    ? `${fmtPrice(draft.priceCents)} — hors suppléments`
-    : "";
+  const draftTotalHint = useMemo(() => {
+    if (!draft) return "";
+    const prix = lireMontant(draft.prix, "Le prix", { max: PRIX_FORMULE_MAX_CENTS });
+    // Pendant la frappe, le champ est momentanément illisible (« 10, ») : on
+    // affiche alors le rappel du format plutôt qu'un prix faux.
+    return prix.ok && prix.cents !== null
+      ? `${fmtPrice(prix.cents)} — hors suppléments`
+      : "Montant en euros, par exemple 10,90";
+  }, [draft]);
 
   // ─── Mutations du brouillon ─────────────────────────────────
 
@@ -154,7 +251,7 @@ export function FormulesAdmin() {
         ...s,
         choices: exists
           ? s.choices.filter((c) => c.dishId !== dishId)
-          : [...s.choices, { dishId, supplementCents: 0 }],
+          : [...s.choices, { dishId, supplement: "0,00" }],
       };
     });
 
@@ -166,22 +263,27 @@ export function FormulesAdmin() {
       if (allIn) return { ...s, choices: s.choices.filter((c) => !inCat.includes(c.dishId)) };
       const missing = inCat
         .filter((id) => !s.choices.some((c) => c.dishId === id))
-        .map((id) => ({ dishId: id, supplementCents: 0 }));
+        .map((id) => ({ dishId: id, supplement: "0,00" }));
       return { ...s, choices: [...s.choices, ...missing] };
     });
 
+  /* On stocke la frappe telle quelle, sans la reformater : reformater à chaque
+   * caractère renvoyait « 0,00 » dans le champ dès qu'il était vidé, et il
+   * devenait impossible de retaper un montant. */
   const setSupplement = (slotIndex: number, dishId: string, euros: string) =>
     patchSlot(slotIndex, (s) => ({
       ...s,
-      choices: s.choices.map((c) =>
-        c.dishId === dishId ? { ...c, supplementCents: toCents(euros) } : c,
-      ),
+      choices: s.choices.map((c) => (c.dishId === dishId ? { ...c, supplement: euros } : c)),
     }));
 
   // ─── Enregistrement ─────────────────────────────────────────
 
   const save = async () => {
     if (!draft) return;
+    if (!lu?.ok) {
+      setErreur(lu?.error ?? "La formule n'est pas enregistrable en l'état.");
+      return;
+    }
     setSaving(true);
     setErreur(null);
     setMessage(null);
@@ -189,20 +291,7 @@ export function FormulesAdmin() {
       const res = await fetch(`/api/formules/${draft.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code: draft.code,
-          name: draft.name,
-          desc: draft.desc,
-          extra: draft.extra,
-          priceCents: draft.priceCents,
-          active: draft.active,
-          slots: draft.slots.map((s) => ({
-            id: s.id ?? undefined,
-            label: s.label,
-            required: s.required,
-            choices: s.choices,
-          })),
-        }),
+        body: JSON.stringify(lu.corps),
       });
       const data = (await res.json().catch(() => null)) as
         | { formula?: Formula; error?: string }
@@ -369,8 +458,9 @@ export function FormulesAdmin() {
                   <Champ label="Prix (€)" hint={draftTotalHint}>
                     <input
                       inputMode="decimal"
-                      value={toEuros(draft.priceCents)}
-                      onChange={(e) => patch((d) => ({ ...d, priceCents: toCents(e.target.value) }))}
+                      placeholder="10,90"
+                      value={draft.prix}
+                      onChange={(e) => patch((d) => ({ ...d, prix: e.target.value }))}
                       className="w-full rounded-xl border border-line bg-panel-2 px-3.5 py-2.5 text-sm"
                     />
                   </Champ>
@@ -467,7 +557,7 @@ export function FormulesAdmin() {
                                   +
                                   <input
                                     inputMode="decimal"
-                                    value={toEuros(c.supplementCents)}
+                                    value={c.supplement}
                                     onChange={(e) => setSupplement(i, c.dishId, e.target.value)}
                                     aria-label={`Supplément pour ${dish?.name ?? "ce plat"}`}
                                     className="w-14 rounded-md border border-line bg-panel px-1.5 py-0.5 text-right"
@@ -551,6 +641,14 @@ export function FormulesAdmin() {
               </div>
 
               {/* ── Barre d'actions ── */}
+              {lu && !lu.ok && (
+                <p
+                  role="alert"
+                  className="rounded-xl border border-brick/30 bg-primary-soft p-3 text-sm text-brick"
+                >
+                  {lu.error}
+                </p>
+              )}
               <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-card)] border border-line bg-panel p-4 shadow-[var(--shadow-lg)]">
                 <button
                   type="button"
@@ -562,7 +660,7 @@ export function FormulesAdmin() {
                 <button
                   type="button"
                   onClick={save}
-                  disabled={saving}
+                  disabled={saving || !lu?.ok}
                   className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving ? "Enregistrement…" : "Enregistrer"}

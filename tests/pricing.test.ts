@@ -60,6 +60,7 @@ interface Promo {
   usedCount: number;
   oncePerCustomer: boolean;
   weekday: number | null;
+  mode: string | null;
   auto: boolean;
   active: boolean;
 }
@@ -78,6 +79,7 @@ function promo(over: Partial<Promo> = {}): Promo {
     usedCount: 0,
     oncePerCustomer: false,
     weekday: null,
+    mode: null,
     auto: false,
     active: true,
     ...over,
@@ -314,6 +316,25 @@ describe("promotionEligible", () => {
 
   it("accepte pile au minimum", () => {
     expect(promotionEligible(promo({ minSubtotalCents: 3000 }), 3000, at).ok).toBe(true);
+  });
+
+  /* « −10 % sur toute la carte à emporter » (dépliant 2026) : la remise ne doit
+   * jamais s'appliquer à une livraison. */
+  it("réserve une promotion « à emporter » au retrait", () => {
+    const p = promo({ mode: "emporter" });
+    expect(promotionEligible(p, 3000, at, "emporter").ok).toBe(true);
+    const res = promotionEligible(p, 3000, at, "livraison");
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("à emporter");
+  });
+
+  it("refuse une promotion réservée à un mode quand le mode est inconnu", () => {
+    expect(promotionEligible(promo({ mode: "emporter" }), 3000, at).ok).toBe(false);
+  });
+
+  it("laisse une promotion sans mode valable dans les deux modes", () => {
+    expect(promotionEligible(promo(), 3000, at, "livraison").ok).toBe(true);
+    expect(promotionEligible(promo(), 3000, at, "emporter").ok).toBe(true);
   });
 });
 

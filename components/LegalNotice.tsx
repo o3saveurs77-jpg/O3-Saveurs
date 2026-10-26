@@ -21,7 +21,7 @@ import { Icon } from "@/components/Icon";
 import { SETTING_DEFAULTS, formatAddress, getSettings, type Settings } from "@/lib/settings";
 
 /** Date de dernière mise à jour des textes légaux, affichée en pied de page. */
-export const LEGAL_UPDATED = "25 juillet 2026";
+export const LEGAL_UPDATED = "23 octobre 2026";
 
 /** Réglages pour une page légale, avec repli sur les valeurs par défaut. */
 export async function readSettings(): Promise<Settings> {
@@ -133,10 +133,19 @@ export function LegalNotice({ settings: s }: { settings: Settings }) {
       value: [s["restaurant.name"], s["restaurant.tagline"]].filter(Boolean).join(" — "),
       what: "le nom commercial",
     },
+    /* Une société doit indiquer son siège (art. 6-III LCEN). Le Kbis du
+     * 20 octobre 2026 place le siège à l'adresse du restaurant : si l'un des
+     * deux déménage, ce libellé devient faux et il faudra un réglage distinct. */
     {
-      label: "Adresse de l'établissement",
+      label: "Siège social et établissement",
       value: formatAddress(s),
-      what: "l'adresse de l'établissement",
+      what: "l'adresse du siège social",
+    },
+    {
+      label: "Immatriculation",
+      value: s["legal.rcs"],
+      what: "le numéro d'immatriculation au RCS",
+      optional: true,
     },
     { label: "SIRET", value: s["legal.siret"], what: "le numéro SIRET (14 chiffres)" },
     {

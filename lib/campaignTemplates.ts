@@ -72,7 +72,7 @@ export const MODELES_CAMPAGNE: ModeleCampagne[] = [
     sujet: "{plat} arrive à la carte — Ô 3 Saveurs",
     champs: [
       { cle: "plat", label: "Nom du plat", type: "ligne", exemple: "Le Thiéboudiène Poisson", requis: true },
-      { cle: "description", label: "Description", type: "texte", exemple: "Riz au gras, poisson frais, légumes mijotés — la recette de Laila, celle de sa grand-mère.", requis: true },
+      { cle: "description", label: "Description", type: "texte", exemple: "Riz au gras, poisson frais, légumes mijotés — la recette de la maison, celle de sa grand-mère.", requis: true },
       { cle: "prix", label: "Prix", type: "prix", exemple: "13,90 €", requis: false },
       { cle: "lien", label: "Lien", type: "lien", exemple: "https://o3saveurs.fr/carte", requis: true },
     ],
@@ -116,7 +116,7 @@ export const MODELES_CAMPAGNE: ModeleCampagne[] = [
     usage: "Le programme de la semaine, envoyé le lundi matin.",
     sujet: "Au menu cette semaine chez Ô 3 Saveurs",
     champs: [
-      { cle: "intro", label: "Introduction", type: "texte", exemple: "Voici ce que Laila vous prépare cette semaine.", requis: false },
+      { cle: "intro", label: "Introduction", type: "texte", exemple: "Voici ce qu'Ô 3 Saveurs vous prépare cette semaine.", requis: false },
       { cle: "programme", label: "Programme (une ligne par jour)", type: "texte", exemple: "Lundi : Mafé bœuf\nMardi : Tajine poulet aux olives\nMercredi : Yassa poulet", requis: true },
       { cle: "lien", label: "Lien", type: "lien", exemple: "https://o3saveurs.fr/carte", requis: true },
     ],

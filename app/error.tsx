@@ -3,11 +3,17 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
-import { info } from "@/lib/menu";
+import { formatPhone, info, telHref } from "@/lib/menu";
 
 /**
  * Frontière d'erreur du site. Sans ce fichier, la moindre exception dans un
  * composant client produisait un écran blanc sans recours.
+ *
+ * Cet écran lit le numéro dans `info` et non dans les réglages : il s'affiche
+ * précisément quand le rendu a échoué, donc éventuellement quand la base est
+ * injoignable. Un appel réseau pour obtenir un numéro de secours pourrait
+ * échouer à son tour et laisser le client sans aucun recours. La constante de
+ * `lib/menu.ts` doit donc rester juste — c'est son unique raison d'être.
  */
 export default function Error({
   error,
@@ -53,10 +59,10 @@ export default function Error({
           Retour à l'accueil
         </Link>
         <a
-          href={`tel:${info.phone.replace(/\s/g, "")}`}
+          href={telHref(info.phone)}
           className="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-6 py-3 font-semibold hover:bg-panel-2"
         >
-          <Icon name="phone" size={18} /> {info.phone}
+          <Icon name="phone" size={18} /> {formatPhone(info.phone)}
         </a>
       </div>
     </div>

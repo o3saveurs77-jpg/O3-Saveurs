@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { fmtCents } from "@/lib/money";
-import { STATUS_LABEL, STATUS_NEXT, type Order, type OrderStatus } from "@/lib/types";
+import {
+  STATUS_LABEL,
+  STATUS_NEXT,
+  paidAtCounter,
+  type Order,
+  type OrderStatus,
+} from "@/lib/types";
 import { StatusPill } from "./StatusPill";
 
 /* Écran « Livraisons » — tournées du jour (lot 4.2).
@@ -90,13 +96,68 @@ const clock = (ms: number | null) =>
 
 const slotLabel = (slot: string) => (slot === "asap" ? "Dès que possible" : slot);
 
+/**
+ * Argent que le livreur doit recevoir en main propre sur cet arrêt.
+ *
+ * « Non payée » n'est pas « à encaisser » : une commande réglée par carte dont
+ * le paiement n'a pas abouti reste non payée, et il n'y a pourtant rien à
+ * prendre au client — le livreur n'a pas de terminal. L'écran comptait
+ * pourtant tout `!paid` en espèces, jusque sur la feuille de route imprimée :
+ * le livreur partait avec un montant à réclamer qui n'existait pas.
+ * `paidAtCounter` (`lib/types.ts`) est la règle commune avec l'écran
+ * Commandes.
+ */
+export function cashDueCents(o: Pick<Order, "paid" | "paymentMethod" | "totalCents">): number {
+  return !o.paid && paidAtCounter(o.paymentMethod) ? o.totalCents : 0;
+}
+
+/**
+ * Cet arrêt peut-il être marqué « encaissé » depuis cet écran ?
+ *
+ * Le bouton n'était conditionné qu'à `!paid` : il s'affichait donc sur une
+ * commande par carte. Un clic y attribuait un **numéro de facture définitif**
+ * et envoyait la facture au client (`PATCH /api/orders/[id]`) pour de l'argent
+ * jamais reçu — et un numéro de facture ne se reprend pas. Seul l'argent remis
+ * en main propre se marque à la main.
+ */
+export function peutEncaisser(
+  o: Pick<Order, "paid" | "paymentMethod" | "totalCents" | "status">,
+): boolean {
+  return o.status !== "annulee" && cashDueCents(o) > 0;
+}
+
+/**
+ * Composition de la tournée à envoyer au serveur, dans l'ordre d'affichage.
+ *
+ * Les arrêts annulés en sont exclus : `PATCH /api/delivery-runs/[id]` refuse
+ * une commande annulée, et renvoyer la liste telle qu'affichée faisait échouer
+ * toute affectation ou tout réordonnancement dès qu'un arrêt avait été annulé.
+ */
+export function stopIds(orders: readonly Pick<Order, "id" | "status">[]): string[] {
+  return orders.filter((o) => o.status !== "annulee").map((o) => o.id);
+}
+
+/**
+ * Liste après déplacement d'un cran, ou `null` si le mouvement sort de la
+ * liste. Les boutons sont désactivés aux extrémités, mais c'est ici que la
+ * règle se vérifie — et c'est ici qu'elle se teste.
+ */
+export function reordered<T>(items: readonly T[], index: number, delta: number): T[] | null {
+  const target = index + delta;
+  if (index < 0 || index >= items.length) return null;
+  if (target < 0 || target >= items.length) return null;
+  const next = [...items];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}
+
 /** Récapitulatif d'une tournée : arrêts, espèces à ramener, communes desservies. */
 function recap(run: RunView) {
   const live = run.orders.filter((o) => o.status !== "annulee");
   return {
     stops: live.length,
     delivered: live.filter((o) => o.status === "livree").length,
-    cashCents: live.filter((o) => !o.paid).reduce((s, o) => s + o.totalCents, 0),
+    cashCents: live.reduce((s, o) => s + cashDueCents(o), 0),
     collectedCents: live.filter((o) => o.paid).reduce((s, o) => s + o.totalCents, 0),
     cities: [...new Set(live.map((o) => o.customer.city).filter(Boolean))] as string[],
   };
@@ -170,7 +231,16 @@ export function LivraisonsAdmin() {
     return () => window.removeEventListener("afterprint", done);
   }, []);
 
-  /** Appel écrivain : remonte le message d'erreur de l'API et recharge. */
+  /**
+   * Appel écrivain : remonte le message d'erreur de l'API et recharge.
+   *
+   * **Succès comme échec.** Seul le succès rechargeait : un refus du serveur
+   * laissait à l'écran un ordre de passage que la base n'avait pas accepté, et
+   * la feuille de route imprimée juste après ne correspondait ni à la base ni
+   * à ce que voyait le livreur. Toute écriture refusée remet donc l'écran sur
+   * ce que dit la base, y compris quand le réseau n'a rien répondu — on ne
+   * sait alors pas si l'écriture a eu lieu, et c'est le serveur qui tranche.
+   */
   const send = useCallback(
     async (url: string, init: RequestInit, okText?: string): Promise<boolean> => {
       setBusy(true);
@@ -183,6 +253,7 @@ export function LivraisonsAdmin() {
           | { error?: string; message?: string }
           | null;
         if (!res.ok) {
+          await load();
           setMessage({ tone: "err", text: data?.error ?? "L'opération a échoué." });
           return false;
         }
@@ -190,6 +261,7 @@ export function LivraisonsAdmin() {
         await load();
         return true;
       } catch {
+        await load();
         setMessage({ tone: "err", text: "Le serveur n'a pas répondu." });
         return false;
       } finally {
@@ -229,32 +301,26 @@ export function LivraisonsAdmin() {
   const assign = (orderId: string, runId: string) => {
     const run = runs.find((r) => r.id === runId);
     if (!run) return;
-    void setRunOrders(run, [...run.orders.map((o) => o.id), orderId], "Commande affectée.");
+    void setRunOrders(run, [...stopIds(run.orders), orderId], "Commande affectée.");
   };
 
   const detach = (run: RunView, orderId: string) =>
     void setRunOrders(
       run,
-      run.orders.filter((o) => o.id !== orderId).map((o) => o.id),
+      stopIds(run.orders.filter((o) => o.id !== orderId)),
       "Commande retirée de la tournée.",
     );
 
   const move = (run: RunView, index: number, delta: number) => {
-    const target = index + delta;
-    if (target < 0 || target >= run.orders.length) return;
-    const ids = run.orders.map((o) => o.id);
-    [ids[index], ids[target]] = [ids[target], ids[index]];
-    // Réordonnancement optimiste : l'ordre de passage se règle par petits
-    // mouvements successifs, attendre l'aller-retour réseau à chaque clic
-    // rendait la liste inutilisable.
-    setRuns((cur) =>
-      cur.map((r) =>
-        r.id === run.id
-          ? { ...r, orders: ids.map((id) => r.orders.find((o) => o.id === id)!) }
-          : r,
-      ),
-    );
-    void setRunOrders(run, ids, "Ordre de passage mis à jour.");
+    const arretes = reordered(run.orders, index, delta);
+    if (!arretes) return;
+    /* Réordonnancement optimiste : l'ordre de passage se règle par petits
+     * mouvements successifs, attendre l'aller-retour réseau à chaque clic
+     * rendait la liste inutilisable. Le pari est tenable parce qu'un refus du
+     * serveur recharge maintenant l'écran (`send`) : l'affichage ne peut plus
+     * rester en avance sur la base. */
+    setRuns((cur) => cur.map((r) => (r.id === run.id ? { ...r, orders: arretes } : r)));
+    void setRunOrders(run, stopIds(arretes), "Ordre de passage mis à jour.");
   };
 
   const setRunStatus = (run: RunView, status: string) =>
@@ -422,7 +488,7 @@ export function LivraisonsAdmin() {
                     <Icon name="clock" size={14} /> {slotLabel(o.slot)}
                   </span>
                   <span className="font-bold text-brick">{fmtCents(o.totalCents)}</span>
-                  {!o.paid && (
+                  {cashDueCents(o) > 0 && (
                     <span className="rounded-full bg-gold/20 px-2 py-0.5 text-xs font-bold text-[#8a6d00]">
                       à encaisser
                     </span>
@@ -601,13 +667,21 @@ export function LivraisonsAdmin() {
                                 </p>
                                 <p className="mt-1 text-sm font-bold text-brick">
                                   {fmtCents(o.totalCents)}
+                                  {/* « espèces à encaisser » s'affichait sur
+                                      toute commande non payée : le livreur
+                                      était envoyé réclamer en liquide le
+                                      montant d'un paiement par carte. */}
                                   {o.paid ? (
                                     <span className="ml-2 text-xs font-semibold text-teal">
                                       payée
                                     </span>
-                                  ) : (
+                                  ) : cashDueCents(o) > 0 ? (
                                     <span className="ml-2 text-xs font-semibold text-[#8a6d00]">
                                       espèces à encaisser
+                                    </span>
+                                  ) : (
+                                    <span className="ml-2 text-xs font-semibold text-brick">
+                                      {o.paymentMethod} non abouti — ne rien encaisser
                                     </span>
                                   )}
                                 </p>
@@ -665,7 +739,7 @@ export function LivraisonsAdmin() {
                                   {STATUS_LABEL[s]}
                                 </button>
                               ))}
-                              {!o.paid && o.status !== "annulee" && (
+                              {peutEncaisser(o) && (
                                 <button
                                   type="button"
                                   onClick={() => markPaid(o.id)}
@@ -771,7 +845,7 @@ export function LivraisonsAdmin() {
         <div id="feuille-de-route" className="hidden bg-white text-black print:block">
           <h1 className="text-2xl font-bold">Feuille de route</h1>
           <p className="mt-1 text-sm">
-            Ô 3 Saveurs — Chez Laila · {dayLabel(day)} · créneau {slotLabel(sheet.slot)}
+            Ô 3 Saveurs · {dayLabel(day)} · créneau {slotLabel(sheet.slot)}
           </p>
           <p className="mt-1 text-lg font-bold">Livreur : {sheet.driverName ?? "—"}</p>
 
@@ -801,8 +875,15 @@ export function LivraisonsAdmin() {
                     {o.customer.address}
                     {o.customer.zip ? `, ${o.customer.zip}` : ""} {o.customer.city}
                   </td>
+                  {/* La feuille de route est ce que le livreur a en main : elle
+                      ne doit annoncer une somme à réclamer que si elle se
+                      reçoit en main propre. */}
                   <td className="py-1.5 pr-2 text-right font-bold">
-                    {o.paid ? "payée" : fmtCents(o.totalCents)}
+                    {o.paid
+                      ? "payée"
+                      : cashDueCents(o) > 0
+                        ? fmtCents(cashDueCents(o))
+                        : "rien à encaisser"}
                   </td>
                 </tr>
               ))}

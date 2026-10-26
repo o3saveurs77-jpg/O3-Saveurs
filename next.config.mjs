@@ -108,6 +108,52 @@ const nextConfig = {
         ]
       : [],
     formats: ["image/avif", "image/webp"],
+
+    /* Largeurs proposées dans le `srcset`.
+     *
+     * La liste par défaut de Next monte à 3840 px, et c'est bien ce que le site
+     * servait : mesuré en production, l'accueil demandait son image d'en-tête en
+     * 3840 px de large, pour 440 Ko. Personne ne regarde ce restaurant sur un
+     * écran de 4 000 pixels, et surtout pas le visiteur en 4G que cette page
+     * faisait attendre onze secondes.
+     *
+     * Plafonner à 1920 suffit à couvrir un grand écran — y compris en densité
+     * double, puisque la mise en page borne le contenu à 1180 px (`.wrap`). Les
+     * petites tailles sont conservées : ce sont elles que reçoit un téléphone. */
+    deviceSizes: [360, 480, 640, 828, 1080, 1280, 1600, 1920],
+
+    /* Durée de conservation des images optimisées, en secondes. Trente jours :
+     * une photo de plat ne change pas, et chaque reconversion coûte du calcul
+     * sur une instance qui n'en a pas à revendre. */
+    minimumCacheTTL: 2_592_000,
+  },
+
+  /* Redirections des URL d'un site antérieur.
+   *
+   * Google garde `o3saveurs.fr/accueil/` dans son index — titre « Accueil - Ô 3
+   * Saveurs - Restaurant », soit une page qui n'a jamais existé dans cette
+   * application. Le domaine a donc servi un autre site avant celle-ci, et cette
+   * URL est aujourd'hui une 404 : le peu d'autorité qu'elle porte est perdu, et
+   * un visiteur qui clique le résultat tombe sur une erreur.
+   *
+   * Une 301 transfère l'autorité vers l'accueil et fait disparaître l'entrée de
+   * l'index au passage suivant du robot. `permanent: true` est bien ce qu'on
+   * veut ici : la page ne reviendra pas.
+   */
+  async redirects() {
+    return [
+      { source: "/accueil", destination: "/", permanent: true },
+
+      /* `/commande` tout seul n'a jamais existé : la page de suivi est
+       * `/commande/<identifiant>` et le tunnel est `/commander`. L'adresse
+       * courte circule pourtant — on la tape de mémoire, elle traîne dans des
+       * échanges — et elle tombait sur la page d'erreur. Le `source` est exact,
+       * sans joker : `/commande/<id>` doit continuer d'afficher le suivi.
+       *
+       * 308 et non 301 : la redirection permanente de Next conserve la méthode
+       * HTTP, ce qui évite qu'un formulaire posté là se transforme en GET. */
+      { source: "/commande", destination: "/commander", permanent: true },
+    ];
   },
 
   async headers() {

@@ -20,6 +20,14 @@ import { Icon } from "@/components/Icon";
  *
  * L'ordre d'affichage est celui de l'API (dernière activité en premier) : une
  * réclamation qui vient de recevoir un message remonte d'elle-même.
+ *
+ * L'écran annonçait « Réponse envoyée » dès que la route répondait 201, c'est-à-dire
+ * dès que le message était en base — alors que l'email, lui, pouvait avoir été
+ * refusé par Resend. Le restaurant classait donc la réclamation comme traitée,
+ * le client n'avait jamais rien reçu, et le litige reprenait quinze jours plus
+ * tard. La route rend maintenant le sort de l'envoi (`notification`), et c'est
+ * `messageReponse()` qui le traduit en une phrase — y compris celle qui dit
+ * qu'il faut décrocher le téléphone.
  */
 
 const PRIORITES = ["basse", "normale", "haute"] as const;
@@ -47,6 +55,57 @@ function quand(ms: number): string {
   });
 }
 
+/** Trois tons : c'est fait, c'est fait à moitié, ça a raté. */
+type Ton = "ok" | "attention" | "erreur";
+
+const TON_BANDEAU: Record<Ton, string> = {
+  ok: "border-teal/30 bg-teal/10 text-teal",
+  attention: "border-gold/50 bg-gold/10 text-[#7a5c02]",
+  erreur: "border-brick/30 bg-primary-soft text-brick",
+};
+
+/** Sort de l'email de réponse, tel que `POST /api/tickets/[id]/messages` le rend. */
+export interface NotificationReponse {
+  sent: boolean;
+  to: string | null;
+}
+
+/**
+ * Ce que l'écran annonce après une réponse déposée dans le fil.
+ *
+ * Le message est en base dans les trois cas — c'est l'email qui varie. La
+ * nuance n'est pas cosmétique : si le client n'a rien reçu, la réclamation
+ * n'est pas traitée, et la seule issue est un appel. La phrase le dit, plutôt
+ * que de laisser deviner.
+ *
+ * Fonction pure, et exportée pour cela : une erreur de formulation ici se
+ * paierait en litiges, pas en pixels.
+ */
+export function messageReponse(
+  notification: NotificationReponse | undefined,
+  client: string,
+): { tone: Ton; text: string } {
+  /* Champ absent : réponse d'une version plus ancienne de la route, ou corps
+   * illisible. On ne sait pas — donc on ne promet pas. */
+  if (!notification) {
+    return {
+      tone: "attention",
+      text: `Réponse enregistrée dans le fil. Le serveur n'a pas indiqué si l'email était parti : assurez-vous que ${client} l'a bien reçu avant de clore la réclamation.`,
+    };
+  }
+
+  if (!notification.sent) {
+    return {
+      tone: "erreur",
+      text: `Réponse enregistrée dans le fil, mais l'email${
+        notification.to ? ` à ${notification.to}` : ""
+      } n'est pas parti : ${client} n'a rien reçu. Rappelez ${client} pour lui répondre de vive voix.`,
+    };
+  }
+
+  return { tone: "ok", text: `Réponse envoyée à ${notification.to ?? client}.` };
+}
+
 export function SavAdmin() {
   const [tickets, setTickets] = useState<SupportTicketView[]>([]);
   const [ready, setReady] = useState(false);
@@ -54,7 +113,7 @@ export function SavAdmin() {
   const [ouvert, setOuvert] = useState<string | null>(null);
   const [reponse, setReponse] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<{ tone: "ok" | "erreur"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ tone: Ton; text: string } | null>(null);
 
   const charger = useCallback(async () => {
     try {
@@ -103,24 +162,26 @@ export function SavAdmin() {
     }
   };
 
-  const repondre = async (id: string) => {
+  const repondre = async (ticket: SupportTicketView) => {
     const texte = reponse.trim();
     if (texte.length < 2) return;
     setBusy(true);
     setMessage(null);
     try {
-      const res = await fetch(`/api/tickets/${id}/messages`, {
+      const res = await fetch(`/api/tickets/${ticket.id}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: texte }),
       });
-      if (!res.ok) {
-        const e = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(e?.error ?? "Envoi refusé");
-      }
+      const data = (await res.json().catch(() => null)) as
+        | ({ error?: string } & { notification?: NotificationReponse })
+        | null;
+      if (!res.ok) throw new Error(data?.error ?? "Envoi refusé");
+
       setReponse("");
       await charger();
-      setMessage({ tone: "ok", text: "Réponse envoyée." });
+      // Le message est enregistré ; reste à dire si le client, lui, l'a reçu.
+      setMessage(messageReponse(data?.notification, ticket.customerName));
     } catch (e) {
       setMessage({ tone: "erreur", text: (e as Error).message });
     } finally {
@@ -148,13 +209,11 @@ export function SavAdmin() {
       </header>
 
       {message && (
+        /* `alert` dès que l'envoi n'est pas sûr : un lecteur d'écran doit
+            l'annoncer sans attendre que la personne y revienne. */
         <p
-          role={message.tone === "erreur" ? "alert" : "status"}
-          className={`rounded-xl border p-3 text-sm ${
-            message.tone === "erreur"
-              ? "border-brick/30 bg-primary-soft text-brick"
-              : "border-teal/30 bg-teal/10 text-teal"
-          }`}
+          role={message.tone === "ok" ? "status" : "alert"}
+          className={`rounded-xl border p-3 text-sm ${TON_BANDEAU[message.tone]}`}
         >
           {message.text}
         </p>
@@ -301,7 +360,7 @@ export function SavAdmin() {
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => repondre(t.id)}
+                            onClick={() => repondre(t)}
                             disabled={busy || reponse.trim().length < 2}
                             className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-white transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
                           >

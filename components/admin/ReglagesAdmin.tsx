@@ -18,6 +18,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import { HorairesAdmin } from "@/components/admin/HorairesAdmin";
 import type { Settings } from "@/lib/settings";
 
 type Draft = Record<string, string>;
@@ -48,12 +49,18 @@ const SECTIONS: SectionDef[] = [
     desc: "Ce que les clients voient : nom, téléphone, adresse. Repris dans le pied de page, les emails et les factures.",
     fields: [
       { key: "restaurant.name", label: "Nom du restaurant" },
-      { key: "restaurant.tagline", label: "Signature", placeholder: "Chez Laila" },
+      { key: "restaurant.tagline", label: "Signature", placeholder: "Cuisine du monde" },
       { key: "restaurant.phone", label: "Téléphone", type: "tel" },
       { key: "restaurant.email", label: "Email de contact", type: "email" },
       { key: "restaurant.address", label: "Adresse (numéro et rue)" },
       { key: "restaurant.zip", label: "Code postal", help: "5 chiffres" },
       { key: "restaurant.city", label: "Commune" },
+      {
+        key: "restaurant.partners",
+        label: "Plateformes de livraison",
+        placeholder: "Uber Eats",
+        help: "Affiché en pied de page (« Livraison & à emporter, mais aussi … »). Laisser vide retire la ligne. N'annoncez que les plateformes réellement actives : une enseigne citée à tort fait chercher le restaurant là où il n'est pas.",
+      },
     ],
   },
   {
@@ -82,6 +89,12 @@ const SECTIONS: SectionDef[] = [
         key: "legal.capital",
         label: "Capital social",
         help: "Uniquement pour une société. Laisser vide pour une entreprise individuelle.",
+      },
+      {
+        key: "legal.rcs",
+        label: "Immatriculation RCS",
+        help: "Ville du greffe et SIREN, tels que sur le Kbis.",
+        placeholder: "RCS Melun 131 135 550",
       },
       {
         key: "legal.publisher",
@@ -367,26 +380,10 @@ export function ReglagesAdmin({ initial }: { initial: Settings }) {
         </section>
       ))}
 
-      {/* ─────────────────────────────────────────────────────────────
-          Section « Horaires ».
-          Emplacement réservé à `components/admin/HorairesAdmin.tsx`, écrit en
-          parallèle par un autre agent (modèle `OpeningHours`, `lib/hours.ts`).
-          Brancher en remplaçant le paragraphe ci-dessous par :
-
-              <HorairesAdmin />
-
-          et en ajoutant l'import correspondant en tête de fichier.
-          ───────────────────────────────────────────────────────────── */}
-      <section className="rounded-[var(--radius-card)] border border-line bg-panel p-6 shadow-[var(--shadow-soft)]">
-        <h2 className="text-xl">Horaires d&apos;ouverture</h2>
-        <p className="mt-1 text-sm text-ink-2">
-          Services du midi et du soir, jour par jour. Ils déterminent les créneaux proposés au
-          client et le refus des commandes hors service.
-        </p>
-        <p className="mt-4 rounded-xl border border-dashed border-line bg-panel-2 px-4 py-3 text-sm text-ink-2">
-          Emplacement réservé à l&apos;éditeur d&apos;horaires (en cours d&apos;intégration).
-        </p>
-      </section>
+      {/* Les horaires vivent dans la table `OpeningHours`, pas dans `Settings` :
+          ils se chargent et s'enregistrent par `/api/hours`, avec leur propre
+          bouton. Le bouton « Enregistrer » de cette page ne les emporte pas. */}
+      <HorairesAdmin />
 
       <div className="flex justify-end">
         <button

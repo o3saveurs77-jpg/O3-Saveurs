@@ -272,13 +272,29 @@ export function SurCommandeBlock({
             >
               {/* La vignette n'apparaît que si la photo existe : sans elle, la
                   description prend toute la largeur au lieu de laisser un carré
-                  vide dans chaque carte. */}
+                  vide dans chaque carte.
+
+                  `alt=""` est délibéré, et non un oubli d'accessibilité : le
+                  nom du plat est écrit juste à côté, en toutes lettres, dans le
+                  titre de la carte. Décrire la photo le ferait annoncer deux
+                  fois de suite au lecteur d'écran, ce qui fait perdre du temps
+                  sans rien apprendre. Une image purement illustrative d'un
+                  texte adjacent se tait — règle WCAG 1.1.1, cas « décoratif ».
+                  Merci de ne pas « corriger » cette ligne au prochain audit.
+
+                  Taille déclarée alignée sur la taille d'affichage. Elle valait
+                  160 px pour une vignette de 80 à 96 px : Next calculant son
+                  jeu de variantes à partir de cette valeur, le navigateur
+                  téléchargeait du 256 px en écran simple et du 384 px en écran
+                  à forte densité, soit quatre fois les pixels nécessaires, et
+                  cela pour chacune des pièces sur commande. */}
               {d.photo && (
                 <Image
                   src={d.photo}
                   alt=""
-                  width={160}
-                  height={160}
+                  width={96}
+                  height={96}
+                  sizes="(min-width: 640px) 96px, 80px"
                   className="h-20 w-20 shrink-0 rounded-2xl object-cover sm:h-24 sm:w-24"
                 />
               )}

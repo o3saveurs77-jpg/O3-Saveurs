@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Ô 3 Saveurs">
+  <!--
+    Icône d'onglet. Reprend l'emblème de `components/Brand.tsx` — disque
+    terracotta, fin anneau crème — mais réduit au seul « Ô » : le « Ô3 » suivi
+    de « SAVEURS » tient dans un logo de 46 px, pas dans un onglet de 16.
+    Couleurs écrites en dur : les variables CSS du site n'existent pas dans le
+    contexte où un navigateur peint une icône.
+    Police générique à dessein : Playfair Display n'est pas chargée ici, et une
+    police absente ferait tomber le texte sur un rendu imprévisible.
+  -->
+  <circle cx="50" cy="50" r="48" fill="#e8732a"/>
+  <circle cx="50" cy="50" r="41" fill="none" stroke="#fbf1e0" stroke-width="4"/>
+  <text x="50" y="50" text-anchor="middle" dominant-baseline="central"
+        font-family="Georgia, 'Times New Roman', serif" font-weight="700"
+        font-size="52" fill="#fbf1e0">Ô</text>
+</svg>

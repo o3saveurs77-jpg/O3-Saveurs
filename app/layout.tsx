@@ -32,12 +32,11 @@ export const metadata: Metadata = {
 
   /* Le gabarit ne complète que les titres *courts* des pages : chaque page
    * annonce « La Carte », la marque est ajoutée ici. Les pages portaient
-   * auparavant leur titre complet — « La Carte · Ô 3 Saveurs — Chez Laila » —
-   * auquel le gabarit ajoutait la marque une seconde fois, donnant en résultat
-   * de recherche « La Carte · Ô 3 Saveurs — Chez Laila · Ô 3 Saveurs ». */
+   * auparavant leur titre complet — auquel le gabarit ajoutait la marque une
+   * seconde fois. */
   title: {
-    default: "Ô 3 Saveurs · Restaurant africain & maghrébin à Pontault-Combault",
-    template: "%s · Ô 3 Saveurs — Chez Laila",
+    default: "Ô 3 Saveurs · Cuisine du monde à Pontault-Combault",
+    template: "%s · Ô 3 Saveurs",
   },
   description:
     "Cuisine du monde préparée maison — Afrique de l'Ouest, Maghreb, Méditerranée. Commandez en ligne, en livraison ou à emporter, à Pontault-Combault et alentours.",
@@ -56,8 +55,8 @@ export const metadata: Metadata = {
     type: "website",
     locale: "fr_FR",
     url: SITE_URL,
-    siteName: "Ô 3 Saveurs — Chez Laila",
-    title: "Ô 3 Saveurs — Chez Laila · Cuisine du monde à Pontault-Combault",
+    siteName: "Ô 3 Saveurs",
+    title: "Ô 3 Saveurs · Cuisine du monde à Pontault-Combault",
     description:
       "Afrique de l'Ouest, Maghreb, Méditerranée — préparé maison, livré chez vous à Pontault-Combault et alentours.",
     /* Photo réelle plutôt que carte générée par `next/og` : la compilation
@@ -75,7 +74,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Ô 3 Saveurs — Chez Laila · Cuisine du monde à Pontault-Combault",
+    title: "Ô 3 Saveurs · Cuisine du monde à Pontault-Combault",
     description:
       "Afrique de l'Ouest, Maghreb, Méditerranée — préparé maison, livré chez vous.",
     images: ["/photos/p03.jpg"],

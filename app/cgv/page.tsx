@@ -3,7 +3,7 @@
  * Obligatoires pour la vente à distance (art. L221-5 et L111-1 du code de la
  * consommation). Le point le plus coûteux à omettre est l'article 10 :
  * l'exclusion du droit de rétractation pour les denrées périssables
- * (art. L221-28 3°) n'est **opposable que si elle figure dans des CGV acceptées
+ * (art. L221-28 4° — le 3° vise les biens personnalisés) n'est **opposable que si elle figure dans des CGV acceptées
  * avant paiement**. Sans elles, chaque client pouvait légalement exiger le
  * remboursement d'un repas déjà livré et consommé.
  *
@@ -16,11 +16,13 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { rowToZone } from "@/lib/serialize";
 import { fmtCents, fmtVatRate } from "@/lib/money";
+import { pageMetadata } from "@/lib/seo";
 import type { Zone } from "@/lib/menu";
 import {
   LEGAL_UPDATED,
   LegalBody,
   LegalHero,
+  LegalNotice,
   LegalSection,
   Missing,
   MissingBox,
@@ -30,12 +32,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+/* Description, canonique et image de partage : `lib/seo.ts`. */
+export const metadata: Metadata = pageMetadata({
+  path: "/cgv",
   title: "Conditions générales de vente",
-  description:
-    "Conditions de commande, prix, livraison, paiement, réclamations et droit de rétractation.",
-  alternates: { canonical: "/cgv" },
-};
+});
 
 async function readZones(): Promise<Zone[]> {
   try {
@@ -71,9 +72,12 @@ export default async function CgvPage() {
           <p>
             Les présentes conditions générales de vente régissent les ventes de plats préparés
             réalisées à distance sur ce site par l&apos;exploitant du restaurant{" "}
-            <strong>Ô 3 Saveurs — Chez Laila</strong>, dont les informations légales figurent dans
-            les <Link href="/mentions-legales" className="font-semibold text-brick underline">mentions légales</Link>.
+            <strong>Ô 3 Saveurs</strong>, ci-après « le restaurant », identifié comme suit :
           </p>
+          {/* L'identité du vendeur fait partie de l'information précontractuelle
+              (art. L221-5 et L111-1) : un simple renvoi aux mentions légales ne
+              la place pas dans le document que le client accepte. */}
+          <LegalNotice settings={s} />
           <p>
             Elles s&apos;appliquent à toute commande, en livraison à domicile comme en retrait sur
             place. Toute commande implique leur acceptation sans réserve, matérialisée par la case à
@@ -237,7 +241,7 @@ export default async function CgvPage() {
         {/* L'article le plus important de ces CGV. */}
         <LegalSection id="retractation" title="10. Droit de rétractation">
           <p className="rounded-xl border border-brick/40 bg-primary-soft p-4 font-semibold text-brick">
-            Conformément à l&apos;article L221-28 3° du code de la consommation, le droit de
+            Conformément à l&apos;article L221-28 4° du code de la consommation, le droit de
             rétractation ne peut pas être exercé pour les biens susceptibles de se détériorer ou de
             se périmer rapidement. Les plats préparés commandés sur ce site étant des denrées
             alimentaires périssables, <strong>aucun droit de rétractation ne s&apos;applique</strong>{" "}
@@ -322,6 +326,12 @@ export default async function CgvPage() {
             Les plats sont destinés à une consommation immédiate. Ils doivent être consommés dans
             les deux heures suivant la livraison ou le retrait, ou conservés au réfrigérateur et
             consommés dans les vingt-quatre heures.
+          </p>
+          <p>
+            Le client bénéficie dans tous les cas de la garantie légale de conformité (articles
+            L217-3 et suivants du code de la consommation) et de la garantie des vices cachés
+            (articles 1641 et suivants du code civil). Leur mise en œuvre passe par la réclamation
+            décrite à l&apos;article 11.
           </p>
         </LegalSection>
 

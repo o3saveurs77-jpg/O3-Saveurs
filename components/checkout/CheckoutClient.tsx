@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useCart } from "@/components/cart/CartContext";
 import { useAuth } from "@/components/providers/AuthContext";
-import { fmtPrice, info } from "@/lib/menu";
+import { fmtPrice, formatPhone, info } from "@/lib/menu";
 import type { Zone } from "@/lib/menu";
 import { resolveZone } from "@/lib/zones";
 import { formatLeadTime } from "@/lib/preorder";
@@ -13,6 +13,14 @@ import { Icon } from "@/components/Icon";
 import { AddressAutocomplete } from "./AddressAutocomplete";
 import type { DeliveryQuote } from "@/app/api/delivery-quote/route";
 import type { OrderMode } from "@/lib/types";
+import { applyPercent } from "@/lib/money";
+
+/** Remise automatique à emporter, telle que l'annonce `/api/delivery-info`. */
+interface PickupDiscount {
+  label: string;
+  percent: number;
+  minSubtotalCents: number;
+}
 
 /** Doit rester aligné sur `PAYMENT_METHODS` de `app/api/checkout/route.ts`. */
 const PAYMENTS = ["Carte bancaire", "Apple Pay", "Google Pay", "PayPal", "Espèces sur place"] as const;
@@ -71,9 +79,38 @@ export function CheckoutClient() {
   const [error, setError] = useState<string | null>(null);
   const [canceled, setCanceled] = useState(false);
 
+  /* Numéro à donner au client quand la commande en ligne ne peut pas aboutir.
+   *
+   * Les trois messages de recours lisaient `info.phone`, une constante du code :
+   * depuis le changement de ligne, le tunnel invitait donc à appeler un numéro
+   * qui ne sonne plus — au moment précis où le téléphone est le dernier recours
+   * du client. Les réglages font foi, `info` n'est plus que le repli, affiché
+   * d'emblée pour qu'aucun message ne sorte sans numéro.
+   *
+   * Appel public de `/api/settings` (clés d'affichage seulement) : la page de
+   * commande est un composant client, elle ne peut pas lire la base. */
+  const [telMaison, setTelMaison] = useState(info.phone);
+
+  useEffect(() => {
+    let monte = true;
+    fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((data: { settings?: Record<string, string> }) => {
+        const valeur = (data.settings?.["restaurant.phone"] ?? "").trim();
+        if (monte && valeur) setTelMaison(valeur);
+      })
+      .catch(() => {
+        /* Réglages injoignables : le repli reste affiché. */
+      });
+    return () => {
+      monte = false;
+    };
+  }, []);
+
   const [zones, setZones] = useState<Zone[] | null>(null);
   const [slots, setSlots] = useState<SlotsResponse | null>(null);
   const [freeDeliveryThresholdCents, setFreeDeliveryThresholdCents] = useState<number | null>(null);
+  const [pickupDiscount, setPickupDiscount] = useState<PickupDiscount | null>(null);
 
   /* Plats sur commande : le panier porte le délai de chaque plat, et c'est le
    * plus long qui commande — un gigot à 48 h et des pastels partent ensemble,
@@ -168,9 +205,16 @@ export function CheckoutClient() {
     let alive = true;
     fetch("/api/delivery-info", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("delivery-info"))))
-      .then((data: { freeDeliveryThresholdCents: number | null }) => {
-        if (alive) setFreeDeliveryThresholdCents(data.freeDeliveryThresholdCents);
-      })
+      .then(
+        (data: {
+          freeDeliveryThresholdCents: number | null;
+          pickupDiscount?: PickupDiscount | null;
+        }) => {
+          if (!alive) return;
+          setFreeDeliveryThresholdCents(data.freeDeliveryThresholdCents);
+          setPickupDiscount(data.pickupDiscount ?? null);
+        },
+      )
       .catch(() => alive && setFreeDeliveryThresholdCents(null));
     return () => {
       alive = false;
@@ -353,7 +397,17 @@ export function CheckoutClient() {
   // barème réellement appliqué (distance ou zones).
   const feeCents =
     mode === "livraison" && !freeDeliveryReached ? quote?.feeCents ?? zone?.feeCents ?? 0 : 0;
-  const totalCents = subtotalCents + feeCents;
+  /* Remise automatique à emporter, en aperçu. Un code saisi la remplace côté
+   * serveur (`computeOrder()` n'applique qu'une promotion) : on ne l'affiche
+   * donc pas dans ce cas, pour ne pas annoncer une remise qui ne viendra pas. */
+  const pickupDiscountCents =
+    mode === "emporter" &&
+    pickupDiscount &&
+    !promoCode.trim() &&
+    subtotalCents >= pickupDiscount.minSubtotalCents
+      ? applyPercent(subtotalCents, pickupDiscount.percent)
+      : 0;
+  const totalCents = subtotalCents + feeCents - pickupDiscountCents;
   const belowMin =
     mode === "livraison" && (!!quote?.deliverable || !!zone) && subtotalCents < minimumCents;
 
@@ -418,7 +472,9 @@ export function CheckoutClient() {
          la date choisie est servable. */
       if (!preorderSlots) out.push("Chargement des dates disponibles…");
       else if (preorderSlots.days.length === 0) {
-        out.push(`Aucune date n'est disponible pour ces plats. Appelez-nous au ${info.phone}.`);
+        out.push(
+          `Aucune date n'est disponible pour ces plats. Appelez-nous au ${formatPhone(telMaison)}.`,
+        );
       } else if (!preorderDay) out.push("Choisissez une date de retrait à l'étape 2.");
       else if (!preorderDay.slots.includes(slot)) out.push("Choisissez une heure à l'étape 2.");
 
@@ -478,6 +534,7 @@ export function CheckoutClient() {
     minimumCents,
     subtotalCents,
     cgv,
+    telMaison,
   ]);
 
   const valid = lines.length > 0 && blockers.length === 0;
@@ -662,7 +719,7 @@ export function CheckoutClient() {
               <Icon name="warning" size={18} className="mt-0.5 shrink-0" />
               <span>
                 <strong>La commande en ligne est momentanément indisponible.</strong> Réessayez dans
-                un instant, ou appelez-nous au {info.phone} — nous prenons votre commande par
+                un instant, ou appelez-nous au {formatPhone(telMaison)} — nous prenons votre commande par
                 téléphone.
               </span>
             </span>
@@ -789,7 +846,7 @@ export function CheckoutClient() {
             ) : preorderSlots.days.length === 0 ? (
               <p className="text-sm text-ink-2">
                 Aucune date n&apos;est disponible pour ces plats en ce moment. Appelez-nous au{" "}
-                {info.phone}.
+                {formatPhone(telMaison)}.
               </p>
             ) : (
               <>
@@ -1148,6 +1205,12 @@ export function CheckoutClient() {
                       : fmtPrice(zone.feeCents)}
               </dd>
             </div>
+            {pickupDiscountCents > 0 && pickupDiscount && (
+              <div className="flex justify-between text-brick">
+                <dt>{pickupDiscount.label}</dt>
+                <dd className="font-semibold">−{fmtPrice(pickupDiscountCents)}</dd>
+              </div>
+            )}
           </dl>
 
           <div className="my-4 h-px bg-line" />

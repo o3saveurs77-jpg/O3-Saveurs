@@ -77,7 +77,15 @@ export async function POST(req: Request) {
     name: str(body.name, "Le nom", { min: 2, max: 60 }),
     desc: str(body.desc, "La description", { max: 200, required: false }),
     extra: str(body.extra, "L'argument", { max: 80, required: false }),
-    priceCents: int(body.priceCents, "Le prix", { min: 0, max: 100_000 }),
+    /* Une formule **mise en vente** ne peut pas coûter zéro : c'est le défaut
+     * que l'écran laissait passer, et que le serveur acceptait sans broncher.
+     * Zéro reste permis sur une formule masquée, seul cas légitime — un tarif
+     * pas encore arbitré, qu'on prépare sans l'exposer. L'écran ne doit pas
+     * être la seule défense : il suffit d'un appel direct pour le contourner. */
+    priceCents: int(body.priceCents, "Le prix", {
+      min: bool(body.active, true) ? 1 : 0,
+      max: 100_000,
+    }),
   });
   if (!fields.ok) return badRequest(fields.error);
 

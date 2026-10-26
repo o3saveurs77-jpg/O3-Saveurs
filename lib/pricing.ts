@@ -314,15 +314,21 @@ interface PromotionRow {
   usedCount: number;
   oncePerCustomer: boolean;
   weekday: number | null;
+  mode: string | null;
   auto: boolean;
   active: boolean;
 }
 
-/** Une promotion est-elle utilisable maintenant, pour ce montant ? */
+/**
+ * Une promotion est-elle utilisable maintenant, pour ce montant et ce mode ?
+ * Une promotion réservée à un mode est refusée quand le mode n'est pas fourni :
+ * mieux vaut une remise manquée qu'un −10 % « à emporter » sur une livraison.
+ */
 export function promotionEligible(
   promo: PromotionRow,
   subtotalCents: number,
   at: Date = new Date(),
+  mode?: OrderMode,
 ): Result<true> {
   if (!promo.active) return err("Ce code promotionnel n'est plus actif");
   if (promo.startsAt && at < promo.startsAt) return err("Ce code n'est pas encore valable");
@@ -332,6 +338,13 @@ export function promotionEligible(
   }
   if (promo.weekday !== null && at.getDay() !== promo.weekday) {
     return err("Ce code n'est pas valable aujourd'hui");
+  }
+  if (promo.mode && promo.mode !== mode) {
+    return err(
+      promo.mode === "emporter"
+        ? "Ce code n'est valable que pour une commande à emporter"
+        : "Ce code n'est valable que pour une livraison",
+    );
   }
   if (subtotalCents < promo.minSubtotalCents) {
     return err(`Ce code s'applique à partir de ${(promo.minSubtotalCents / 100).toFixed(2)} €`);
@@ -432,7 +445,7 @@ export async function computeOrder(input: ComputeInput): Promise<Result<PricedOr
     const promo = await prisma.promotion.findUnique({ where: { code } });
     if (!promo) return err("Code promotionnel inconnu");
 
-    const eligible = promotionEligible(promo, subtotalCents, now);
+    const eligible = promotionEligible(promo, subtotalCents, now, input.mode);
     if (!eligible.ok) return eligible;
 
     if (promo.oncePerCustomer && input.customerEmail) {
@@ -459,7 +472,7 @@ export async function computeOrder(input: ComputeInput): Promise<Result<PricedOr
     const autos = await prisma.promotion.findMany({ where: { active: true, auto: true } });
     let best: AppliedPromotion | null = null;
     for (const promo of autos) {
-      if (!promotionEligible(promo, subtotalCents, now).ok) continue;
+      if (!promotionEligible(promo, subtotalCents, now, input.mode).ok) continue;
       const { discountCents, freeDelivery } = promotionDiscount(promo, subtotalCents, feeCents);
       const gain = discountCents + (freeDelivery ? feeCents : 0);
       const bestGain = best ? best.discountCents + (best.freeDelivery ? feeCents : 0) : -1;

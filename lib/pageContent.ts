@@ -316,7 +316,10 @@ async function loadPractical(): Promise<PracticalInfo> {
     address: formatAddress(settings) || info.address,
     phone: settings["restaurant.phone"] || info.phone,
     payments: payments.length ? payments : info.payments,
-    partners: info.partners,
+    /* `??` et non `||` : une chaîne vide est une réponse, pas une absence.
+     * La cliente qui vide le champ dans Réglages veut cesser d'annoncer une
+     * plateforme, pas retomber sur la valeur du code. */
+    partners: settings["restaurant.partners"] ?? info.partners,
     hours: hours.map((h) => ({
       jour: WEEKDAY_LABEL[h.weekday],
       horaire: formatDayHours(h),

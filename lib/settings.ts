@@ -7,18 +7,31 @@
 
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_HOURS, type DayHours } from "@/lib/hours";
+import { formatAddress } from "@/lib/address";
 import type { DeliveryTier } from "@/lib/delivery";
 import type { LatLng } from "@/lib/geo";
 
 export const SETTING_DEFAULTS = {
   // Identité
   "restaurant.name": "Ô 3 Saveurs",
-  "restaurant.tagline": "Chez Laila",
-  "restaurant.phone": "01 72 84 52 44",
+  "restaurant.tagline": "Cuisine du monde",
+  /* Le repli portait l'ancien numéro, celui d'avant le changement de ligne.
+   * Un réglage par défaut faux est pire qu'absent : il s'affiche sans jamais
+   * se signaler. */
+  "restaurant.phone": "09 54 83 12 75",
   "restaurant.email": "contact@o3saveurs.fr",
   "restaurant.address": "38 rue des Prés Saint-Martin",
   "restaurant.zip": "77340",
   "restaurant.city": "Pontault-Combault",
+
+  /* Plateformes de livraison citées au pied de page.
+   *
+   * C'était une constante du code (`info.partners`), donc une annonce que
+   * personne ne pouvait corriger : la maison n'est pas sûre que Deliveroo soit
+   * encore actif, et promettre une plateforme qui ne prend pas la commande vaut
+   * moins que de n'en citer aucune. Réglage vide = la ligne entière disparaît
+   * du pied de page. */
+  "restaurant.partners": "Uber Eats & Deliveroo",
 
   // Informations légales — à renseigner par la cliente avant mise en ligne
   "legal.company": "",
@@ -26,8 +39,10 @@ export const SETTING_DEFAULTS = {
   "legal.siret": "",
   "legal.vatNumber": "",
   "legal.capital": "",
+  /** « RCS Melun 131 135 550 » — exigé sur le site et les factures d'une société. */
+  "legal.rcs": "",
   "legal.publisher": "",
-  "legal.host": "Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, États-Unis",
+  "legal.host": "Clever Cloud SAS, 3 rue de l'Allier, 44000 Nantes, France",
   "legal.mediator": "",
 
   // Commercial
@@ -200,12 +215,22 @@ export async function deliveryOrigin(): Promise<LatLng | null> {
   return found;
 }
 
-/** Adresse postale sur une ligne, pour les emails et les factures. */
-export function formatAddress(s: Settings): string {
-  return [s["restaurant.address"], `${s["restaurant.zip"]} ${s["restaurant.city"]}`.trim()]
-    .filter(Boolean)
-    .join(", ");
-}
+/**
+ * Adresse postale sur une ligne, pour les emails et les factures.
+ *
+ * Les espaces sont normalisés : la saisie du back-office arrive avec des
+ * doubles espaces ou une espace traînante, et cette même chaîne sert de clé de
+ * cache au géocodage (`deliveryOrigin()`) — une espace en trop y suffisait à
+ * invalider un cache valide, donc à repayer un appel Google à chaque page.
+ *
+ * Le calcul lui-même vit dans `lib/address.ts`, qui est **pur** : ce module-ci
+ * ouvre Prisma et tire `lib/geo.ts`, marqué `server-only`. La page de facture
+ * affiche l'identité du vendeur côté navigateur et a besoin de cette mise en
+ * forme ; l'importer d'ici faisait échouer la compilation. Réexport plutôt que
+ * déplacement, pour ne casser aucun import existant — même motif que
+ * `formatInvoiceNumber`, réexporté par `lib/ref.ts`.
+ */
+export { formatAddress };
 
 /**
  * Vrai quand toutes les informations légales obligatoires sont renseignées.

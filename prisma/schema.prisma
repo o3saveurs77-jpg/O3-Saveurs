@@ -342,6 +342,8 @@ model Promotion {
   oncePerCustomer  Boolean @default(false)
   /// restreint à un jour de la semaine (0 = dimanche), null = tous les jours
   weekday          Int?
+  /// restreint à un mode de commande (livraison | emporter), null = les deux
+  mode             String?
   /// true = appliquée automatiquement sans que le client saisisse un code
   auto             Boolean @default(false)
   active           Boolean @default(true)
@@ -535,6 +537,18 @@ model NewsletterSubscriber {
   createdAt DateTime @default(now())
 
   @@index([confirmed, unsubscribedAt])
+  /// Index de joignabilité, posé par `20260810120000_add_subscriber_basis`.
+  ///
+  /// Il existait en base sans être déclaré ici : la migration le créait, le
+  /// schéma l'ignorait. Le prochain `prisma migrate dev` aurait donc engendré
+  /// une migration le **supprimant**, défaisant en silence une décision prise
+  /// exprès — la sélection des destinataires d'une campagne interroge
+  /// `unsubscribedAt` avec `confirmed` ou `basis`, sur toute la liste.
+  /// `map` reprend le nom que la migration a réellement donné à l'index. Sans
+  /// lui, Prisma voudrait le renommer vers sa convention à trois colonnes, ce
+  /// qui produirait une migration de pur renommage — du bruit sur une base de
+  /// production, pour rien.
+  @@index([basis, confirmed, unsubscribedAt], map: "NewsletterSubscriber_basis_confirmed_idx")
 }
 
 model Campaign {

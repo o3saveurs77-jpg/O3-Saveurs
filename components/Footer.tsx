@@ -1,11 +1,81 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Emblem } from "./Brand";
 import { Icon } from "./Icon";
 import { NewsletterForm } from "./NewsletterForm";
-import { info } from "@/lib/menu";
+import { formatPhone, info, telHref } from "@/lib/menu";
+
+/**
+ * Coordonnées affichées au pied de page.
+ *
+ * Elles venaient de `info` (`lib/menu.ts`), une constante du code : le jour où
+ * le restaurant a changé de ligne téléphonique, le site a continué d'afficher
+ * l'ancien numéro sur **toutes** ses pages, alors que l'écran Réglages portait
+ * déjà le bon. Les réglages en base sont donc la source, `info` le repli.
+ *
+ * Pourquoi un appel réseau plutôt qu'une lecture serveur : le pied de page est
+ * monté par `SiteChrome`, un composant client (il lit `usePathname`). Un
+ * composant serveur ne peut pas y être rendu sans faire descendre les réglages
+ * depuis le layout racine, ce qui chargerait la base sur chaque page du site.
+ * Le `GET /api/settings` anonyme ne renvoie que les clés d'affichage.
+ *
+ * Le premier rendu part du repli : le pied de page est complet avant la réponse,
+ * et un appel qui échoue laisse des coordonnées justes à l'écran plutôt qu'un
+ * trou.
+ */
+interface Coordonnees {
+  address: string;
+  phone: string;
+  /** Plateformes de livraison. Vide = la ligne entière disparaît. */
+  partners: string;
+}
+
+const REPLI: Coordonnees = {
+  address: info.address,
+  phone: info.phone,
+  partners: info.partners,
+};
+
+function useCoordonnees(): Coordonnees {
+  const [coords, setCoords] = useState<Coordonnees>(REPLI);
+
+  useEffect(() => {
+    let monte = true;
+
+    fetch("/api/settings")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((data: { settings?: Record<string, string> }) => {
+        if (!monte) return;
+        const s = data.settings ?? {};
+        const rue = (s["restaurant.address"] ?? "").trim();
+        const ville = `${s["restaurant.zip"] ?? ""} ${s["restaurant.city"] ?? ""}`.trim();
+        setCoords({
+          address: [rue, ville].filter(Boolean).join(", ") || REPLI.address,
+          phone: (s["restaurant.phone"] ?? "").trim() || REPLI.phone,
+          /* `??` et non `||` : une chaîne vide est un choix de la maison — ne
+             citer aucune plateforme — et non une valeur manquante. Seule
+             l'absence de la clé fait revenir au repli. */
+          partners: s["restaurant.partners"] ?? REPLI.partners,
+        });
+      })
+      .catch(() => {
+        /* Réglages injoignables : on garde le repli, déjà affiché. */
+      });
+
+    return () => {
+      monte = false;
+    };
+  }, []);
+
+  return coords;
+}
 
 export function Footer() {
-  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(info.address)}`;
+  const { address, phone, partners } = useCoordonnees();
+  const mapsHref = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 
   return (
     <footer className="bg-footer-bg text-footer-ink">
@@ -18,7 +88,7 @@ export function Footer() {
             <Emblem size={48} />
             <div>
               <p className="font-display text-xl">Ô 3 Saveurs</p>
-              <p className="text-sm text-gold">Chez Laila · Cuisine du monde</p>
+              <p className="text-sm text-gold">Cuisine du monde</p>
             </div>
           </div>
           <p className="mt-4 max-w-sm text-sm opacity-80">{info.baseline}</p>
@@ -90,19 +160,24 @@ export function Footer() {
             <li className="flex items-start gap-2">
               <Icon name="pin" size={18} className="mt-0.5 shrink-0 text-primary" />
               <a href={mapsHref} target="_blank" rel="noopener noreferrer" className="link-underline">
-                {info.address}
+                {address}
               </a>
             </li>
             <li className="flex items-center gap-2">
               <Icon name="phone" size={18} className="shrink-0 text-primary" />
-              <a href={`tel:${info.phone.replace(/\s/g, "")}`} className="link-underline">
-                {info.phone}
+              <a href={telHref(phone)} className="link-underline">
+                {formatPhone(phone)}
               </a>
             </li>
-            <li className="flex items-center gap-2">
-              <Icon name="truck" size={18} className="shrink-0 text-primary" />
-              Livraison & à emporter, mais aussi {info.partners}
-            </li>
+            {/* Aucune plateforme renseignée : aucune ligne. Annoncer une
+                plateforme qui ne prendrait pas la commande coûte plus cher
+                qu'un silence. */}
+            {partners.trim() && (
+              <li className="flex items-center gap-2">
+                <Icon name="truck" size={18} className="shrink-0 text-primary" />
+                Livraison & à emporter, mais aussi {partners}
+              </li>
+            )}
           </ul>
         </div>
 
@@ -145,15 +220,33 @@ export function Footer() {
       </div>
 
       <div className="border-t border-white/10">
-        <div className="wrap flex flex-col items-center justify-between gap-2 py-5 text-center text-xs opacity-70 sm:flex-row sm:text-left">
-          <p>© {new Date().getFullYear()} Ô 3 Saveurs — Chez Laila. Tous droits réservés.</p>
+        <div className="wrap flex flex-col items-center justify-between gap-4 py-5 text-center text-xs sm:flex-row sm:items-center sm:text-left">
+          <p className="opacity-70">© {new Date().getFullYear()} Ô 3 Saveurs. Tous droits réservés.</p>
           {/* `flex-wrap` : plusieurs liens en ligne fixe dépassaient la largeur
               d'un écran de 320 px et créaient un défilement latéral. */}
-          <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+          <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1 opacity-70">
             <Link href="/mentions-legales" className="hover:text-gold">Mentions légales</Link>
             <Link href="/cgv" className="hover:text-gold">CGV</Link>
             <Link href="/confidentialite" className="hover:text-gold">Confidentialité</Link>
           </nav>
+          <a
+            href="https://magar-developpement.fr"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.06] py-1 pl-1 pr-3 transition hover:border-gold/40 hover:bg-white/10"
+          >
+            {/* Fond crème : le monogramme Magar est marine, illisible à même
+                le bordeaux du pied de page. */}
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f7e9d2]">
+              <Image src="/magar-developpement.svg" alt="" width={22} height={22} unoptimized />
+            </span>
+            <span className="text-left leading-tight">
+              <span className="block text-[10px] uppercase tracking-[0.14em] text-gold/80">
+                Réalisé par
+              </span>
+              <span className="font-semibold text-footer-ink">Magar Développement</span>
+            </span>
+          </a>
         </div>
       </div>
     </footer>

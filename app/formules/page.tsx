@@ -7,19 +7,14 @@ import { rowToFormula, formulaSupplements } from "@/lib/formulas";
 import { fmtPrice } from "@/lib/menu";
 import type { Formula } from "@/lib/menu";
 import { JsonLd } from "@/components/JsonLd";
-import { graph, formulasNode, breadcrumbNode } from "@/lib/seo";
+import { graph, formulasNode, breadcrumbNode, pageMetadata } from "@/lib/seo";
 
-export const metadata: Metadata = {
+/* Description, canonique et image de partage : `lib/seo.ts`. */
+export const metadata: Metadata = pageMetadata({
+  path: "/formules",
   title: "Nos Formules",
-  description:
-    "Formules Express, Midi, Gourmande, Sandwich et Menu Enfant à prix fixe : un plat au choix parmi nos salades, tajines, plats d'Afrique de l'Ouest et grillades, à Pontault-Combault.",
-  alternates: { canonical: "/formules" },
-  openGraph: {
-    title: "Nos Formules · Ô 3 Saveurs — Chez Laila",
-    description: "Un plat au choix, une boisson maison — à prix fixe, midi et soir.",
-    url: "/formules",
-  },
-};
+  accroche: "Un plat au choix, une boisson maison — à prix fixe, midi et soir.",
+});
 
 /* Même cadence que la carte : les formules bougent au rythme du back-office. */
 export const revalidate = 300;

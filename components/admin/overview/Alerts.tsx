@@ -3,6 +3,21 @@ import { fmtCents } from "@/lib/money";
 import { Icon, type IconName } from "@/components/Icon";
 import type { StatsResponse } from "@/lib/analytics";
 
+/**
+ * Alertes du tableau de bord.
+ *
+ * Les liens « Voir » ne filtraient rien : `OrdersAdmin` ignorait `?filtre=`,
+ * son filtre étant un `useState("actives")` figé, et la valeur `abandonnes`
+ * n'existait même pas dans ses onglets. Cliquer « Voir » sur « 3 paniers
+ * abandonnés » ouvrait donc la liste « En cours », où ils ne figurent pas —
+ * l'alerte paraissait fausse, et la cliente a cessé d'y croire.
+ *
+ * `OrdersAdmin` lit maintenant `?filtre=` et le valide contre ses onglets
+ * (`parseOrdersFilter`). Toute valeur écrite ici doit donc exister dans sa
+ * table `FILTERS` : ce composant est rendu côté serveur et ne peut pas importer
+ * ce module client, le lien est donc tenu par un test
+ * (`tests/ordersAdmin.test.ts`) qui relit ces `href`.
+ */
 export function Alerts({ alerts }: { alerts: StatsResponse["alerts"] }) {
   const items: {
     icon: IconName;

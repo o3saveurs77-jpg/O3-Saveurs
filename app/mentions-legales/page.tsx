@@ -8,6 +8,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageMetadata } from "@/lib/seo";
 import {
   LEGAL_UPDATED,
   LegalBody,
@@ -21,12 +22,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
+/* Description, canonique et image de partage : `lib/seo.ts`. */
+export const metadata: Metadata = pageMetadata({
+  path: "/mentions-legales",
   title: "Mentions légales",
-  description:
-    "Éditeur du site, informations légales de l'entreprise, hébergeur et responsable de la publication.",
-  alternates: { canonical: "/mentions-legales" },
-};
+});
 
 export default async function MentionsLegalesPage() {
   const s = await readSettings();
@@ -43,7 +43,7 @@ export default async function MentionsLegalesPage() {
       <LegalBody>
         <LegalSection id="editeur" title="1. Éditeur du site">
           <p>
-            Le présent site est édité par l&apos;exploitant du restaurant Ô 3 Saveurs — Chez Laila,
+            Le présent site est édité par l&apos;exploitant du restaurant Ô 3 Saveurs,
             dont les informations légales sont les suivantes :
           </p>
           <LegalNotice settings={s} />
@@ -78,10 +78,14 @@ export default async function MentionsLegalesPage() {
               why="L'hébergeur doit être identifiable (art. 6-III 1° c de la LCEN)."
             />
           )}
+          {/* Neon (États-Unis) était cité ici : la base a quitté Neon pour Clever
+              Cloud le 3 septembre 2026, et la page annonçait un transfert hors UE
+              qui n'avait plus lieu. */}
           <p>
-            La base de données est opérée par Neon Inc. (États-Unis) et les paiements par carte par
-            Stripe Payments Europe, Ltd. (Irlande). Les transferts de données hors Union européenne
-            et les garanties associées sont détaillés dans notre{" "}
+            La base de données et les photos du site sont hébergées par ce même prestataire, en
+            France. Les paiements par carte sont traités par Stripe Payments Europe, Ltd. (Irlande).
+            Les transferts de données hors Union européenne et les garanties associées sont
+            détaillés dans notre{" "}
             <Link href="/confidentialite">politique de confidentialité</Link>.
           </p>
         </LegalSection>
@@ -108,8 +112,12 @@ export default async function MentionsLegalesPage() {
             préalable est interdite.
           </p>
           <p>
-            Les marques et noms de tiers éventuellement cités (Stripe, Uber Eats, Vercel) demeurent
-            la propriété de leurs titulaires respectifs.
+            {/* Vercel était cité ici alors que le site est hébergé par Clever Cloud
+                depuis le changement d'hébergeur : la page nommait un prestataire
+                qui n'intervient plus, juste sous le paragraphe qui doit nommer
+                l'hébergeur réel. */}
+            Les marques et noms de tiers éventuellement cités, tels que Stripe, Uber Eats ou
+            Clever Cloud, demeurent la propriété de leurs titulaires respectifs.
           </p>
         </LegalSection>
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
-import { fmtCents, toCents, toEuros } from "@/lib/money";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { fmtCents, lireMontant, toEuros } from "@/lib/money";
 import {
   ANNOUNCEMENT_TONES,
   ANNOUNCEMENT_TONE_LABEL,
@@ -84,6 +84,92 @@ function versDate(ms: number | null): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+export interface FormulairePlatDuJour {
+  id: string | null;
+  name: string;
+  /** Euros saisis, tels quels. Vide = aucun prix annoncé. */
+  prix: string;
+  /** "" = récurrence hebdomadaire, sinon date précise */
+  date: string;
+  weekday: string;
+  active: boolean;
+}
+
+/** Corps attendu par `validateDailySpecialInput`, côté serveur. */
+export interface CorpsPlatDuJour {
+  name: string;
+  priceCents: number | null;
+  date: string | null;
+  weekday: number | null;
+  active: boolean;
+}
+
+/** Même borne que `validateDailySpecialInput` côté serveur (1 000 €). */
+const PRIX_PLAT_DU_JOUR_MAX_CENTS = 1_000_00;
+
+/**
+ * Lit le formulaire « plat du jour », ou rend la raison du refus.
+ *
+ * Le prix passait par `toCents(Number(formS.prix) || 0)`. Or le formulaire est
+ * prérempli par `toEuros`, donc avec une virgule : `Number("12,50")` vaut
+ * `NaN`, `|| 0` le change en 0, et corriger une faute dans le nom du plat
+ * suffisait à l'annoncer **à 0,00 €** sur l'accueil et en haut de la Carte.
+ *
+ * Le prix reste facultatif — un plat du jour sans prix affiché est un cas
+ * normal, le site reprend alors celui du plat rattaché. Mais « vide » et
+ * « gratuit » ne sont pas la même chose : un champ laissé vide rend `null`, et
+ * un 0 explicitement saisi est refusé, parce qu'il s'afficherait « 0,00 € » en
+ * page d'accueil.
+ */
+export function lirePlatDuJour(
+  form: FormulairePlatDuJour,
+): { ok: true; corps: CorpsPlatDuJour } | { ok: false; error: string } {
+  const name = form.name.trim();
+  if (name.length < 2) {
+    return { ok: false, error: "Le nom du plat doit comporter au moins 2 caractères." };
+  }
+
+  if (form.date !== "" && form.weekday !== "") {
+    return { ok: false, error: "Choisissez une date précise ou un jour récurrent, pas les deux." };
+  }
+  if (form.date === "" && form.weekday === "") {
+    return {
+      ok: false,
+      error: "Indiquez une date précise, ou un jour de la semaine pour une récurrence.",
+    };
+  }
+
+  const prix = lireMontant(form.prix, "Le prix du plat du jour", {
+    requis: false,
+    min: 1,
+    max: PRIX_PLAT_DU_JOUR_MAX_CENTS,
+  });
+  if (!prix.ok) {
+    // Message plus parlant que « doit être d'au moins 0,01 € » pour le cas,
+    // fréquent, où la cliente tape 0 en pensant « pas de prix ».
+    const zero = lireMontant(form.prix, "Le prix", { requis: false, min: 0 });
+    if (zero.ok && zero.cents === 0) {
+      return {
+        ok: false,
+        error:
+          "Un plat du jour à 0,00 € serait annoncé gratuit sur l'accueil : laissez le champ vide pour ne pas afficher de prix.",
+      };
+    }
+    return prix;
+  }
+
+  return {
+    ok: true,
+    corps: {
+      name,
+      priceCents: prix.cents,
+      date: form.date || null,
+      weekday: form.weekday === "" ? null : Number(form.weekday),
+      active: form.active,
+    },
+  };
+}
+
 export function MiseEnAvantAdmin() {
   const [onglet, setOnglet] = useState<Onglet>("annonces");
   const [annonces, setAnnonces] = useState<AnnouncementView[]>([]);
@@ -108,15 +194,12 @@ export function MiseEnAvantAdmin() {
     placement: BannerPlacement;
     active: boolean;
   } | null>(null);
-  const [formS, setFormS] = useState<{
-    id: string | null;
-    name: string;
-    prix: string;
-    /** "" = récurrence hebdomadaire, sinon date précise */
-    date: string;
-    weekday: string;
-    active: boolean;
-  } | null>(null);
+  const [formS, setFormS] = useState<FormulairePlatDuJour | null>(null);
+
+  /* Une seule lecture du formulaire, rejouée à la frappe : elle sert à la fois
+   * au message affiché, à l'état du bouton et au corps envoyé. Aucun écart
+   * possible entre ce qu'on reproche à l'écran et ce qui part au serveur. */
+  const luS = useMemo(() => (formS ? lirePlatDuJour(formS) : null), [formS]);
 
   const baseId = useId();
 
@@ -542,11 +625,14 @@ export function MiseEnAvantAdmin() {
                   <label htmlFor={`${baseId}-sp`} className={labelCls}>
                     Prix (€, facultatif)
                   </label>
+                  {/* Champ texte et non `type="number"` : un champ numérique
+                      refuse la virgule française et s'affiche vide alors que
+                      React garde « 12,50 » — le prix partait alors converti
+                      en 0,00 €. */}
                   <input
                     id={`${baseId}-sp`}
-                    type="number"
-                    min={0}
-                    step={0.5}
+                    inputMode="decimal"
+                    placeholder="12,50"
                     value={formS.prix}
                     onChange={(e) => setFormS({ ...formS, prix: e.target.value })}
                     className={inputCls}
@@ -586,29 +672,26 @@ export function MiseEnAvantAdmin() {
               {/* Le validateur refuse les deux ensemble ou aucun des deux. */}
               <p className="mt-3 text-xs text-ink-2">
                 Choisissez une date précise <strong>ou</strong> un jour récurrent — pas les deux.
+                Prix facultatif : laissé vide, le site reprend celui du plat rattaché.
               </p>
+              {luS && !luS.ok && (
+                <p
+                  role="alert"
+                  className="mt-3 rounded-xl border border-brick/30 bg-primary-soft p-3 text-sm text-brick"
+                >
+                  {luS.error}
+                </p>
+              )}
               <div className="mt-4 flex gap-3">
                 <button
                   type="button"
-                  disabled={
-                    busy ||
-                    formS.name.trim().length < 2 ||
-                    (formS.date === "" && formS.weekday === "") ||
-                    (formS.date !== "" && formS.weekday !== "")
-                  }
+                  disabled={busy || !luS?.ok}
                   onClick={async () => {
+                    if (!luS?.ok) return;
                     const ok = await envoyer(
                       formS.id ? `/api/daily-specials/${formS.id}` : "/api/daily-specials",
                       formS.id ? "PATCH" : "POST",
-                      {
-                        name: formS.name.trim(),
-                        priceCents: formS.prix.trim()
-                          ? (toCents(Number(formS.prix) || 0) ?? null)
-                          : null,
-                        date: formS.date || null,
-                        weekday: formS.weekday === "" ? null : Number(formS.weekday),
-                        active: formS.active,
-                      },
+                      luS.corps,
                     );
                     if (ok) setFormS(null);
                   }}
@@ -657,7 +740,7 @@ export function MiseEnAvantAdmin() {
                     setFormS({
                       id: s.id,
                       name: s.name,
-                      prix: s.priceCents === null ? "" : String(toEuros(s.priceCents)),
+                      prix: toEuros(s.priceCents),
                       date: versDate(s.date),
                       weekday: s.weekday === null ? "" : String(s.weekday),
                       active: s.active,

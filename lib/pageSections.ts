@@ -92,6 +92,24 @@ export interface SectionContent {
   theme: SectionTheme;
   columns: number;
   photos: string[];
+  /**
+   * Ce que montre chaque photo, pour les lecteurs d'écran et les moteurs.
+   *
+   * Les galeries ne stockaient que des chemins : le code n'a aucun moyen de
+   * savoir si `/photos/p11.jpg` est un tajine ou la salle, et une alternative
+   * inventée (« photo de plat ») désinforme là où le silence se contentait de
+   * ne rien dire. La description se saisit donc au back-office, par la seule
+   * personne qui sait ce qu'il y a sur l'image.
+   *
+   * Rangée **par chemin**, pas par rang : les flèches de l'éditeur déplacent
+   * les photos, et une liste parallèle aurait laissé chaque description collée
+   * à la mauvaise image au premier réordonnancement.
+   *
+   * Absente des sections déjà en base, et c'est voulu : `normalizeContent` la
+   * complète à vide et `photoAlt()` sert alors un repli lisible. Aucune
+   * migration à passer, aucun contenu perdu.
+   */
+  photoAlts: Record<string, string>;
   ctaLabel: string;
   ctaHref: string;
   altLabel: string;
@@ -111,6 +129,7 @@ export const EMPTY_CONTENT: SectionContent = {
   theme: "clair",
   columns: 3,
   photos: [],
+  photoAlts: {},
   ctaLabel: "",
   ctaHref: "",
   altLabel: "",
@@ -445,6 +464,30 @@ function normalizeItem(raw: unknown, index: number): SectionItem {
 }
 
 /**
+ * Descriptions de photos : on ne garde que celles qui désignent une photo
+ * réellement présente dans la section.
+ *
+ * Deux raisons. Le ménage d'abord : sans élagage, retirer puis remettre une
+ * photo dix fois laisserait dix descriptions orphelines dans le JSON stocké,
+ * qui grossirait sans que rien ne s'affiche. La sûreté ensuite : les clés
+ * viennent d'un formulaire, et seules celles qui ont déjà passé
+ * `isAllowedPhoto` sont recopiées — `__proto__` et ses pareils ne sont pas des
+ * chemins de photo, ils n'entrent donc jamais dans l'objet.
+ */
+function normalizeAlts(raw: unknown, photos: string[]): Record<string, string> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+
+  const source = raw as Record<string, unknown>;
+  const out: Record<string, string> = {};
+  for (const src of photos) {
+    if (!Object.hasOwn(source, src)) continue;
+    const text = str(source[src], MAX_SHORT).trim();
+    if (text) out[src] = text;
+  }
+  return out;
+}
+
+/**
  * Rend exploitable n'importe quel JSON stocké : champs manquants complétés,
  * valeurs hors bornes ramenées, liens et photos filtrés. Une section corrompue
  * s'affiche vide plutôt que de faire tomber la page entière.
@@ -454,6 +497,11 @@ export function normalizeContent(raw: unknown): SectionContent {
   const theme = str(o.theme, 20) as SectionTheme;
   const ctaHref = str(o.ctaHref, MAX_SHORT).trim();
   const altHref = str(o.altHref, MAX_SHORT).trim();
+  // Les photos d'abord : leurs descriptions s'élaguent sur cette liste.
+  const photos = (Array.isArray(o.photos) ? o.photos : [])
+    .slice(0, MAX_PHOTOS)
+    .map((p) => str(p, MAX_SHORT).trim())
+    .filter(isAllowedPhoto);
 
   return {
     eyebrow: str(o.eyebrow, MAX_SHORT).trim(),
@@ -462,10 +510,8 @@ export function normalizeContent(raw: unknown): SectionContent {
     body: str(o.body, MAX_LONG),
     theme: THEMES.includes(theme) ? theme : "clair",
     columns: (COLUMNS as readonly number[]).includes(Number(o.columns)) ? Number(o.columns) : 3,
-    photos: (Array.isArray(o.photos) ? o.photos : [])
-      .slice(0, MAX_PHOTOS)
-      .map((p) => str(p, MAX_SHORT).trim())
-      .filter(isAllowedPhoto),
+    photos,
+    photoAlts: normalizeAlts(o.photoAlts, photos),
     ctaLabel: str(o.ctaLabel, MAX_SHORT).trim(),
     ctaHref: ctaHref && isAllowedHref(ctaHref) ? ctaHref : "",
     altLabel: str(o.altLabel, MAX_SHORT).trim(),
@@ -495,7 +541,7 @@ export function starterContent(kind: SectionKind): SectionContent {
     case "hero":
       return {
         ...base,
-        eyebrow: "Chez Laila · Cuisine du monde",
+        eyebrow: "Ô 3 Saveurs · Cuisine du monde",
         title: "Le voyage *des saveurs* livré chez vous.",
         body: "Décrivez votre cuisine en une phrase.",
         photos: [photo(3), photo(11)],
@@ -509,7 +555,7 @@ export function starterContent(kind: SectionKind): SectionContent {
       return {
         ...base,
         theme: "sombre",
-        eyebrow: "Chez Laila",
+        eyebrow: "Ô 3 Saveurs",
         title: "Titre de la page",
         subtitle: "Une phrase d'introduction.",
       };
@@ -658,9 +704,9 @@ const it = (
 export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
   accueil: [
     seed("hero", "Bandeau d'ouverture", {
-      eyebrow: "Chez Laila · Cuisine du monde",
+      eyebrow: "Ô 3 Saveurs · Cuisine du monde",
       title: "Le voyage *des saveurs*\nlivré chez vous.",
-      body: "Tajines, thiéboudiène, yassa, mafé, grillades & bowls frais — la cuisine du monde de Chez Laila, préparée maison à Pontault-Combault.",
+      body: "Tajines, thiéboudiène, yassa, mafé, grillades & bowls frais — la cuisine du monde d'Ô 3 Saveurs, préparée maison à Pontault-Combault.",
       photos: [photo(3), photo(11)],
       ctaLabel: "Voir la carte",
       ctaHref: "/carte",
@@ -691,7 +737,7 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
         it(
           "medit",
           "Méditerranée",
-          "Chakchouka, zaalouk, sardines frites — des saveurs solaires.",
+          "Chakchouka, zaalouk, salade marocaine — des saveurs solaires.",
           { photo: photo(25), href: "/carte" },
         ),
       ],
@@ -742,7 +788,7 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
     }),
     seed("texte_images", "Teaser « Notre histoire »", {
       theme: "sombre",
-      eyebrow: "Chez Laila",
+      eyebrow: "Ô 3 Saveurs",
       title: "Une cuisine généreuse, faite maison",
       body: "Ô 3 Saveurs réunit trois cultures dans une même assiette : l'Afrique de l'Ouest, le Maghreb et la Méditerranée. Des recettes familiales, des produits frais, et beaucoup d'amour — à déguster chez vous.",
       photos: [photo(3), photo(11), photo(4), photo(12)],
@@ -756,12 +802,12 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
   "a-propos": [
     seed("entete", "En-tête", {
       theme: "sombre",
-      eyebrow: "Chez Laila",
+      eyebrow: "Ô 3 Saveurs",
       title: "Notre histoire",
       subtitle: "Trois continents, une seule cuisine, faite maison chaque jour à Pontault-Combault.",
     }),
     seed("texte_images", "Le récit", {
-      body: "**Ô 3 Saveurs — Chez Laila** est née d'une envie simple : réunir dans une même assiette les saveurs qui ont bercé notre famille. Trois continents, une seule cuisine, faite maison chaque jour.\n\nDe l'**Afrique de l'Ouest** (thiéboudiène, yassa, mafé), du **Maghreb** (nos tajines mijotés) et de la **Méditerranée** (chakchouka, zaalouk, sardines), chaque plat raconte un voyage.\n\nNous travaillons des produits frais, des épices choisies et des recettes transmises de génération en génération. Le tout livré chez vous ou à emporter, sans rien perdre de la générosité de la maison.",
+      body: "**Ô 3 Saveurs** est née d'une envie simple : réunir dans une même assiette les saveurs qui ont bercé notre famille. Trois continents, une seule cuisine, faite maison chaque jour.\n\nDe l'**Afrique de l'Ouest** (thiéboudiène, yassa, mafé), du **Maghreb** (nos tajines mijotés) et de la **Méditerranée** (chakchouka, zaalouk, salade marocaine), chaque plat raconte un voyage.\n\nNous travaillons des produits frais, des épices choisies et des recettes transmises de génération en génération. Le tout livré chez vous ou à emporter, sans rien perdre de la générosité de la maison.",
       photos: [photo(3), photo(11), photo(4), photo(12)],
       ctaLabel: "Découvrir la carte",
       ctaHref: "/carte",
@@ -802,6 +848,40 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
 };
 
 // ─── Aides de rendu ───────────────────────────────────────────
+
+/** Repli quand ni la photo ni la section ne disent rien d'elles-mêmes. */
+export const PHOTO_ALT_FALLBACK = "Spécialité de la maison";
+
+/**
+ * Texte alternatif d'une photo de galerie.
+ *
+ * Quatorze photos de l'accueil et de la page « À propos » sortaient en
+ * `alt=""` : pour qui navigue au lecteur d'écran, les grilles de la section
+ * « Notre histoire » et de la galerie étaient des trous dans la page, et
+ * l'audit les comptait — à juste titre — comme des images muettes.
+ *
+ * La description saisie au back-office passe en premier : c'est la seule
+ * honnête. À défaut, plutôt que de retomber sur le silence, on sert un repli
+ * *lisible* : le titre de la section replace la photo dans son contexte, et son
+ * rang la distingue de ses voisines (« Notre histoire, photo 2 »). Sans titre,
+ * la mention générique de la maison — la même que celle du carrousel du
+ * bandeau, pour que le site parle d'une seule voix.
+ */
+export function photoAlt(
+  src: string,
+  alts: Record<string, string>,
+  context: { title?: string; index?: number; total?: number } = {},
+): string {
+  const saved = typeof alts[src] === "string" ? alts[src].trim() : "";
+  if (saved) return saved;
+
+  const { title = "", index = 0, total = 1 } = context;
+  /* Les astérisques de mise en forme et les retours à la ligne saisis dans un
+     titre ne s'entendent pas : lus tels quels, ils donneraient « étoile des
+     saveurs étoile » puis une pause au milieu d'un mot. */
+  const base = title.replace(/\*/g, "").replace(/\s+/g, " ").trim() || PHOTO_ALT_FALLBACK;
+  return total > 1 ? `${base}, photo ${index + 1}` : base;
+}
 
 /** Découpe un texte long en paragraphes (une ligne vide = un nouveau bloc). */
 export function paragraphs(body: string): string[] {

@@ -12,7 +12,16 @@
 
 import { useMemo, useState } from "react";
 import { useOrders } from "@/components/providers/OrdersContext";
-import { invoiced, inRange, modeSplit, netCollectedCents } from "@/lib/analytics";
+import {
+  MAX_FETCHED_ORDERS,
+  invoiced,
+  inRange,
+  modeSplit,
+  netCollectedCents,
+  parisDayStart,
+  parisShiftDays,
+} from "@/lib/analytics";
+import { PARIS_TZ, parisYmd } from "@/lib/hours";
 import { vatBreakdownByRate, fmtVatRate, formatInvoiceNumber } from "@/lib/money";
 import { formatCreditNoteNumber } from "@/lib/refunds";
 import { vatPartsOf } from "@/lib/types";
@@ -20,18 +29,65 @@ import { fmtPrice } from "@/lib/menu";
 import { Icon } from "@/components/Icon";
 import type { Order } from "@/lib/types";
 
-function startOfMonth(): number {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+/* ─── Bornes de période, en heure de Paris ──────────────────────
+ *
+ * La période était décalée d'un jour. `startOfMonth()` prenait minuit **local**
+ * (le 1er septembre 00:00 à Paris), `toInputDate()` en rendait la date **UTC**
+ * via `toISOString()` — soit « 2026-08-31 » tout l'été. Ouvrir Compta et
+ * cliquer « Ventilation TVA » sans toucher aux dates produisait donc une
+ * déclaration de septembre contenant tout le service du soir du 31 août, déjà
+ * déclaré en août : la même recette comptée deux fois, dans deux déclarations.
+ *
+ * Les champs `<input type="date">` portent une date **civile de Paris**, et les
+ * bornes de comparaison sont les **instants réels** de minuit à Paris — pas
+ * minuit UTC, qui range le service du soir dans la journée suivante. Ces
+ * fonctions sont pures et testées (`tests/comptaPeriode.test.ts`) : une
+ * déclaration de TVA n'est pas l'endroit où découvrir un décalage d'un jour.
+ */
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Midi UTC de la date civile donnée. À ± 12 h d'écart, aucun changement
+ * d'heure ne peut faire basculer la date visée — c'est ce point d'ancrage que
+ * `parisDayStart()` ramène ensuite à minuit à Paris.
+ */
+function noonUtc(ymd: string): Date | null {
+  if (!YMD.test(ymd)) return null;
+  const [y, mo, d] = ymd.split("-").map(Number);
+  const at = new Date(Date.UTC(y, mo - 1, d, 12));
+  /* `Date.UTC` reporte sans broncher un « 2026-02-30 » sur le 2 mars, et un
+     mois 13 sur janvier de l'année suivante. On relit donc la date obtenue :
+     une saisie impossible doit être refusée, pas silencieusement déplacée. */
+  const exacte =
+    at.getUTCFullYear() === y && at.getUTCMonth() === mo - 1 && at.getUTCDate() === d;
+  return exacte ? at : null;
 }
 
-function endOfToday(): number {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999).getTime();
+/** Date civile parisienne du jour, telle que l'attend un `<input type="date">`. */
+export function parisTodayInput(at: Date = new Date()): string {
+  return parisYmd(at);
 }
 
-function toInputDate(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
+/** Premier jour du mois civil **parisien** en cours, « 2026-09-01 ». */
+export function parisMonthStartInput(at: Date = new Date()): string {
+  return `${parisYmd(at).slice(0, 7)}-01`;
+}
+
+/**
+ * Bornes `[start, end)` d'une période saisie en dates civiles de Paris, en
+ * instants réels. `null` si une date est illisible ou si la période est
+ * inversée : mieux vaut un écran qui le dit qu'un export silencieusement vide.
+ */
+export function parisPeriodRange(du: string, au: string): { start: number; end: number } | null {
+  const a = noonUtc(du);
+  const b = noonUtc(au);
+  if (!a || !b) return null;
+  const start = parisDayStart(a).getTime();
+  // Le « au » est inclusif pour la cliente : la borne haute est donc minuit du
+  // lendemain, exclusive — `inRange()` compare en `[start, end)`.
+  const end = parisShiftDays(b, 1).getTime();
+  return end > start ? { start, end } : null;
 }
 
 function downloadCsv(filename: string, header: string[], rows: (string | number)[][]) {
@@ -48,18 +104,14 @@ function downloadCsv(filename: string, header: string[], rows: (string | number)
 const euros = (cents: number) => (cents / 100).toFixed(2);
 
 export function ComptaAdmin() {
-  const { orders, ready } = useOrders();
-  const [du, setDu] = useState(toInputDate(startOfMonth()));
-  const [au, setAu] = useState(toInputDate(endOfToday()));
+  const { orders, total, ready, error: loadFailed, truncated, refresh } = useOrders();
+  const [du, setDu] = useState(() => parisMonthStartInput());
+  const [au, setAu] = useState(() => parisTodayInput());
 
-  const range = useMemo(() => {
-    const start = new Date(du).getTime();
-    const end = new Date(au).getTime() + 24 * 60 * 60 * 1000 - 1;
-    return { start, end };
-  }, [du, au]);
+  const range = useMemo(() => parisPeriodRange(du, au), [du, au]);
 
   const periode = useMemo(
-    () => inRange(orders, range.start, range.end),
+    () => (range ? inRange(orders, range.start, range.end) : []),
     [orders, range],
   );
   /* Base comptable : les commandes **facturées**, et non les seules commandes
@@ -137,7 +189,11 @@ export function ComptaAdmin() {
    * qui compte pour l'écriture comptable : espèces vs tout le reste. */
   const compteEncaissement = (o: Order) => (o.paymentMethod === "Espèces sur place" ? "530" : "512");
 
-  const dateFr = (ms: number) => new Date(ms).toLocaleDateString("fr-FR");
+  /* Date d'une pièce comptable : en heure de Paris, et pas dans le fuseau du
+     navigateur qui consulte. Une commande du 31 août 23 h ne doit pas changer
+     de jour — donc de mois, donc de déclaration — selon l'ordinateur ouvert. */
+  const dateFr = (ms: number) =>
+    new Date(ms).toLocaleDateString("fr-FR", { timeZone: PARIS_TZ });
 
   /* Journal des ventes : les lignes restent au prix facturé — c'est ce qui a
      été vendu. La colonne « Avoir » signale la pièce qui l'annule, sans quoi
@@ -270,6 +326,12 @@ export function ComptaAdmin() {
 
   if (!ready) return <p className="py-20 text-center text-ink-2">Chargement…</p>;
 
+  /* Un export comptable ne se fait pas « au mieux » : sur une lecture en échec
+     il ne contiendrait que ses en-têtes, et sur une période illisible il
+     porterait sur zéro commande. Dans les deux cas le fichier passerait pour un
+     mois sans activité chez le comptable. On préfère refuser et le dire. */
+  const exportable = !loadFailed && range !== null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -294,6 +356,49 @@ export function ComptaAdmin() {
           />
         </div>
       </div>
+
+      {loadFailed && (
+        <p
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brick/30 bg-primary-soft p-4 text-sm text-brick"
+        >
+          <span>
+            <strong>Lecture des commandes impossible.</strong> Les totaux ci-dessous sont à zéro
+            faute de données, et les extractions sont désactivées : un export fait maintenant ne
+            contiendrait que ses en-têtes.
+          </span>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+          >
+            Réessayer
+          </button>
+        </p>
+      )}
+
+      {/* Une déclaration établie sur une liste tronquée est fausse, et rien ne
+          le signalerait : ce bandeau a le même ton que les erreurs, à dessein. */}
+      {truncated && (
+        <p
+          role="alert"
+          className="rounded-xl border border-brick/30 bg-primary-soft p-4 text-sm text-brick"
+        >
+          <strong>Période incomplète.</strong> {total} commandes existent et seules les{" "}
+          {MAX_FETCHED_ORDERS} plus récentes sont chargées : resserrez la période avant d&apos;en
+          tirer une déclaration, sinon les montants sont sous-évalués.
+        </p>
+      )}
+
+      {range === null && (
+        <p
+          role="alert"
+          className="rounded-xl border border-brick/30 bg-primary-soft p-4 text-sm text-brick"
+        >
+          <strong>Période illisible.</strong> Vérifiez les dates : le « du » doit précéder le
+          « au ». Rien n&apos;est calculé ni exporté tant que la période n&apos;est pas valide.
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
@@ -345,7 +450,14 @@ export function ComptaAdmin() {
               {parTaux.length === 0 && (
                 <tr>
                   <td colSpan={3} className="py-4 text-center text-ink-2">
-                    Aucune commande sur la période.
+                    {/* « Aucune commande » et « on n'a rien pu lire » mènent au
+                        même tableau vide : seule la première est une
+                        information comptable. */}
+                    {loadFailed
+                      ? "Lecture impossible — ventilation inconnue."
+                      : range === null
+                        ? "Période invalide."
+                        : "Aucune commande sur la période."}
                   </td>
                 </tr>
               )}
@@ -406,23 +518,31 @@ export function ComptaAdmin() {
         <div className="grid gap-2.5 sm:grid-cols-3">
           <button
             onClick={exportVentes}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold hover:bg-panel-2"
+            disabled={!exportable}
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold hover:bg-panel-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon name="list" size={16} /> Journal des ventes
           </button>
           <button
             onClick={exportEcritures}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold hover:bg-panel-2"
+            disabled={!exportable}
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold hover:bg-panel-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon name="chart" size={16} /> Écritures comptables
           </button>
           <button
             onClick={exportTva}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold hover:bg-panel-2"
+            disabled={!exportable}
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-line px-4 py-2.5 text-sm font-semibold hover:bg-panel-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon name="euro" size={16} /> Ventilation TVA
           </button>
         </div>
+        {!exportable && (
+          <p className="mt-3 text-sm font-semibold text-brick">
+            Extractions indisponibles : corrigez la période ou relancez la lecture des commandes.
+          </p>
+        )}
       </div>
 
       <div className="flex items-start gap-3 rounded-xl border border-line bg-panel-2 p-4 text-sm text-ink-2">

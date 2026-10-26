@@ -97,13 +97,33 @@ export async function POST(req: Request) {
     return serverError("Votre demande n'a pas pu être enregistrée. Merci de nous appeler.");
   }
 
-  await sendCateringInquiryReceived(created).catch(() => {});
-  await sendCateringInquiryNotify(created).catch(() => {});
+  /* Ces deux `.catch(() => {})` avalaient tout, exceptions comme refus de
+   * Resend. C'est ainsi qu'une demande de devis arrivée en base le 6 août à
+   * 16 h 47 n'a laissé **aucune** trace dans `EmailLog` — ni succès, ni échec —
+   * alors que le code d'envoi était en place depuis 13 h 12 le même jour.
+   * Personne n'a été prévenu, et personne n'a pu s'en apercevoir.
+   *
+   * Les deux fonctions ne lèvent plus et rendent leur verdict ; `lib/email.ts`
+   * journalise désormais jusqu'aux erreurs de gabarit. */
+  const acknowledged = await sendCateringInquiryReceived(created);
+  const notified = await sendCateringInquiryNotify(created);
+  if (!notified) {
+    console.error(
+      `[traiteur] demande ${created.id} enregistrée, mais le restaurant n'a pas été prévenu par email.`,
+    );
+  }
 
   return NextResponse.json(
     {
       ok: true,
-      message: "Merci ! Votre demande de devis est bien arrivée, réponse sous 24 h ouvrées.",
+      notified,
+      acknowledged,
+      /* Un devis se chiffre à la main : la personne attend un retour. Lui
+       * promettre un email de confirmation qui n'est pas parti, c'est la
+       * laisser attendre en silence — autant lui dire d'appeler. */
+      message: acknowledged
+        ? "Merci ! Votre demande de devis est bien arrivée, réponse sous 24 h ouvrées."
+        : "Merci ! Votre demande de devis est bien arrivée — mais l'email de confirmation n'a pas pu vous être envoyé. Appelez-nous pour en parler tout de suite.",
     },
     { status: 201 },
   );

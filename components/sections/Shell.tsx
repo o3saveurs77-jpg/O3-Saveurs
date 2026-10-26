@@ -10,7 +10,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { Reveal } from "@/components/Reveal";
-import { accents, strongs, type SectionContent, type SectionTheme } from "@/lib/pageSections";
+import {
+  accents,
+  photoAlt,
+  strongs,
+  type SectionContent,
+  type SectionTheme,
+} from "@/lib/pageSections";
 
 export interface Tone {
   /** Fond et couleur de texte de la section. */
@@ -76,6 +82,90 @@ export function gridCols(columns: number): string {
   if (columns === 4) return "sm:grid-cols-2 lg:grid-cols-4";
   if (columns === 5) return "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5";
   return "sm:grid-cols-3";
+}
+
+/* Géométrie de la page, telle que `.wrap` la fixe dans `globals.css` : largeur
+ * plafonnée à 1180 px (bordures comprises), gouttière intérieure de 16 px puis
+ * de 22 px à partir de 640 px. C'est de là que se déduit la largeur réelle
+ * d'une case de grille — voir `gridSizes`. */
+const WRAP_MAX = 1180;
+const PAD_BASE = 16;
+const PAD_SM = 22;
+
+/** Les paliers de `gridCols`, en données. Les deux doivent rester d'accord. */
+function gridSteps(columns: number, base: number): { min: number; cols: number }[] {
+  const first = { min: 0, cols: base };
+  if (columns === 2) return [first, { min: 640, cols: 2 }];
+  if (columns === 4) return [first, { min: 640, cols: 2 }, { min: 1024, cols: 4 }];
+  if (columns === 5)
+    return [first, { min: 640, cols: 2 }, { min: 1024, cols: 3 }, { min: 1280, cols: 5 }];
+  return [first, { min: 640, cols: 3 }];
+}
+
+/**
+ * Valeur de `sizes` pour une photo posée dans une grille de section.
+ *
+ * `sizes` n'est pas une indication : c'est **la** valeur sur laquelle le
+ * navigateur choisit la variante à télécharger, avant même d'avoir calculé la
+ * mise en page. Les grilles annonçaient toutes « (max-width: 768px) 100vw,
+ * 33vw », quel que soit leur nombre de colonnes. Deux erreurs à la clé :
+ *
+ *  · le seuil. Tailwind passe en plusieurs colonnes dès 640 px, pas 768 : sur
+ *    un écran de 700 px, chaque vignette de 180 px réclamait une image plein
+ *    écran, soit trois fois trop large ;
+ *  · le plafond. `.wrap` s'arrête à 1180 px, donc une case de grille à trois
+ *    colonnes ne dépasse jamais 363 px. « 33vw » en demandait 634 sur un écran
+ *    de 1920 px — une variante plus lourde, et souvent une **seconde**
+ *    variante téléchargée pour une photo déjà chargée ailleurs dans la page.
+ *
+ * On décrit donc la grille telle qu'elle est : ses paliers, ses gouttières et
+ * le plafond de la page. Une case vaut (largeur disponible − gouttières) /
+ * colonnes, et la largeur disponible vaut `100vw` moins les marges — tout se
+ * ramène à une seule soustraction et une seule division.
+ */
+export function gridSizes({
+  columns,
+  gap,
+  base = 1,
+  halfFrom = 0,
+  halfGap = 0,
+}: {
+  columns: number;
+  /** Gouttière de la grille, en pixels : `gap-4` vaut 16, `gap-6` vaut 24. */
+  gap: number;
+  /** Colonnes sous 640 px, pour les grilles qui en imposent déjà deux. */
+  base?: number;
+  /** Palier à partir duquel la grille ne tient plus qu'une demi-page. */
+  halfFrom?: number;
+  /** Gouttière de ce partage en deux : `gap-10` vaut 40. */
+  halfGap?: number;
+}): string {
+  const steps = gridSteps(columns, base);
+
+  /* Du plus large au plus étroit : `sizes` retient la première condition qui
+     s'applique, l'ordre inverse ne décrirait que le plus petit écran. */
+  const mins = [...new Set([...steps.map((s) => s.min), halfFrom, WRAP_MAX])].sort((a, b) => b - a);
+
+  return mins
+    .map((min) => {
+      const cols = [...steps].reverse().find((s) => s.min <= min)!.cols;
+      const half = halfFrom > 0 && min >= halfFrom;
+      const pad = min >= 640 ? PAD_SM : PAD_BASE;
+
+      const fixed = 2 * pad + (half ? halfGap : 0) + (half ? 2 : 1) * gap * (cols - 1);
+      const div = cols * (half ? 2 : 1);
+
+      const value =
+        min >= WRAP_MAX
+          ? // Au-delà, la page ne grandit plus : la case a une largeur arrêtée.
+            `${Math.round((WRAP_MAX - fixed) / div)}px`
+          : div === 1
+            ? `calc(100vw - ${fixed}px)`
+            : `calc((100vw - ${fixed}px) / ${div})`;
+
+      return min > 0 ? `(min-width: ${min}px) ${value}` : value;
+    })
+    .join(", ");
 }
 
 /** Titre dont les passages entre astérisques passent en manuscrit doré. */
@@ -220,14 +310,33 @@ export function CtaRow({
  */
 export function PhotoGrid({
   photos,
+  alts,
+  title,
   columns = 2,
   height = "h-40",
+  lead = false,
 }: {
   photos: string[];
+  /** Descriptions saisies au back-office, rangées par chemin de photo. */
+  alts: Record<string, string>;
+  /** Titre de la section — sert de repli au texte alternatif. */
+  title?: string;
   columns?: number;
   height?: string;
+  /**
+   * Cette grille porte-t-elle la première image de la page ? Si oui, sa
+   * première photo est préchargée ; voir `SectionList`, qui en désigne une
+   * seule pour toute la page.
+   */
+  lead?: boolean;
 }) {
   if (!photos.length) return null;
+
+  /* La grille vit dans la demi-colonne de « Texte & photos » (`md:grid-cols-2`,
+     `gap-10`) à partir de 768 px : une case n'y vaut donc qu'un quart de page
+     moins les gouttières, soit 266 px sur grand écran — et non les 25vw (480 px
+     à 1920) annoncés jusqu'ici. */
+  const sizes = gridSizes({ columns, gap: 16, base: 2, halfFrom: 768, halfGap: 40 });
 
   return (
     <div className={`grid gap-4 ${gridCols(columns)} grid-cols-2`}>
@@ -240,9 +349,10 @@ export function PhotoGrid({
           >
             <Image
               src={src}
-              alt=""
+              alt={photoAlt(src, alts, { title, index: i, total: photos.length })}
               fill
-              sizes="(max-width: 768px) 50vw, 25vw"
+              sizes={sizes}
+              priority={lead && i === 0}
               className="object-cover transition duration-700 ease-out group-hover:scale-110"
             />
           </div>
