@@ -737,7 +737,7 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
         it(
           "medit",
           "Méditerranée",
-          "Chakchouka, zaalouk, sardines frites — des saveurs solaires.",
+          "Chakchouka, zaalouk, salade marocaine — des saveurs solaires.",
           { photo: photo(25), href: "/carte" },
         ),
       ],
@@ -807,7 +807,7 @@ export const DEFAULT_SECTIONS: Record<PageSlug, SectionSeed[]> = {
       subtitle: "Trois continents, une seule cuisine, faite maison chaque jour à Pontault-Combault.",
     }),
     seed("texte_images", "Le récit", {
-      body: "**Ô 3 Saveurs** est née d'une envie simple : réunir dans une même assiette les saveurs qui ont bercé notre famille. Trois continents, une seule cuisine, faite maison chaque jour.\n\nDe l'**Afrique de l'Ouest** (thiéboudiène, yassa, mafé), du **Maghreb** (nos tajines mijotés) et de la **Méditerranée** (chakchouka, zaalouk, sardines), chaque plat raconte un voyage.\n\nNous travaillons des produits frais, des épices choisies et des recettes transmises de génération en génération. Le tout livré chez vous ou à emporter, sans rien perdre de la générosité de la maison.",
+      body: "**Ô 3 Saveurs** est née d'une envie simple : réunir dans une même assiette les saveurs qui ont bercé notre famille. Trois continents, une seule cuisine, faite maison chaque jour.\n\nDe l'**Afrique de l'Ouest** (thiéboudiène, yassa, mafé), du **Maghreb** (nos tajines mijotés) et de la **Méditerranée** (chakchouka, zaalouk, salade marocaine), chaque plat raconte un voyage.\n\nNous travaillons des produits frais, des épices choisies et des recettes transmises de génération en génération. Le tout livré chez vous ou à emporter, sans rien perdre de la générosité de la maison.",
       photos: [photo(3), photo(11), photo(4), photo(12)],
       ctaLabel: "Découvrir la carte",
       ctaHref: "/carte",
