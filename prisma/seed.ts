@@ -136,7 +136,13 @@ async function seedDeliveryTiers() {
   for (const t of DEFAULT_TIERS) {
     await prisma.deliveryTier.upsert({
       where: { idx: t.idx },
-      create: { idx: t.idx, maxKm: t.maxKm, feeCents: t.feeCents, minimumCents: t.minimumCents },
+      create: {
+        idx: t.idx,
+        maxKm: t.maxKm,
+        maxMinutes: t.maxMinutes,
+        feeCents: t.feeCents,
+        minimumCents: t.minimumCents,
+      },
       // Un barème déjà réglé est un choix de la cliente : on ne l'écrase pas.
       update: {},
     });

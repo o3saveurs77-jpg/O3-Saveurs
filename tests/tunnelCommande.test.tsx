@@ -77,6 +77,7 @@ function devis(over: Partial<DeliveryQuote> = {}): DeliveryQuote {
     via: "zones",
     deliverable: true,
     distanceKm: null,
+    durationMinutes: null,
     feeCents: ZONE.feeCents,
     minimumCents: ZONE.minimumCents,
     maxKm: null,

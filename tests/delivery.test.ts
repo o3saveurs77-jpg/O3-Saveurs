@@ -4,16 +4,18 @@ import {
   formatKm,
   haversineKm,
   maxDeliveryKm,
+  outOfRangeMessage,
   sortTiers,
   tierForDistance,
+  tierForTrip,
   tierLabel,
   type DeliveryTier,
 } from "@/lib/delivery";
 
 const tiers: DeliveryTier[] = [
-  { idx: 0, maxKm: 3, feeCents: 200, minimumCents: 1500 },
-  { idx: 1, maxKm: 6, feeCents: 350, minimumCents: 2000 },
-  { idx: 2, maxKm: 10, feeCents: 500, minimumCents: 2500 },
+  { idx: 0, maxKm: 3, maxMinutes: null, feeCents: 200, minimumCents: 1500 },
+  { idx: 1, maxKm: 6, maxMinutes: null, feeCents: 350, minimumCents: 2000 },
+  { idx: 2, maxKm: 10, maxMinutes: null, feeCents: 500, minimumCents: 2500 },
 ];
 
 describe("sortTiers", () => {
@@ -25,9 +27,9 @@ describe("sortTiers", () => {
   it("écarte les bornes nulles, négatives ou non numériques", () => {
     const sales = [
       ...tiers,
-      { idx: 3, maxKm: 0, feeCents: 100, minimumCents: 0 },
-      { idx: 4, maxKm: -5, feeCents: 100, minimumCents: 0 },
-      { idx: 5, maxKm: Number.NaN, feeCents: 100, minimumCents: 0 },
+      { idx: 3, maxKm: 0, maxMinutes: null, feeCents: 100, minimumCents: 0 },
+      { idx: 4, maxKm: -5, maxMinutes: null, feeCents: 100, minimumCents: 0 },
+      { idx: 5, maxKm: Number.NaN, maxMinutes: null, feeCents: 100, minimumCents: 0 },
     ];
     expect(sortTiers(sales).map((t) => t.idx)).toEqual([0, 1, 2]);
   });
@@ -83,6 +85,64 @@ describe("tierForDistance", () => {
 
   it("refuse tout quand aucun palier n'est défini", () => {
     expect(tierForDistance([], 2)).toBeNull();
+  });
+});
+
+/* Distance et durée : chaque critère désigne son palier, on facture le plus
+ * cher des deux. */
+describe("tierForTrip", () => {
+  const avecDuree: DeliveryTier[] = [
+    { idx: 0, maxKm: 3, maxMinutes: 8, feeCents: 200, minimumCents: 1500 },
+    { idx: 1, maxKm: 6, maxMinutes: 15, feeCents: 350, minimumCents: 2000 },
+    { idx: 2, maxKm: 10, maxMinutes: 22, feeCents: 500, minimumCents: 2500 },
+  ];
+  const palier = (km: number, min: number) => {
+    const r = tierForTrip(avecDuree, km, min);
+    return r?.ok ? r.tier.idx : r;
+  };
+
+  it("prend le palier de la distance quand le trajet est fluide", () => {
+    expect(palier(2, 5)).toBe(0);
+    expect(palier(5, 12)).toBe(1);
+  });
+
+  /* 4 km de centre-ville aux heures chargées occupent le livreur autant
+   * qu'une course plus longue : c'est la durée qui fixe le palier. */
+  it("monte au palier de la durée quand la course est courte mais lente", () => {
+    expect(palier(4, 17)).toBe(2);
+    expect(palier(2, 10)).toBe(1);
+  });
+
+  it("garde le palier de la distance quand c'est lui le plus cher", () => {
+    expect(palier(9, 6)).toBe(2);
+  });
+
+  it("refuse au-delà de la dernière durée, en disant que c'est la durée", () => {
+    expect(palier(4, 30)).toEqual({ ok: false, over: "minutes" });
+  });
+
+  it("refuse au-delà de la dernière distance, en disant que c'est la distance", () => {
+    expect(palier(12, 10)).toEqual({ ok: false, over: "km" });
+  });
+
+  it("ignore la durée pour un palier qui n'en fixe pas", () => {
+    // Paliers d'avant la mesure de durée : la facturation ne change pas.
+    expect(tierForTrip(tiers, 4.5, 90)).toEqual({ ok: true, tier: tiers[1] });
+  });
+
+  it("ne devine rien sur une mesure invalide", () => {
+    expect(tierForTrip(avecDuree, Number.NaN, 5)).toBeNull();
+    expect(tierForTrip(avecDuree, 2, -1)).toBeNull();
+    expect(tierForTrip([], 2, 5)).toBeNull();
+  });
+
+  it("dit dans le refus de quelle limite il s'agit", () => {
+    expect(outOfRangeMessage(avecDuree, 4, 30, { ok: false, over: "minutes" })).toContain(
+      "30 min de route, au-delà de notre limite de livraison de 22 min",
+    );
+    expect(outOfRangeMessage(avecDuree, 12, 10, { ok: false, over: "km" })).toContain(
+      "12 km, au-delà de notre rayon de livraison de 10 km",
+    );
   });
 });
 

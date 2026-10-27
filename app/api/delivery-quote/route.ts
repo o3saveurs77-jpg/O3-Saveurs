@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rowToZone } from "@/lib/serialize";
 import { resolveZone } from "@/lib/zones";
-import { formatKm, maxDeliveryKm, tierForDistance } from "@/lib/delivery";
+import { maxDeliveryKm, outOfRangeMessage, tierForTrip } from "@/lib/delivery";
 import { isGeoConfigured, measureDelivery, zipMismatchMessage } from "@/lib/geo";
 import { deliveryOrigin, getDeliveryTiers, getSetting } from "@/lib/settings";
 import { readJson, badRequest } from "@/lib/guard";
@@ -22,6 +22,8 @@ export interface DeliveryQuote {
   via: "distance" | "zones";
   deliverable: boolean;
   distanceKm: number | null;
+  /** durée du trajet en voiture, quand elle a été mesurée */
+  durationMinutes: number | null;
   feeCents: number | null;
   minimumCents: number | null;
   /** rayon maximal livré, quand le barème à la distance est actif */
@@ -73,6 +75,7 @@ export async function POST(req: Request) {
           via: "distance",
           deliverable: false,
           distanceKm: null,
+          durationMinutes: null,
           feeCents: null,
           minimumCents: null,
           maxKm: maxDeliveryKm(tiers),
@@ -81,22 +84,19 @@ export async function POST(req: Request) {
       }
 
       if (measure.kind === "ok") {
-        const km = measure.km;
-        const tier = tierForDistance(tiers, km);
-        const maxKm = maxDeliveryKm(tiers);
+        const { km, minutes } = measure;
+        const found = tierForTrip(tiers, km, minutes);
+        const tier = found?.ok ? found.tier : null;
 
         return NextResponse.json<DeliveryQuote>({
           via: "distance",
           deliverable: !!tier,
           distanceKm: km,
+          durationMinutes: minutes,
           feeCents: tier?.feeCents ?? null,
           minimumCents: tier?.minimumCents ?? null,
-          maxKm,
-          message: tier
-            ? null
-            : `Adresse à ${formatKm(km)} km — au-delà de notre rayon de livraison${
-                maxKm !== null ? ` de ${formatKm(maxKm)} km` : ""
-              }.`,
+          maxKm: maxDeliveryKm(tiers),
+          message: tier ? null : outOfRangeMessage(tiers, km, minutes, found),
         });
       }
     }
@@ -114,6 +114,7 @@ export async function POST(req: Request) {
     via: "zones",
     deliverable: !!found,
     distanceKm: null,
+    durationMinutes: null,
     feeCents: found?.feeCents ?? null,
     minimumCents: found?.minimumCents ?? null,
     maxKm: null,

@@ -29,6 +29,7 @@ export async function GET() {
     tiers: rows.map((r) => ({
       idx: r.idx,
       maxKm: r.maxKm,
+      maxMinutes: r.maxMinutes,
       feeCents: r.feeCents,
       minimumCents: r.minimumCents,
       active: r.active,
@@ -44,6 +45,8 @@ export async function GET() {
 interface PutBody {
   idx: number;
   maxKm?: number;
+  /** `null` retire la limite de durée du palier. */
+  maxMinutes?: number | null;
   feeCents?: number;
   minimumCents?: number;
   active?: boolean;
@@ -68,6 +71,12 @@ export async function PUT(req: Request) {
     const v = num(body.maxKm, "La distance maximale", { min: 0.1, max: 100 });
     if (!v.ok) return badRequest(v.error);
     data.maxKm = v.value;
+  }
+
+  if (body.maxMinutes !== undefined) {
+    const v = parseMaxMinutes(body.maxMinutes);
+    if (!v.ok) return badRequest(v.error);
+    data.maxMinutes = v.value;
   }
 
   if (body.feeCents !== undefined) {
@@ -108,6 +117,8 @@ export async function POST(req: Request) {
     minimumCents: int(body.minimumCents, "Le minimum de commande", { min: 0, max: 500_00 }),
   });
   if (!fields.ok) return badRequest(fields.error);
+  const minutes = parseMaxMinutes(body.maxMinutes ?? null);
+  if (!minutes.ok) return badRequest(minutes.error);
 
   const last = await prisma.deliveryTier.findFirst({
     orderBy: { idx: "desc" },
@@ -118,12 +129,24 @@ export async function POST(req: Request) {
     data: {
       idx: (last?.idx ?? -1) + 1,
       maxKm: fields.value.maxKm,
+      maxMinutes: minutes.value,
       feeCents: fields.value.feeCents,
       minimumCents: fields.value.minimumCents,
     },
   });
 
   return NextResponse.json(row, { status: 201 });
+}
+
+/**
+ * Durée maximale d'un palier : vide (`null` ou chaîne vide) = pas de limite.
+ * Au-delà de trois heures, ce n'est plus de la livraison de repas.
+ */
+function parseMaxMinutes(
+  raw: unknown,
+): { ok: true; value: number | null } | { ok: false; error: string } {
+  if (raw === null || raw === "") return { ok: true, value: null };
+  return num(raw, "La durée maximale", { min: 1, max: 180 });
 }
 
 /** DELETE /api/delivery-tiers?idx=… — suppression d'un palier. */

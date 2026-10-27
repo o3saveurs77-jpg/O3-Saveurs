@@ -17,7 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { rowToDish, rowToZone } from "@/lib/serialize";
 import { applyPercent, VAT_RATE_BP } from "@/lib/money";
 import { resolveZone } from "@/lib/zones";
-import { formatKm, maxDeliveryKm, tierForDistance } from "@/lib/delivery";
+import { outOfRangeMessage, tierForTrip } from "@/lib/delivery";
 import { isGeoConfigured, measureDelivery, zipMismatchMessage } from "@/lib/geo";
 import { deliveryOrigin, getDeliveryTiers, getSetting } from "@/lib/settings";
 import { priceFormula, rowToFormula, type RawPick } from "@/lib/formulas";
@@ -556,9 +556,10 @@ async function deliveryCharge(
         if (measure.kind === "zip_mismatch") return err(zipMismatchMessage(measure));
 
         if (measure.kind === "ok") {
-          const km = measure.km;
-          const tier = tierForDistance(tiers, km);
-          if (tier) {
+          const { km, minutes } = measure;
+          const found = tierForTrip(tiers, km, minutes);
+          if (found?.ok) {
+            const { tier } = found;
             return ok({
               zone: { idx: tier.idx, feeCents: tier.feeCents, minimumCents: tier.minimumCents },
               feeCents: tier.feeCents,
@@ -566,15 +567,10 @@ async function deliveryCharge(
               distanceKm: km,
             });
           }
-          /* Distance mesurée de façon fiable, mais au-delà du dernier palier :
+          /* Trajet mesuré de façon fiable, mais au-delà du dernier palier :
            * c'est un vrai refus, pas une panne. Replier sur les zones ici
            * ferait livrer une adresse que la cliente a explicitement exclue. */
-          const limite = maxDeliveryKm(tiers);
-          return err(
-            limite !== null
-              ? `Cette adresse est à ${formatKm(km)} km, au-delà de notre rayon de livraison de ${formatKm(limite)} km. Vous pouvez commander à emporter.`
-              : "Nous ne livrons pas encore à cette adresse.",
-          );
+          return err(outOfRangeMessage(tiers, km, minutes, found));
         }
       }
     }

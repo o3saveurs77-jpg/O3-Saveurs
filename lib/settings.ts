@@ -171,6 +171,7 @@ export async function getDeliveryTiers(): Promise<DeliveryTier[]> {
   return rows.map((r) => ({
     idx: r.idx,
     maxKm: r.maxKm,
+    maxMinutes: r.maxMinutes,
     feeCents: r.feeCents,
     minimumCents: r.minimumCents,
   }));
