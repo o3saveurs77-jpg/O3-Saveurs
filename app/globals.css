@@ -325,6 +325,48 @@ h4 {
   transform-origin: left;
 }
 
+/* ── Animation des boutons ────────────────────────────────────
+   Il n'y a pas de composant bouton : chacun porte ses classes Tailwind (plus
+   de 250 dans le site). L'animation est donc posée ici, une fois pour toutes :
+
+   · tous les boutons s'enfoncent légèrement à l'appui — le retour tactile
+     qu'on attend sur un téléphone, où il n'y a pas de survol ;
+   · les boutons pleins (fond primaire, encre, brique) se soulèvent au survol
+     avec un halo de leur couleur, sur les écrans qui ont une souris.
+
+   Dans `@layer components` et sous `:where()` (spécificité nulle) : la moindre
+   classe utilitaire d'un bouton — `hover:-translate-y-0.5`, `active:scale-95`,
+   sa propre `transition` — l'emporte. On ajoute un comportement par défaut, on
+   n'en écrase aucun. Tailwind v4 anime `translate` et `scale` comme propriétés
+   à part entière : ce sont elles qu'on emploie, pas `transform`. */
+@layer components {
+  :where(button, [role="button"], a[class*="rounded-full"][class*="bg-"]) {
+    transition-property:
+      color, background-color, border-color, box-shadow, filter, opacity, translate, scale;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  :where(button, [role="button"], a[class*="rounded-full"][class*="bg-"]):where(
+      :not(:disabled):not([aria-disabled="true"])
+    ):active {
+    scale: 0.96;
+    transition-duration: 90ms;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    :where(
+        button,
+        a[class*="rounded-full"]
+      ):where([class*="bg-primary"]:not([class*="bg-primary-soft"]), [class*="bg-ink"], [class*="bg-brick"]):where(
+        :not(:disabled):not([aria-disabled="true"])
+      ):hover {
+      translate: 0 -1px;
+      box-shadow: 0 8px 18px -8px color-mix(in oklab, var(--color-primary) 60%, transparent);
+    }
+  }
+}
+
 /* `prefers-reduced-motion` n'est pas une préférence esthétique : pour une
    partie des utilisateurs le mouvement déclenche des troubles vestibulaires.
    Tout ce qui bouge est neutralisé d'un bloc, état final visible. */
@@ -345,6 +387,12 @@ h4 {
   }
   .link-underline::after {
     transition: none;
+  }
+  /* Les boutons gardent leur halo de survol, mais ne bougent plus. */
+  :where(button, [role="button"], a):active,
+  :where(button, a):hover {
+    scale: none;
+    translate: none;
   }
   *,
   *::before,
