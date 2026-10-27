@@ -627,24 +627,19 @@ describe("récapitulatif", () => {
     expect(montantAffiche("Total TTC")).toBe(SOUS_TOTAL);
   });
 
-  it.fails(
-    "DÉFAUT — le total facture l'estimation serveur, la ligne affiche la zone",
-    async () => {
-      /* Le barème à la distance donne 4,90 € pour cette adresse, le repli par
-       * zones 2,50 €. `totalCents` retient l'estimation serveur (c'est la
-       * bonne), mais la ligne « Frais de livraison » du récapitulatif lit
-       * `zone.feeCents` sans la regarder : le client lit 25,80 + 2,50 = 30,70 €
-       * et doit payer 30,70 €… sur une addition qui, telle qu'elle est écrite,
-       * fait 28,30 €. Le même aveuglement frappe « Plus que X pour la livraison
-       * offerte », qui ne se déclenche que si une zone correspond. */
-      routes["/api/delivery-quote"] = () =>
-        reponse(devis({ via: "distance", distanceKm: 6.4, feeCents: 490 }));
-      await monter();
-      await remplirTout();
+  /* Le barème à la distance donne 4,90 € pour cette adresse, le repli par
+   * zones 2,50 €. La ligne « Frais de livraison » lisait `zone.feeCents` quand
+   * le total retenait l'estimation serveur : le client lisait 25,80 + 2,50 et
+   * devait payer 30,70 €. Elle affiche maintenant le montant additionné. */
+  it("affiche les frais du barème quand c'est lui qui facture", async () => {
+    routes["/api/delivery-quote"] = () =>
+      reponse(devis({ via: "distance", distanceKm: 6.4, feeCents: 490 }));
+    await monter();
+    await remplirTout();
 
-      expect(montantAffiche("Sous-total") + montantAffiche("Frais de livraison")).toBe(
-        montantAffiche("Total TTC"),
-      );
-    },
-  );
+    expect(montantAffiche("Frais de livraison")).toBe(490);
+    expect(montantAffiche("Sous-total") + montantAffiche("Frais de livraison")).toBe(
+      montantAffiche("Total TTC"),
+    );
+  });
 });

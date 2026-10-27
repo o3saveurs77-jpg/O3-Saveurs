@@ -1205,13 +1205,17 @@ export function CheckoutClient() {
                 {mode === "livraison" ? "Frais de livraison" : "À emporter"}
               </dt>
               <dd className="font-semibold">
+                {/* Le montant affiché est celui que le total additionne
+                    (`feeCents`), pas celui de la zone : avec le barème au
+                    kilomètre, la ligne annonçait 2,50 € quand le total en
+                    comptait 5,00. */}
                 {mode !== "livraison"
                   ? "Gratuit"
-                  : !zone
+                  : quote?.feeCents == null && !zone
                     ? "selon votre adresse"
                     : freeDeliveryReached
                       ? "Offerte"
-                      : fmtPrice(zone.feeCents)}
+                      : fmtPrice(feeCents)}
               </dd>
             </div>
             {pickupDiscountCents > 0 && pickupDiscount && (
@@ -1242,7 +1246,7 @@ export function CheckoutClient() {
           )}
 
           {mode === "livraison" &&
-            zone &&
+            (zone || quote?.deliverable) &&
             !belowMin &&
             !freeDeliveryReached &&
             freeDeliveryThresholdCents !== null && (
