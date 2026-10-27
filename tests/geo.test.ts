@@ -6,10 +6,10 @@
  * palier — ou d'envoyer le livreur ailleurs que là où le tarif a été calculé.
  *
  * Aucun appel ne sort sur le réseau : `fetch` est remplacé, et répond comme le
- * feraient les API Geocoding et Distance Matrix de Google.
+ * feraient les API Geocoding et Routes de Google.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { measureDelivery, zipMismatchMessage } from "@/lib/geo";
+import { measureDelivery, suggestAddresses, zipMismatchMessage } from "@/lib/geo";
 
 /** Restaurant, Pontault-Combault. */
 const ORIGINE = { lat: 48.8013, lng: 2.6075 };
@@ -24,17 +24,20 @@ interface Reponses {
     partiel?: boolean;
     precision?: string;
   } | null;
-  /** Distance routière renvoyée par Distance Matrix, en mètres. */
+  /** Distance routière renvoyée par la Routes API, en mètres (`null` : aucun trajet). */
   metres: number | null;
 }
 
 let reponses: Reponses;
 let appels: string[];
+/** Corps JSON des requêtes envoyées à la Routes API. */
+let trajets: { destination: Record<string, unknown> }[];
 
 beforeEach(() => {
   vi.stubEnv("GOOGLE_MAPS_API_KEY", "cle-de-test");
   appels = [];
-  vi.stubGlobal("fetch", async (url: string) => {
+  trajets = [];
+  vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     appels.push(url);
     if (url.includes("/geocode/")) {
       const l = reponses.lieu;
@@ -56,11 +59,22 @@ beforeEach(() => {
           : { status: "ZERO_RESULTS", results: [] },
       );
     }
-    if (url.includes("/distancematrix/")) {
+    if (url.includes("places.googleapis.com")) {
+      trajets.push(JSON.parse(String(init?.body)));
+      return Response.json({
+        suggestions: [
+          { placePrediction: { placeId: "p1", text: { text: "12 Rue des Prés, Pontault-Combault, France" } } },
+          { queryPrediction: { text: { text: "rue des prés" } } },
+        ],
+      });
+    }
+    if (url.includes("routes.googleapis.com")) {
+      trajets.push(JSON.parse(String(init?.body)));
+      // Aucun trajet : la Routes API répond un objet vide.
       return Response.json(
         reponses.metres === null
-          ? { status: "OK", rows: [{ elements: [{ status: "NOT_FOUND" }] }] }
-          : { status: "OK", rows: [{ elements: [{ status: "OK", distance: { value: reponses.metres } }] }] },
+          ? {}
+          : { routes: [{ distanceMeters: reponses.metres, duration: "540s" }] },
       );
     }
     throw new Error(`appel inattendu : ${url}`);
@@ -82,26 +96,38 @@ let k = 0;
 const ici = () => ({ lat: 48.79 + ++k / 10_000, lng: 2.63 });
 
 describe("mesure retenue", () => {
-  it("rend la distance routière quand l'adresse est reconnue et cohérente", async () => {
+  it("rend la distance et la durée du trajet quand l'adresse est reconnue et cohérente", async () => {
     reponses = { lieu: { ...ici(), zip: "77340", ville: "Pontault-Combault" }, metres: 3200 };
-    expect(await measureDelivery(ORIGINE, adresse())).toEqual({ kind: "ok", km: 3.2 });
+    expect(await measureDelivery(ORIGINE, adresse())).toEqual({ kind: "ok", km: 3.2, minutes: 9 });
   });
 
   it("mesure le trajet vers le point vérifié, pas vers le texte brut", async () => {
     const point = ici();
     reponses = { lieu: { ...point, zip: "77340" }, metres: 3200 };
     await measureDelivery(ORIGINE, adresse());
-    const matrice = appels.find((u) => u.includes("/distancematrix/"))!;
-    expect(new URL(matrice).searchParams.get("destinations")).toBe(`${point.lat},${point.lng}`);
+    expect(trajets[0].destination).toEqual({
+      location: { latLng: { latitude: point.lat, longitude: point.lng } },
+    });
   });
 
   it("garde la suggestion choisie par le client comme destination", async () => {
     reponses = { lieu: { ...ici(), zip: "77340" }, metres: 3200 };
     await measureDelivery(ORIGINE, { placeId: `place-${++n}`, address: "x", zip: "77340" });
     const geocodage = appels.find((u) => u.includes("/geocode/"))!;
-    const matrice = appels.find((u) => u.includes("/distancematrix/"))!;
     expect(new URL(geocodage).searchParams.get("place_id")).toBe(`place-${n}`);
-    expect(new URL(matrice).searchParams.get("destinations")).toBe(`place_id:place-${n}`);
+    expect(trajets[0].destination).toEqual({ placeId: `place-${n}` });
+  });
+});
+
+describe("autocomplétion (Places API New)", () => {
+  it("ne demande que des adresses en France, et ne garde que les suggestions de lieux", async () => {
+    const r = await suggestAddresses("12 rue des prés", "jeton");
+    expect(r).toEqual([{ placeId: "p1", label: "12 Rue des Prés, Pontault-Combault, France" }]);
+    expect(trajets[0]).toMatchObject({
+      includedRegionCodes: ["fr"],
+      includedPrimaryTypes: ["street_address", "premise", "subpremise", "route"],
+      sessionToken: "jeton",
+    });
   });
 });
 
@@ -115,7 +141,7 @@ describe("adresse et code postal discordants", () => {
     const m = await measureDelivery(ORIGINE, adresse("77185"));
 
     expect(m).toEqual({ kind: "zip_mismatch", zip: "77340", city: "Pontault-Combault" });
-    expect(appels.some((u) => u.includes("/distancematrix/"))).toBe(false);
+    expect(trajets).toHaveLength(0);
     expect(zipMismatchMessage(m as { zip: string; city: string })).toContain("77340 Pontault-Combault");
   });
 

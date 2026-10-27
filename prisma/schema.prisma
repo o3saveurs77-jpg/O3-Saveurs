@@ -199,6 +199,9 @@ model DeliveryTier {
   idx          Int     @unique
   /// borne haute **incluse**, en kilomètres de route (pas à vol d'oiseau)
   maxKm        Float
+  /// borne haute **incluse** de la durée du trajet en voiture, en minutes ;
+  /// vide = ce palier ne borne que la distance (voir `tierForTrip`)
+  maxMinutes   Float?
   feeCents     Int
   minimumCents Int
   active       Boolean @default(true)

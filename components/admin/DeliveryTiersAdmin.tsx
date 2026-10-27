@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { fmtCents, toCents, toEuros } from "@/lib/money";
-import { formatKm, sortTiers, type DeliveryTier } from "@/lib/delivery";
+import { formatKm, formatMinutes, sortTiers, type DeliveryTier } from "@/lib/delivery";
 import { Icon } from "@/components/Icon";
 
 /**
@@ -10,8 +10,9 @@ import { Icon } from "@/components/Icon";
  *
  * Remplace le rapprochement par code postal, qui facturait au même tarif deux
  * adresses d'une même commune séparées par 7 km de route. Les paliers sont
- * bornés par le haut : une course tombe dans le premier palier dont la borne la
- * couvre, et au-delà du dernier on ne livre pas.
+ * bornés par le haut, en distance et en durée de trajet : chaque critère
+ * désigne son palier, la course paie le plus cher des deux (`tierForTrip`), et
+ * au-delà du dernier on ne livre pas.
  */
 interface TiersResponse {
   tiers: (DeliveryTier & { active: boolean })[];
@@ -64,6 +65,7 @@ export function DeliveryTiersAdmin() {
         body: JSON.stringify({
           idx: tier.idx,
           maxKm: tier.maxKm,
+          maxMinutes: tier.maxMinutes,
           feeCents: tier.feeCents,
           minimumCents: tier.minimumCents,
         }),
@@ -92,6 +94,7 @@ export function DeliveryTiersAdmin() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           maxKm: (last?.maxKm ?? 0) + 3,
+          maxMinutes: last?.maxMinutes != null ? last.maxMinutes + 7 : null,
           feeCents: (last?.feeCents ?? 200) + 150,
           minimumCents: last?.minimumCents ?? 1500,
         }),
@@ -131,9 +134,11 @@ export function DeliveryTiersAdmin() {
       <div>
         <h1 className="text-3xl">Barème de livraison</h1>
         <p className="text-ink-2">
-          Frais et minimum de commande selon la <strong>distance routière</strong> entre le
-          restaurant et le client. Une course tombe dans le premier palier qui la couvre ; au-delà
-          du dernier, la livraison est refusée.
+          Frais et minimum de commande selon la <strong>distance</strong> et la{" "}
+          <strong>durée du trajet</strong> en voiture entre le restaurant et le client. Chacune
+          désigne un palier, et la course paie <strong>le plus cher des deux</strong> : 4 km mais
+          17 minutes de route coûtent le prix du palier des 17 minutes. Au-delà du dernier palier,
+          la livraison est refusée. Laissez la durée vide pour ne compter que la distance.
         </p>
       </div>
 
@@ -178,6 +183,8 @@ export function DeliveryTiersAdmin() {
             const kmId = `${baseId}-km-${t.idx}`;
             const feeId = `${baseId}-fee-${t.idx}`;
             const minId = `${baseId}-min-${t.idx}`;
+            const durId = `${baseId}-dur-${t.idx}`;
+            const fromMinutes = i > 0 ? sorted[i - 1].maxMinutes : 0;
             // Un palier dont la borne est sous la précédente n'est jamais
             // atteignable : le signaler plutôt que de laisser un tarif mort.
             const unreachable = i > 0 && t.maxKm <= sorted[i - 1].maxKm;
@@ -190,6 +197,7 @@ export function DeliveryTiersAdmin() {
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1 text-sm font-bold text-brick">
                     <Icon name="truck" size={15} /> {formatKm(from)} – {formatKm(t.maxKm)} km
+                    {t.maxMinutes !== null && <> · {formatMinutes(t.maxMinutes)}</>}
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -210,7 +218,7 @@ export function DeliveryTiersAdmin() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <div>
                     <label htmlFor={kmId} className="mb-1 block text-xs font-semibold text-ink-2">
                       Jusqu&apos;à (km)
@@ -226,6 +234,25 @@ export function DeliveryTiersAdmin() {
                       className={`w-full rounded-lg border bg-page px-3 py-2 outline-none focus:border-primary ${
                         unreachable ? "border-brick" : "border-line"
                       }`}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor={durId} className="mb-1 block text-xs font-semibold text-ink-2">
+                      Jusqu&apos;à (min)
+                    </label>
+                    <input
+                      id={durId}
+                      type="number"
+                      step="1"
+                      min="1"
+                      placeholder="—"
+                      value={t.maxMinutes ?? ""}
+                      onChange={(e) =>
+                        setField(t.idx, {
+                          maxMinutes: e.target.value === "" ? null : Number(e.target.value),
+                        })
+                      }
+                      className="w-full rounded-lg border border-line bg-page px-3 py-2 outline-none focus:border-primary"
                     />
                   </div>
                   <div>
@@ -268,8 +295,15 @@ export function DeliveryTiersAdmin() {
                     </span>
                   ) : (
                     <>
-                      Course de plus de {formatKm(from)} km et jusqu&apos;à {formatKm(t.maxKm)} km :{" "}
-                      {fmtCents(t.feeCents)} de frais, minimum {fmtCents(t.minimumCents)}.
+                      Course de plus de {formatKm(from)} km et jusqu&apos;à {formatKm(t.maxKm)} km
+                      {t.maxMinutes !== null && (
+                        <>
+                          {" "}
+                          (ou de plus de {formatMinutes(fromMinutes ?? 0)} et jusqu&apos;à{" "}
+                          {formatMinutes(t.maxMinutes)} de route)
+                        </>
+                      )}
+                      : {fmtCents(t.feeCents)} de frais, minimum {fmtCents(t.minimumCents)}.
                     </>
                   )}
                 </p>
