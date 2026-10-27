@@ -14,6 +14,17 @@ import { extractZip } from "@/lib/zones";
  * Tout est facultatif : sans clé, chaque fonction renvoie `null` ou un échec
  * explicite, et `lib/pricing.ts` replie sur les zones par code postal. Le site
  * continue donc de vendre si la clé manque, expire ou dépasse son quota.
+ *
+ * Trois API, à activer sur le projet Google Cloud de la clé :
+ *
+ *  · **Places API (New)** — autocomplétion d'adresse ;
+ *  · **Geocoding API** — position et code postal d'une adresse ;
+ *  · **Routes API** — distance routière.
+ *
+ * Places (ancienne version) et Distance Matrix, qu'utilisait la première
+ * version, sont classées « Legacy » par Google depuis le 1er mars 2025 : elles
+ * ne s'activent plus sur un projet créé depuis. Une clé neuve les aurait vues
+ * répondre en erreur, et le site serait resté sur les zones sans le dire.
  */
 
 export interface LatLng {
@@ -40,7 +51,7 @@ export function isGeoConfigured(): boolean {
  * facturé en moins par Google. Volontairement borné : une instance serverless
  * qui vit longtemps ne doit pas accumuler indéfiniment. */
 const CACHE_MAX = 500;
-const distanceCache = new Map<string, number>();
+const tripCache = new Map<string, RoadTrip>();
 const geocodeCache = new Map<string, LatLng>();
 
 function remember<T>(cache: Map<string, T>, key: string, value: T): T {
@@ -53,11 +64,15 @@ function remember<T>(cache: Map<string, T>, key: string, value: T): T {
 }
 
 /** Appel HTTP borné dans le temps : une API lente ne doit pas bloquer une commande. */
-async function fetchJson(url: string, timeoutMs = 4000): Promise<Record<string, unknown> | null> {
+async function fetchJson(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = 4000,
+): Promise<Record<string, unknown> | null> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const res = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
+    const res = await fetch(url, { ...init, signal: ctrl.signal, cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as Record<string, unknown>;
   } catch {
@@ -68,11 +83,18 @@ async function fetchJson(url: string, timeoutMs = 4000): Promise<Record<string, 
   }
 }
 
+/** En-têtes des API Google « nouvelle génération » (Places New, Routes). */
+const googleHeaders = (fieldMask: string) => ({
+  "Content-Type": "application/json",
+  "X-Goog-Api-Key": KEY(),
+  "X-Goog-FieldMask": fieldMask,
+});
+
 /**
- * Suggestions d'adresses (Places Autocomplete), restreintes à la France.
+ * Suggestions d'adresses (Places API (New), Autocomplete), restreintes à la
+ * France et aux adresses — pas de commerces ni de lieux-dits.
  *
- * `sessionToken` regroupe les frappes d'une même recherche en une seule
- * facturation côté Google — sans lui, chaque caractère tapé est un appel payant.
+ * `sessionToken` regroupe les frappes d'une même recherche côté facturation.
  */
 export async function suggestAddresses(
   query: string,
@@ -80,26 +102,26 @@ export async function suggestAddresses(
 ): Promise<AddressSuggestion[]> {
   if (!isGeoConfigured() || query.trim().length < 3) return [];
 
-  const params = new URLSearchParams({
-    input: query.trim(),
-    key: KEY(),
-    language: "fr",
-    components: "country:fr",
-    types: "address",
+  const data = await fetchJson("https://places.googleapis.com/v1/places:autocomplete", {
+    method: "POST",
+    headers: googleHeaders("suggestions.placePrediction.placeId,suggestions.placePrediction.text.text"),
+    body: JSON.stringify({
+      input: query.trim(),
+      languageCode: "fr",
+      includedRegionCodes: ["fr"],
+      includedPrimaryTypes: ["street_address", "premise", "subpremise", "route"],
+      ...(sessionToken ? { sessionToken } : {}),
+    }),
   });
-  if (sessionToken) params.set("sessiontoken", sessionToken);
+  if (!data) return [];
 
-  const data = await fetchJson(
-    `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`,
-  );
-  if (!data || data.status !== "OK") return [];
-
-  const predictions = Array.isArray(data.predictions) ? data.predictions : [];
-  return predictions
+  const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+  return suggestions
     .slice(0, 5)
-    .map((p) => {
-      const row = p as { place_id?: string; description?: string };
-      return { placeId: row.place_id ?? "", label: row.description ?? "" };
+    .map((s) => {
+      const p = (s as { placePrediction?: { placeId?: string; text?: { text?: string } } })
+        .placePrediction;
+      return { placeId: p?.placeId ?? "", label: p?.text?.text ?? "" };
     })
     .filter((s) => s.placeId && s.label);
 }
@@ -174,57 +196,69 @@ export async function geocode(address: string): Promise<LatLng | null> {
   return remember(geocodeCache, key, found);
 }
 
+/** Point de passage au format de la Routes API. */
+function waypoint(p: { placeId?: string | null; latLng?: LatLng | null }) {
+  return p.placeId
+    ? { placeId: p.placeId }
+    : { location: { latLng: { latitude: p.latLng!.lat, longitude: p.latLng!.lng } } };
+}
+
+export interface RoadTrip {
+  km: number;
+  /** Durée du trajet en voiture, hors trafic. */
+  minutes: number;
+}
+
 /**
- * Distance **routière** en kilomètres entre le restaurant et une adresse.
+ * Trajet **routier** entre le restaurant et une adresse : distance et durée
+ * (Routes API, `computeRoutes`, en voiture, sans trafic : le tarif ne doit
+ * pas dépendre de l'heure de la commande).
  *
- * `destination` accepte soit un `place_id` (issu de l'autocomplétion, sans
- * ambiguïté), soit une adresse libre saisie à la main.
+ * `destination` est soit un `placeId` (suggestion choisie, sans ambiguïté),
+ * soit un point déjà géocodé.
  *
  * Renvoie `null` dès que la mesure n'est pas fiable : pas de clé, API muette,
- * trajet introuvable, ou résultat incohérent. `null` veut dire « je ne sais
- * pas », jamais « c'est gratuit » — l'appelant replie sur les zones.
+ * trajet introuvable. `null` veut dire « je ne sais pas », jamais « c'est
+ * gratuit » — l'appelant replie sur les zones.
  */
-export async function roadDistanceKm(
-  origin: string | LatLng,
-  destination: { placeId?: string | null; address?: string | null },
-): Promise<number | null> {
+export async function roadTrip(
+  origin: LatLng,
+  destination: { placeId?: string | null; latLng?: LatLng | null },
+): Promise<RoadTrip | null> {
   if (!isGeoConfigured()) return null;
+  if (!destination.placeId && !destination.latLng) return null;
 
   const dest = destination.placeId
-    ? `place_id:${destination.placeId}`
-    : destination.address?.trim();
-  if (!dest) return null;
-
-  const from = typeof origin === "string" ? origin : `${origin.lat},${origin.lng}`;
-  const cacheKey = `${from}|${dest}`;
-  const cached = distanceCache.get(cacheKey);
+    ? `place:${destination.placeId}`
+    : `${destination.latLng!.lat},${destination.latLng!.lng}`;
+  const cacheKey = `${origin.lat},${origin.lng}|${dest}`;
+  const cached = tripCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
-  const params = new URLSearchParams({
-    origins: from,
-    destinations: dest,
-    key: KEY(),
-    language: "fr",
-    region: "fr",
-    units: "metric",
-    mode: "driving",
+  const data = await fetchJson("https://routes.googleapis.com/directions/v2:computeRoutes", {
+    method: "POST",
+    headers: googleHeaders("routes.distanceMeters,routes.duration"),
+    body: JSON.stringify({
+      origin: waypoint({ latLng: origin }),
+      destination: waypoint(destination),
+      travelMode: "DRIVE",
+      routingPreference: "TRAFFIC_UNAWARE",
+      languageCode: "fr",
+      regionCode: "FR",
+      units: "METRIC",
+    }),
   });
-
-  const data = await fetchJson(
-    `https://maps.googleapis.com/maps/api/distancematrix/json?${params}`,
-  );
-  if (!data || data.status !== "OK") return null;
-
-  const rows = Array.isArray(data.rows) ? data.rows : [];
-  const element = (
-    rows[0] as { elements?: { status?: string; distance?: { value?: number } }[] } | undefined
-  )?.elements?.[0];
-
-  if (!element || element.status !== "OK") return null;
-  const meters = element.distance?.value;
+  // Aucun trajet trouvé : Google répond un objet sans `routes`.
+  const route = (Array.isArray(data?.routes) ? data.routes[0] : undefined) as
+    | { distanceMeters?: number; duration?: string }
+    | undefined;
+  const meters = route?.distanceMeters;
   if (typeof meters !== "number" || !Number.isFinite(meters) || meters < 0) return null;
+  // La durée arrive en texte, « 754s ».
+  const seconds = Number.parseFloat(route?.duration ?? "");
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
 
-  return remember(distanceCache, cacheKey, meters / 1000);
+  return remember(tripCache, cacheKey, { km: meters / 1000, minutes: seconds / 60 });
 }
 
 /**
@@ -301,9 +335,25 @@ async function geocodeDestination(dest: {
   });
 }
 
+/**
+ * Code postal et commune d'une suggestion choisie.
+ *
+ * La nouvelle autocomplétion ne met pas le code postal dans le libellé. Le
+ * client aurait dû le taper — et retoucher le code postal fait oublier la
+ * suggestion (`CheckoutClient`, `setLocality`). On le demande donc à Google.
+ * L'appel est le même que celui de `measureDelivery`, et il est mis en cache.
+ */
+export async function resolvePlace(
+  placeId: string,
+): Promise<{ zip: string | null; city: string | null } | null> {
+  if (!isGeoConfigured() || !placeId) return null;
+  const place = await geocodeDestination({ placeId });
+  return place ? { zip: place.zip, city: place.city } : null;
+}
+
 export type DeliveryMeasure =
   /** Distance mesurée et vérifiée : c'est elle qui facture. */
-  | { kind: "ok"; km: number }
+  | { kind: "ok"; km: number; minutes: number }
   /** Pas de mesure fiable (API muette, adresse floue, résultat incohérent) : replier sur les zones. */
   | { kind: "unknown" }
   /** L'adresse et le code postal saisis désignent deux endroits différents. */
@@ -345,19 +395,19 @@ export async function measureDelivery(
 
   // Le trajet est mesuré vers le point vérifié ci-dessus, pas vers le texte
   // brut : les deux mesures portent ainsi sur le même endroit.
-  const km = await roadDistanceKm(origin, {
+  const trip = await roadTrip(origin, {
     placeId: dest.placeId ?? null,
-    address: `${place.lat},${place.lng}`,
+    latLng: { lat: place.lat, lng: place.lng },
   });
-  if (km === null) return { kind: "unknown" };
+  if (trip === null) return { kind: "unknown" };
 
-  if (!distanceIsPlausible(km, origin, place)) {
+  if (!distanceIsPlausible(trip.km, origin, place)) {
     console.warn(
-      `[geo] distance incohérente écartée : ${km} km par la route, ${haversineKm(origin, place).toFixed(2)} km à vol d'oiseau.`,
+      `[geo] distance incohérente écartée : ${trip.km} km par la route, ${haversineKm(origin, place).toFixed(2)} km à vol d'oiseau.`,
     );
     return { kind: "unknown" };
   }
-  return { kind: "ok", km };
+  return { kind: "ok", km: trip.km, minutes: trip.minutes };
 }
 
 /** Message affiché au client quand l'adresse et le code postal se contredisent. */

@@ -112,6 +112,18 @@ export function AddressAutocomplete({
     onChange(street);
     onPick({ placeId: s.placeId, label: s.label });
     onResolve?.(parseFrenchAddress(s.label));
+    /* Le libellé de Google ne porte pas toujours le code postal : on le
+     * demande au serveur. Un échec laisse simplement le client le saisir. */
+    if (onResolve) {
+      fetch(`/api/address/resolve?placeId=${encodeURIComponent(s.placeId)}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((parts: { zip: string | null; city: string | null } | null) => {
+          if (parts?.zip || parts?.city) {
+            onResolve({ zip: parts.zip ?? undefined, city: parts.city ?? undefined });
+          }
+        })
+        .catch(() => {});
+    }
     setOpen(false);
     setSuggestions([]);
     // Nouvelle session Google pour la recherche suivante.
