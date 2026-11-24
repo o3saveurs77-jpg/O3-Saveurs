@@ -7,6 +7,7 @@
  */
 
 import { int, bool, stringArray, type Result } from "@/lib/validate";
+import { validateBannerImage } from "@/lib/promotionValidation";
 import { ALLERGENS, type Allergen } from "@/lib/types";
 import type { Dish } from "@/lib/menu";
 
@@ -95,9 +96,27 @@ export function validateDishFields(body: Partial<Dish>): Result<Partial<Dish>> {
 
   if (body.popular !== undefined) out.popular = bool(body.popular);
   if (body.available !== undefined) out.available = bool(body.available);
-  if (body.badge !== undefined) out.badge = body.badge;
-  if (body.photo !== undefined) out.photo = body.photo;
-  if (body.options !== undefined) out.options = body.options;
+  if (body.badge !== undefined) {
+    if (typeof body.badge === "string" && body.badge.includes("<")) {
+      return { ok: false, error: "Le badge ne peut pas contenir de HTML." };
+    }
+    out.badge = body.badge;
+  }
+  if (body.photo !== undefined) {
+    if (body.photo === null || body.photo === "") {
+      out.photo = "";
+    } else {
+      const photo = validateBannerImage(body.photo);
+      if (!photo.ok) return photo;
+      out.photo = photo.value;
+    }
+  }
+  if (body.options !== undefined) {
+    if (!Array.isArray(body.options)) {
+      return { ok: false, error: "Les options doivent être une liste." };
+    }
+    out.options = body.options;
+  }
   if (body.formules !== undefined) out.formules = body.formules;
 
   return { ok: true, value: out };

@@ -264,26 +264,25 @@ describe("DÉFAUT — PATCH /api/dishes/[id] ne valide ni cat, ni name, ni desc"
     return appeler(PATCH_PLAT, requete("PATCH", "http://localhost/api/dishes/d1", corps), contexte({ id: "d1" }));
   }
 
-  it.fails("devrait refuser un nom vide, comme le fait le POST", async () => {
+  it("refuse un nom vide, comme le fait le POST", async () => {
     const r = await patch({ name: "" });
     expect(r.status).toBe(400);
   });
 
-  it.fails("devrait refuser une catégorie vide, comme le fait le POST", async () => {
+  it("refuse une catégorie vide, comme le fait le POST", async () => {
     const r = await patch({ cat: "" });
     expect(r.status).toBe(400);
   });
 
-  it.fails("devrait refuser une description au-delà de 500 caractères", async () => {
+  it("refuse une description au-delà de 500 caractères", async () => {
     const r = await patch({ desc: "x".repeat(4000) });
     expect(r.status).toBe(400);
   });
 
-  it("écrit aujourd'hui ces valeurs en base sans broncher", async () => {
+  it("n'écrit rien en base quand cat, name ou desc sont hors contrat", async () => {
     const r = await patch({ name: "", cat: "", desc: "x".repeat(4000) });
-    expect(r.status).toBe(200);
-    expect(donneesEcrites()).toMatchObject({ name: "", cat: "" });
-    expect(String(donneesEcrites().desc)).toHaveLength(4000);
+    expect(r.status).toBe(400);
+    expect(prismaDouble.ecritures()).toHaveLength(0);
   });
 
   /* Même trou, autre champ : `photo`, `badge` et `options` sont recopiés tels
@@ -293,28 +292,24 @@ describe("DÉFAUT — PATCH /api/dishes/[id] ne valide ni cat, ni name, ni desc"
    * `next/image` refuse tout hôte absent de `next.config.mjs` et fait tomber la
    * page publique. Un `photo` arbitraire casse donc la carte, et `options`
    * accepte un objet là où le front attend une liste. */
-  it.fails("devrait refuser une photo qui n'est ni un fichier du site ni un envoi", async () => {
+  it("refuse une photo qui n'est ni un fichier du site ni un envoi", async () => {
     const r = await patch({ photo: "javascript:alert(1)" });
     expect(r.status).toBe(400);
   });
 
-  it.fails("devrait refuser `options` qui n'est pas une liste", async () => {
+  it("refuse `options` qui n'est pas une liste", async () => {
     const r = await patch({ options: { pas: "une liste" } });
     expect(r.status).toBe(400);
   });
 
-  it("écrit aujourd'hui photo, badge et options sans contrôle", async () => {
+  it("n'écrit rien en base quand photo, badge ou options sont hors contrat", async () => {
     const r = await patch({
       photo: "https://exemple-inconnu.test/photo.jpg",
       badge: "<script>alert(1)</script>",
       options: { pas: "une liste" },
     });
-    expect(r.status).toBe(200);
-    expect(donneesEcrites()).toMatchObject({
-      photo: "https://exemple-inconnu.test/photo.jpg",
-      badge: "<script>alert(1)</script>",
-      options: '{"pas":"une liste"}',
-    });
+    expect(r.status).toBe(400);
+    expect(prismaDouble.ecritures()).toHaveLength(0);
   });
 
   /* Ce que le PATCH valide bien, pour montrer que le trou est circonscrit aux
@@ -559,7 +554,7 @@ describe("formules — une formule en vente ne peut pas être à 0 €", () => {
    * L'écran d'administration croit avoir déplacé la formule ; elle n'a pas
    * bougé, et rien ne le dit.
    * ───────────────────────────────────────────────────────────── */
-  it.fails("devrait refuser une position hors bornes au lieu de l'ignorer", async () => {
+  it("refuse une position hors bornes au lieu de l'ignorer", async () => {
     neuf();
     prismaDouble.quand("formula.findUnique", { id: "f1", active: true, position: 3, slots: [] });
     const r = await appeler(
@@ -575,7 +570,7 @@ describe("formules — une formule en vente ne peut pas être à 0 €", () => {
     expect(r.status).toBe(400);
   });
 
-  it("répond aujourd'hui 200 et conserve l'ancienne position", async () => {
+  it("n'écrit rien quand la position est hors bornes", async () => {
     neuf();
     prismaDouble.quand("formula.findUnique", { id: "f1", active: true, position: 3, slots: [] });
     const r = await appeler(
@@ -588,8 +583,8 @@ describe("formules — une formule en vente ne peut pas être à 0 €", () => {
       }),
       contexte({ id: "f1" }),
     );
-    expect(r.status).toBe(200);
-    expect(donneesEcrites()).toMatchObject({ position: 3 });
+    expect(r.status).toBe(400);
+    expect(prismaDouble.ecritures()).toHaveLength(0);
   });
 });
 
@@ -843,43 +838,24 @@ describe("POST /api/stock — mouvements", () => {
    * devraient se comporter pareil — soit refuser avec le manque, soit
    * journaliser l'écart réellement appliqué.
    * ───────────────────────────────────────────────────────────── */
-  it.fails("devrait refuser un mouvement qui ferait passer le stock sous zéro", async () => {
+  it("refuse un mouvement qui ferait passer le stock sous zéro", async () => {
     const r = await mouvement(
       { dishId: "d1", delta: -10, reason: "perte", note: "marmite renversée" },
       3,
     );
     expect(r.status).toBe(400);
-  });
-
-  it.fails("devrait, à défaut, journaliser l'écart réellement appliqué", async () => {
-    await mouvement({ dishId: "d1", delta: -10, reason: "perte", note: "marmite renversée" }, 3);
-    const [maj, trace] = prismaDouble.ecritures();
-    expect(donneesEcrites(maj)).toMatchObject({ stock: 0 });
-    // 3 parts en stock, 3 parts perdues : le journal devrait dire -3.
-    expect(donneesEcrites(trace)).toMatchObject({ delta: -3 });
-  });
-
-  it("écrase aujourd'hui le dépassement et journalise un écart faux", async () => {
-    const r = await mouvement(
-      { dishId: "d1", delta: -10, reason: "perte", note: "marmite renversée" },
-      3,
-    );
-    expect(r.status).toBe(201);
-    const [maj, trace] = prismaDouble.ecritures();
-    expect(donneesEcrites(maj)).toEqual({ stock: 0, available: false });
-    expect(donneesEcrites(trace)).toMatchObject({ delta: -10 });
+    expect(prismaDouble.ecritures()).toHaveLength(0);
   });
 
   /* Les plats à stock illimité (`stock: null`) sont les boissons et les plats
-   * préparés à la demande. Un mouvement manuel les fait basculer en stock
-   * compté, ce qui est l'intention — mais `null` est traité comme 0, donc une
-   * sortie sur un plat illimité le met aussitôt en rupture. */
-  it("traite un stock illimité comme zéro lors d'un mouvement manuel", async () => {
+   * préparés à la demande. Une sortie manuelle n'a pas de quantité à retrancher :
+   * on refuse, plutôt que de les basculer en rupture à 0. */
+  it("refuse une sortie sur un plat à stock illimité", async () => {
     const r = await mouvement(
       { dishId: "d1", delta: -2, reason: "perte", note: "casse" },
       null,
     );
-    expect(r.status).toBe(201);
-    expect(donneesEcrites(prismaDouble.ecritures()[0])).toEqual({ stock: 0, available: false });
+    expect(r.status).toBe(400);
+    expect(prismaDouble.ecritures()).toHaveLength(0);
   });
 });

@@ -149,8 +149,20 @@ export async function POST(req: Request) {
     return badRequest("La quantité ne peut pas être nulle");
   }
 
-  const exists = await prisma.dish.findUnique({ where: { id: dishId }, select: { id: true } });
+  const exists = await prisma.dish.findUnique({
+    where: { id: dishId },
+    select: { id: true, stock: true },
+  });
   if (!exists) return notFound("Plat introuvable");
+
+  if (reason !== "inventaire" && delta < 0) {
+    const actuel = exists.stock ?? 0;
+    if (actuel + delta < 0) {
+      return badRequest(
+        `Le stock ne peut pas passer sous zéro (${actuel} en stock, mouvement ${delta}).`,
+      );
+    }
+  }
 
   try {
     await applyMovement({

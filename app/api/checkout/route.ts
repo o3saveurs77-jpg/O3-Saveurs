@@ -227,6 +227,14 @@ export async function POST(req: Request) {
 
   // ── Espèces : rien à encaisser en ligne ──
   if (cash) {
+    if (created.promotionId) {
+      await prisma.promotion
+        .update({
+          where: { id: created.promotionId },
+          data: { usedCount: { increment: 1 } },
+        })
+        .catch(() => {});
+    }
     const { sendOrderConfirmation } = await import("@/lib/email");
     await sendOrderConfirmation(created);
     return NextResponse.json({ url: `${origin}/commande/${created.id}`, orderId: created.id });

@@ -363,9 +363,9 @@ export function ComptaAdmin() {
           className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brick/30 bg-primary-soft p-4 text-sm text-brick"
         >
           <span>
-            <strong>Lecture des commandes impossible.</strong> Les totaux ci-dessous sont à zéro
-            faute de données, et les extractions sont désactivées : un export fait maintenant ne
-            contiendrait que ses en-têtes.
+            <strong>Lecture des commandes impossible.</strong> Les totaux ci-dessous ne sont pas
+            calculés faute de données, et les extractions sont désactivées : un export fait
+            maintenant ne contiendrait que ses en-têtes.
           </span>
           <button
             type="button"
@@ -403,12 +403,14 @@ export function ComptaAdmin() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
           <p className="text-sm text-ink-2">CA net encaissé</p>
-          <p className="mt-1 font-display text-2xl text-brick">{fmtPrice(totalTTC)}</p>
+          <p className="mt-1 font-display text-2xl text-brick">
+            {loadFailed ? "—" : fmtPrice(totalTTC)}
+          </p>
           <p className="mt-0.5 text-xs text-ink-2">facturé moins remboursé</p>
         </div>
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
           <p className="text-sm text-ink-2">Factures émises</p>
-          <p className="mt-1 font-display text-2xl">{facturees.length}</p>
+          <p className="mt-1 font-display text-2xl">{loadFailed ? "—" : facturees.length}</p>
         </div>
         {/* Le montant rendu doit se lire, et pas seulement se déduire : c'est
             lui qui explique l'écart entre le chiffre d'affaires facturé et ce
@@ -416,15 +418,19 @@ export function ComptaAdmin() {
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
           <p className="text-sm text-ink-2">Avoirs</p>
           <p className="mt-1 font-display text-2xl text-teal">
-            {totalRembourse > 0 ? `− ${fmtPrice(totalRembourse)}` : fmtPrice(0)}
+            {loadFailed
+              ? "—"
+              : totalRembourse > 0
+                ? `− ${fmtPrice(totalRembourse)}`
+                : fmtPrice(0)}
           </p>
           <p className="mt-0.5 text-xs text-ink-2">
-            {avoirs.length} pièce{avoirs.length > 1 ? "s" : ""}
+            {loadFailed ? "lecture impossible" : `${avoirs.length} pièce${avoirs.length > 1 ? "s" : ""}`}
           </p>
         </div>
         <div className="rounded-[var(--radius-card)] border border-line bg-panel p-5 shadow-[var(--shadow-soft)]">
           <p className="text-sm text-ink-2">Panier moyen</p>
-          <p className="mt-1 font-display text-2xl">{fmtPrice(panierMoyen)}</p>
+          <p className="mt-1 font-display text-2xl">{loadFailed ? "—" : fmtPrice(panierMoyen)}</p>
         </div>
       </div>
 
@@ -476,13 +482,21 @@ export function ComptaAdmin() {
               </tr>
             </thead>
             <tbody>
-              {parPaiement.map(([mode, v]) => (
-                <tr key={mode} className="border-t border-line">
-                  <td className="py-2">{mode}</td>
-                  <td className="py-2 text-right">{v.n}</td>
-                  <td className="py-2 text-right">{fmtPrice(v.cents)}</td>
+              {loadFailed ? (
+                <tr>
+                  <td colSpan={3} className="py-4 text-center text-ink-2">
+                    Lecture impossible — ventilation inconnue.
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                parPaiement.map(([mode, v]) => (
+                  <tr key={mode} className="border-t border-line">
+                    <td className="py-2">{mode}</td>
+                    <td className="py-2 text-right">{v.n}</td>
+                    <td className="py-2 text-right">{fmtPrice(v.cents)}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -498,13 +512,21 @@ export function ComptaAdmin() {
               </tr>
             </thead>
             <tbody>
-              {parMode.map((m) => (
-                <tr key={m.mode} className="border-t border-line">
-                  <td className="py-2 capitalize">{m.mode}</td>
-                  <td className="py-2 text-right">{m.orders}</td>
-                  <td className="py-2 text-right">{fmtPrice(m.orderedCents)}</td>
+              {loadFailed ? (
+                <tr>
+                  <td colSpan={3} className="py-4 text-center text-ink-2">
+                    Lecture impossible — ventilation inconnue.
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                parMode.map((m) => (
+                  <tr key={m.mode} className="border-t border-line">
+                    <td className="py-2 capitalize">{m.mode}</td>
+                    <td className="py-2 text-right">{m.orders}</td>
+                    <td className="py-2 text-right">{fmtPrice(m.orderedCents)}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

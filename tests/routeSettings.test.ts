@@ -321,7 +321,7 @@ describe("liens de réseaux sociaux", () => {
    * annoncé par un site en HTTPS, donc averti par les navigateurs, et promesse
    * non tenue par le message lui-même.
    * ───────────────────────────────────────────────────────────── */
-  it.fails("devrait refuser un lien http:// comme son message l'annonce", async () => {
+  it("refuse un lien http:// comme son message l'annonce", async () => {
     const r = await put({ "social.instagram": "http://instagram.com/o3saveurs" });
     expect(r.status).toBe(400);
   });
@@ -364,17 +364,17 @@ describe("clés inconnues", () => {
    * objet lève au lieu de rendre « [object Object] ». Le remède est
    * `Object.hasOwn(SETTING_DEFAULTS, key)`, ici et dans `setSettings()`.
    * ───────────────────────────────────────────────────────────── */
-  it.fails("devrait ignorer une clé héritée du prototype au lieu de l'écrire", async () => {
+  it("ignore une clé héritée du prototype au lieu de l'écrire", async () => {
     const r = await put({ toString: "coucou" });
     expect(r.status).toBe(400);
     expect(prismaDouble.ecritures()).toHaveLength(0);
   });
 
-  it("écrit aujourd'hui en base les clés héritées d'Object.prototype", async () => {
+  it("n'écrit pas en base les clés héritées d'Object.prototype", async () => {
     for (const clef of ["toString", "valueOf", "constructor", "hasOwnProperty"]) {
       const r = await put({ [clef]: "parasite" });
-      expect(r.status, clef).toBe(200);
-      expect(ecrit(), clef).toEqual({ [clef]: "parasite" });
+      expect(r.status, clef).toBe(400);
+      expect(prismaDouble.ecritures(), clef).toHaveLength(0);
     }
   });
 

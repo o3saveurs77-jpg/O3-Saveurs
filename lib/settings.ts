@@ -90,7 +90,7 @@ export async function getSettings(): Promise<Settings> {
   const rows = await prisma.setting.findMany();
   const out = { ...SETTING_DEFAULTS } as Record<string, string>;
   for (const row of rows) {
-    if (row.key in SETTING_DEFAULTS) out[row.key] = row.value;
+    if (Object.hasOwn(SETTING_DEFAULTS, row.key)) out[row.key] = row.value;
   }
   return out as Settings;
 }
@@ -111,7 +111,7 @@ export async function getSettingBool(key: SettingKey): Promise<boolean> {
 
 /** Écrit les réglages fournis ; les clés inconnues sont ignorées. */
 export async function setSettings(patch: Record<string, unknown>): Promise<void> {
-  const entries = Object.entries(patch).filter(([key]) => key in SETTING_DEFAULTS);
+  const entries = Object.entries(patch).filter(([key]) => Object.hasOwn(SETTING_DEFAULTS, key));
   await prisma.$transaction(
     entries.map(([key, value]) =>
       prisma.setting.upsert({

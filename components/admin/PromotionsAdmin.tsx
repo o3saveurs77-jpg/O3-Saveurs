@@ -296,6 +296,7 @@ export function PromotionsAdmin() {
   const [form, setForm] = useState<Form | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lectureEchouee, setLectureEchouee] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "erreur"; text: string } | null>(null);
   const baseId = useId();
 
@@ -305,7 +306,9 @@ export function PromotionsAdmin() {
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { promotions: PromotionView[] };
       setPromos(data.promotions);
+      setLectureEchouee(false);
     } catch {
+      setLectureEchouee(true);
       setMessage({ tone: "erreur", text: "Les promotions n'ont pas pu être chargées." });
     } finally {
       setReady(true);
@@ -403,8 +406,11 @@ export function PromotionsAdmin() {
         <div>
           <h1 className="text-3xl">Promotions</h1>
           <p className="mt-1 text-sm text-ink-2">
-            {promos.length} promotion{promos.length > 1 ? "s" : ""} · {actives} active
-            {actives > 1 ? "s" : ""} · {fmtCents(caTotal)} de commandes générées
+            {lectureEchouee
+              ? "Liste indisponible — les promotions n'ont pas pu être lues."
+              : `${promos.length} promotion${promos.length > 1 ? "s" : ""} · ${actives} active${
+                  actives > 1 ? "s" : ""
+                } · ${fmtCents(caTotal)} de commandes générées`}
           </p>
         </div>
         <button
@@ -422,13 +428,22 @@ export function PromotionsAdmin() {
       {message && (
         <p
           role={message.tone === "erreur" ? "alert" : "status"}
-          className={`rounded-xl border p-3 text-sm ${
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 text-sm ${
             message.tone === "erreur"
               ? "border-brick/30 bg-primary-soft text-brick"
               : "border-teal/30 bg-teal/10 text-teal"
           }`}
         >
-          {message.text}
+          <span>{message.text}</span>
+          {lectureEchouee && message.tone === "erreur" && (
+            <button
+              type="button"
+              onClick={() => void charger()}
+              className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+            >
+              Réessayer
+            </button>
+          )}
         </p>
       )}
 
@@ -611,7 +626,7 @@ export function PromotionsAdmin() {
       {/* ── Liste ──────────────────────────────────────── */}
       {!ready ? (
         <p className="py-16 text-center text-ink-2">Chargement…</p>
-      ) : promos.length === 0 ? (
+      ) : lectureEchouee ? null : promos.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-[var(--radius-card)] border border-line bg-panel py-16 text-center text-ink-2">
           <Icon name="tag" size={40} className="opacity-30" />
           <p className="text-lg font-bold text-ink">Aucune promotion</p>

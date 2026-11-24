@@ -357,7 +357,7 @@ describe("« Appliquer à toute la semaine »", () => {
    * Le comportement actuel est même figé par `tests/horairesAdmin.test.ts`
    * (« propage aussi la fermeture ») : la correction demande donc un arbitrage,
    * pas seulement un patch. */
-  it.fails("laisse fermé un jour marqué fermé, au lieu de le rouvrir", async () => {
+  it("laisse fermé un jour marqué fermé, au lieu de le rouvrir", async () => {
     await ouvrir();
     await screen.findByText("Lundi");
 
@@ -373,14 +373,15 @@ describe("« Appliquer à toute la semaine »", () => {
   /* Revers de la même pièce : appliquer depuis un jour fermé ferme la semaine
    * entière. Ce test documente l'état réel, pour qu'une correction du défaut
    * ci-dessus ne passe pas à côté. */
-  it("ferme en revanche toute la semaine si le jour modèle est fermé (état actuel)", async () => {
+  it("ne ferme pas le reste de la semaine si le jour modèle est fermé", async () => {
     await ouvrir();
     await screen.findByText("Lundi");
 
     fireEvent.click(champs(1).ferme);
     fireEvent.click(bouton(1));
 
-    for (const wd of [1, 2, 3, 4, 5, 6, 0]) expect(champs(wd).ferme).toBeChecked();
+    expect(champs(1).ferme).toBeChecked();
+    for (const wd of [2, 3, 4, 5, 6, 0]) expect(champs(wd).ferme).not.toBeChecked();
   });
 });
 
@@ -487,7 +488,7 @@ describe("quand le chargement échoue", () => {
    * « Les horaires n'ont pas pu être chargés. » au-dessus d'une grille
    * parfaitement chargée : elle n'a aucun moyen de savoir si ce qu'elle lit est
    * à jour, ni si son enregistrement partira. */
-  it.fails("efface le message d'erreur quand le second essai réussit", async () => {
+  it("efface le message d'erreur quand le second essai réussit", async () => {
     await ouvrir({ statut: 500, corps: null });
     await screen.findByText("Les horaires n'ont pas pu être chargés.");
 

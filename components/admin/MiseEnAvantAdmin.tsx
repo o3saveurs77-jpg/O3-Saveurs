@@ -81,7 +81,9 @@ function versDate(ms: number | null): string {
   if (ms === null) return "";
   const d = new Date(ms);
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  /* Minuit UTC, comme `dateOnly()` à l'enregistrement : le fuseau du
+   * navigateur ne doit pas reculer la date d'un jour. */
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
 }
 
 export interface FormulairePlatDuJour {
@@ -177,6 +179,7 @@ export function MiseEnAvantAdmin() {
   const [specials, setSpecials] = useState<SpecialView[]>([]);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [lectureEchouee, setLectureEchouee] = useState(false);
   const [message, setMessage] = useState<{ tone: "ok" | "erreur"; text: string } | null>(null);
 
   const [formA, setFormA] = useState<{
@@ -210,10 +213,13 @@ export function MiseEnAvantAdmin() {
         fetch("/api/banners?all=true", { cache: "no-store" }),
         fetch("/api/daily-specials?all=true", { cache: "no-store" }),
       ]);
-      if (ra.ok) setAnnonces((await ra.json()) as AnnouncementView[]);
-      if (rb.ok) setBandeaux((await rb.json()) as BannerView[]);
-      if (rs.ok) setSpecials((await rs.json()) as SpecialView[]);
+      if (!ra.ok || !rb.ok || !rs.ok) throw new Error();
+      setAnnonces((await ra.json()) as AnnouncementView[]);
+      setBandeaux((await rb.json()) as BannerView[]);
+      setSpecials((await rs.json()) as SpecialView[]);
+      setLectureEchouee(false);
     } catch {
+      setLectureEchouee(true);
       setMessage({ tone: "erreur", text: "Le contenu n'a pas pu être chargé." });
     } finally {
       setReady(true);
@@ -265,13 +271,22 @@ export function MiseEnAvantAdmin() {
       {message && (
         <p
           role={message.tone === "erreur" ? "alert" : "status"}
-          className={`rounded-xl border p-3 text-sm ${
+          className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 text-sm ${
             message.tone === "erreur"
               ? "border-brick/30 bg-primary-soft text-brick"
               : "border-teal/30 bg-teal/10 text-teal"
           }`}
         >
-          {message.text}
+          <span>{message.text}</span>
+          {lectureEchouee && message.tone === "erreur" && (
+            <button
+              type="button"
+              onClick={() => void charger()}
+              className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+            >
+              Réessayer
+            </button>
+          )}
         </p>
       )}
 
@@ -390,7 +405,7 @@ export function MiseEnAvantAdmin() {
             </div>
           )}
 
-          {annonces.length === 0 ? (
+          {lectureEchouee ? null : annonces.length === 0 ? (
             <Vide
               icone="megaphone"
               titre="Aucune annonce"
@@ -542,7 +557,7 @@ export function MiseEnAvantAdmin() {
             </div>
           )}
 
-          {bandeaux.length === 0 ? (
+          {lectureEchouee ? null : bandeaux.length === 0 ? (
             <Vide
               icone="image"
               titre="Aucun bandeau"
@@ -706,7 +721,7 @@ export function MiseEnAvantAdmin() {
             </div>
           )}
 
-          {specials.length === 0 ? (
+          {lectureEchouee ? null : specials.length === 0 ? (
             <Vide
               icone="sparkle"
               titre="Aucun plat du jour"

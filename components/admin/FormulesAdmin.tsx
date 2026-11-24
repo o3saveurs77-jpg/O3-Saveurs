@@ -161,6 +161,7 @@ export function FormulesAdmin() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [lectureEchouee, setLectureEchouee] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
@@ -175,7 +176,9 @@ export function FormulesAdmin() {
       setFormulas(fData.formulas);
       setDishes(dData);
       setSelectedId((prev) => prev ?? fData.formulas[0]?.id ?? null);
+      setLectureEchouee(false);
     } catch {
+      setLectureEchouee(true);
       setErreur("Les formules n'ont pas pu être chargées.");
     } finally {
       setReady(true);
@@ -357,8 +360,9 @@ export function FormulesAdmin() {
         <div>
           <h1 className="text-3xl">Formules</h1>
           <p className="mt-1 text-sm text-ink-2">
-            {formulas.length} formule{formulas.length > 1 ? "s" : ""} · le client compose la sienne
-            depuis la page Formules
+            {lectureEchouee
+              ? "Liste indisponible — les formules n'ont pas pu être lues."
+              : `${formulas.length} formule${formulas.length > 1 ? "s" : ""} · le client compose la sienne depuis la page Formules`}
           </p>
         </div>
         <button
@@ -371,8 +375,20 @@ export function FormulesAdmin() {
       </header>
 
       {erreur && (
-        <p role="alert" className="rounded-xl border border-brick/30 bg-primary-soft p-3 text-sm text-brick">
-          {erreur}
+        <p
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brick/30 bg-primary-soft p-3 text-sm text-brick"
+        >
+          <span>{erreur}</span>
+          {lectureEchouee && (
+            <button
+              type="button"
+              onClick={() => void charger()}
+              className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+            >
+              Réessayer
+            </button>
+          )}
         </p>
       )}
       {message && (
@@ -381,7 +397,7 @@ export function FormulesAdmin() {
         </p>
       )}
 
-      {formulas.length === 0 ? (
+      {lectureEchouee ? null : formulas.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-[var(--radius-card)] border border-line bg-panel py-16 text-center text-ink-2">
           <Icon name="list" size={40} className="opacity-30" />
           <p className="text-lg font-bold text-ink">Aucune formule</p>

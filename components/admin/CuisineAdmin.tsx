@@ -57,7 +57,7 @@ function attenteLisible(min: number): string {
 }
 
 export function CuisineAdmin() {
-  const { orders, ready, refresh } = useOrders();
+  const { orders, ready, error: loadFailed, refresh } = useOrders();
   const [busy, setBusy] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -149,8 +149,9 @@ export function CuisineAdmin() {
         <div>
           <h1 className="text-3xl">Cuisine</h1>
           <p className="mt-1 text-sm text-ink-2">
-            {parStatut.confirmee.length} à lancer · {parStatut.cuisine.length} en préparation ·{" "}
-            {parStatut.route.length} prêtes · actualisation toutes les 30 s
+            {loadFailed
+              ? "Liste indisponible — les commandes n'ont pas pu être lues."
+              : `${parStatut.confirmee.length} à lancer · ${parStatut.cuisine.length} en préparation · ${parStatut.route.length} prêtes · actualisation toutes les 30 s`}
           </p>
           {/* Le glisser-déposer ne se devine pas : sans cette ligne, on
               continue d'utiliser les boutons sans savoir qu'il existe. */}
@@ -166,6 +167,26 @@ export function CuisineAdmin() {
           <Icon name="refresh" size={16} /> Actualiser
         </button>
       </header>
+
+      {loadFailed && (
+        <p
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brick/30 bg-primary-soft p-4 text-sm text-brick"
+        >
+          <span>
+            <strong>Les commandes n&apos;ont pas pu être lues.</strong> Les colonnes sont vides
+            parce que le serveur n&apos;a pas répondu, pas parce qu&apos;il n&apos;y a rien à
+            préparer.
+          </span>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+          >
+            Réessayer
+          </button>
+        </p>
+      )}
 
       {erreur && (
         <p role="alert" className="rounded-xl border border-brick/30 bg-primary-soft p-3 text-sm text-brick">

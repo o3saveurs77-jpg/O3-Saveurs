@@ -1163,7 +1163,7 @@ describe("réglages que le checkout n'applique pas", () => {
    * place ». `oncePerCustomer` tient encore (il compte les commandes), pas
    * `maxUses`. Même trou pour la borne en salle, qui applique les promotions
    * automatiques sans jamais les compter. */
-  it.fails("devrait compter l'usage d'un code promotionnel réglé en espèces", async () => {
+  it("compte l'usage d'un code promotionnel réglé en espèces", async () => {
     etat.promotions = [promo({ code: "DESOLEE", maxUses: 1, usedCount: 0 })];
     const r = await commander({
       lines: [{ dishId: MAFE.id, qty: 2 }],

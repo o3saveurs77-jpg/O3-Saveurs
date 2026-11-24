@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { rowToDish, dishToRow } from "@/lib/serialize";
 import { requireAdmin, readJson, badRequest, notFound, conflict } from "@/lib/guard";
 import { validateDishFields } from "@/lib/dishValidation";
+import { str } from "@/lib/validate";
 import type { Dish } from "@/lib/menu";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const body = await readJson<Partial<Dish>>(req);
   if (!body) return badRequest("Requête invalide");
+
+  /* Même contrat que le POST : ce que la création refuse, la modification le
+   * refuse aussi. On ne valide que les champs réellement envoyés. */
+  if ("name" in body) {
+    const name = str(body.name, "Le nom", { min: 2, max: 120 });
+    if (!name.ok) return badRequest(name.error);
+  }
+  if ("cat" in body) {
+    const cat = str(body.cat, "La catégorie", { min: 1, max: 40 });
+    if (!cat.ok) return badRequest(cat.error);
+  }
+  if ("desc" in body) {
+    const desc = str(body.desc, "La description", { max: 500, required: false });
+    if (!desc.ok) return badRequest(desc.error);
+  }
 
   const priced = validateDishFields(body);
   if (!priced.ok) return badRequest(priced.error);

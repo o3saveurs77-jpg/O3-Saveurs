@@ -162,7 +162,7 @@ function validate(key: SettingKey, raw: unknown): { ok: true; value: string } | 
       if (blank) return { ok: true, value: "" };
       const res = str(asString, "Le lien du réseau social", { max: 300 });
       if (!res.ok) return { ok: false, error: res.error };
-      if (!/^https?:\/\//i.test(res.value)) {
+      if (!/^https:\/\//i.test(res.value)) {
         return { ok: false, error: "Le lien doit commencer par https://" };
       }
       return { ok: true, value: res.value };
@@ -203,7 +203,7 @@ export async function PUT(req: Request) {
   const patch: Record<string, string> = {};
 
   for (const [key, raw] of Object.entries(body)) {
-    if (!(key in SETTING_DEFAULTS)) continue; // clé inconnue : ignorée
+    if (!Object.hasOwn(SETTING_DEFAULTS, key)) continue; // clé inconnue : ignorée
     const res = validate(key as SettingKey, raw);
     if (!res.ok) return badRequest(res.error);
     patch[key] = res.value;

@@ -97,10 +97,6 @@ const DEROGATIONS: Record<string, string> = {
     "Compteur de clic d'un encart : incrément atomique, 204 sans corps, appelé en `keepalive`.",
   "/api/orders/[id]/cancel POST":
     "Annulation par le client de sa propre commande ; l'appartenance est vérifiée par `canAccess` (voir plus bas).",
-
-  // ── Défaut constaté, démontré plus bas ───────────────────────
-  "/api/admin/roles POST":
-    "DÉFAUT : répond 500 sans aucune garde au lieu de refuser l'appelant. Voir le test `it.fails` en fin de fichier.",
 };
 
 /**
@@ -443,35 +439,19 @@ describe("tâches planifiées — jeton partagé", () => {
   });
 });
 
-/* ───────────────────────────────────────────────────────────────
- * Défaut constaté — `POST /api/admin/roles`
- *
- * La route gère les rôles Auth0 : son `PATCH` est derrière `requireAdmin()` et
- * refuse correctement. Son `POST` est un bouchon censé dire « utilisez PATCH »,
- * mais il le dit à tout le monde, **sans garde**, et avec un statut 500 : un
- * appelant anonyme obtient une erreur serveur sur une route d'administration là
- * où il devrait obtenir 401. Une méthode non gérée se refuse par 405, et le
- * contrôle d'accès ne se décide pas méthode par méthode.
- *
- * Rien n'est écrit : ce n'est pas une élévation de privilège, c'est un trou dans
- * la cohérence des gardes — et le seul endroit du dépôt où une route
- * d'administration répond autre chose qu'un refus à un inconnu.
- * ─────────────────────────────────────────────────────────────── */
-describe("défaut : POST /api/admin/roles", () => {
-  it.fails("devrait refuser un appelant anonyme (401/403) ou annoncer 405", async () => {
+describe("POST /api/admin/roles", () => {
+  it("refuse un appelant anonyme", async () => {
     const { POST } = await import("@/app/api/admin/roles/route");
     const res = await POST();
-    expect([401, 403, 405]).toContain(res.status);
+    expect(res.status).toBe(401);
+    expect(prismaDouble.ecritures()).toHaveLength(0);
   });
 
-  it("répond aujourd'hui 500 à n'importe qui, sans rien écrire", async () => {
+  it("refuse un client connecté", async () => {
     const { POST } = await import("@/app/api/admin/roles/route");
-    const anonyme = await lire(POST());
-    expect(anonyme.status).toBe(500);
-
     commeClient();
-    const client = await lire(POST());
-    expect(client.status).toBe(500);
+    const res = await POST();
+    expect(res.status).toBe(403);
     expect(prismaDouble.ecritures()).toHaveLength(0);
   });
 });

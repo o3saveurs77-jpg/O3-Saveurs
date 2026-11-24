@@ -153,6 +153,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   const keptIds = slots.value.map((s) => s.id).filter((v): v is string => Boolean(v));
   const position = int(body.position ?? existing.position, "La position", { min: 0, max: 999 });
+  if (!position.ok) return badRequest(position.error);
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -165,7 +166,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
           extra: fields.value.extra,
           priceCents: fields.value.priceCents,
           active: bool(body.active, existing.active),
-          position: position.ok ? position.value : existing.position,
+          position: position.value,
         },
       });
 

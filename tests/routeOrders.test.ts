@@ -62,6 +62,10 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: async (args: ArgsPrisma) =>
         etat.livreurs.find((l) => l.id === args.where?.id) ?? null,
     },
+    deliveryRun: {
+      findUnique: async (args: ArgsPrisma) =>
+        args.where?.id && args.where.id !== "run-fantome" ? { id: args.where.id } : null,
+    },
     counter: {
       upsert: async () => {
         etat.compteurFactures += 1;
@@ -544,7 +548,7 @@ describe("annulation", () => {
    * par l'écran — qui numérote ce qu'il affiche — réécrit des positions
    * décalées d'un cran par rapport à la feuille de route déjà imprimée. La
    * correction récente n'a traité qu'un des deux chemins. */
-  it.fails("devrait aussi resserrer la tournée après un détachement manuel", async () => {
+  it("resserre la tournée après un détachement manuel", async () => {
     etat.commande = commande({ deliveryRunId: "run-1", runPosition: 0 });
     etat.arretsRestants = [
       { id: "cmd-2", runPosition: 1 },
@@ -631,7 +635,7 @@ describe("encaissement manuel", () => {
    * donc en production la requête finit en 500 — après avoir consommé un numéro
    * de facture, qui laisse un trou définitif dans la suite. `bool()` de
    * `lib/validate.ts` existe précisément pour ça. */
-  it.fails("devrait refuser un drapeau de paiement qui n'est pas un booléen", async () => {
+  it("refuse un drapeau de paiement qui n'est pas un booléen", async () => {
     const r = await patch({ paid: "false" });
     expect(r.statut).toBe(400);
     expect(etat.appelsCompteur).toBe(0);
@@ -671,12 +675,12 @@ describe("affectation du livreur", () => {
    * là où les autres champs produisent un refus lisible. Une `runPosition`
    * négative ou décimale, elle, s'écrit sans rien casser et désordonne
    * silencieusement la feuille de route du livreur. */
-  it.fails("devrait refuser une tournée inexistante comme elle refuse un livreur inconnu", async () => {
+  it("refuse une tournée inexistante comme elle refuse un livreur inconnu", async () => {
     const r = await patch({ deliveryRunId: "run-fantome" });
     expect(r.statut).toBe(400);
   });
 
-  it.fails("devrait refuser une position d'arrêt négative ou décimale", async () => {
+  it("refuse une position d'arrêt négative ou décimale", async () => {
     expect((await patch({ runPosition: -3 })).statut).toBe(400);
     expect((await patch({ runPosition: 1.5 })).statut).toBe(400);
   });
@@ -747,7 +751,7 @@ describe("réponse rendue à l'admin", () => {
    * assigné » pour une course bel et bien affectée — et le dispatcher la
    * réaffecte. Il suffirait de relire la commande avec sa relation, ou de
    * renvoyer le nom déjà connu. */
-  it.fails("devrait garder le nom du livreur même quand rien n'est à écrire", async () => {
+  it("garde le nom du livreur même quand rien n'est à écrire", async () => {
     etat.commande = commande({ driverId: "liv-1" });
     const r = await patch({ status: "confirmee" });
     expect(etat.majCommandes).toHaveLength(0);

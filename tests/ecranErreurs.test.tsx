@@ -366,7 +366,7 @@ describe("Compta — quand la lecture échoue", () => {
   it("dit « ventilation inconnue » au lieu de « aucune commande sur la période »", async () => {
     await monter(ComptaAdmin, panne());
 
-    expect(screen.getByText("Lecture impossible — ventilation inconnue.")).toBeInTheDocument();
+    expect(screen.getAllByText("Lecture impossible — ventilation inconnue.").length).toBeGreaterThan(0);
     expect(screen.queryByText("Aucune commande sur la période.")).not.toBeInTheDocument();
   });
 
@@ -434,18 +434,12 @@ describe("Compta — quand la lecture échoue", () => {
    * sens (Clients remplace son cumul par une phrase, Commandes supprime ses
    * compteurs) : Compta devrait faire de même, par exemple avec un « — ».
    * GRAVITÉ MOYENNE. */
-  it.fails("n'affiche aucun montant à zéro quand elle n'a rien pu lire", async () => {
+  it("n'affiche aucun montant à zéro quand elle n'a rien pu lire", async () => {
     await monter(ComptaAdmin, panne());
 
     expect(document.body.textContent).not.toContain("0,00");
-  });
-
-  /* Revers du même constat, pour documenter l'état réel. */
-  it("affiche aujourd'hui des tuiles à zéro, sous le bandeau d'erreur (état actuel)", async () => {
-    await monter(ComptaAdmin, panne());
-
-    expect(screen.getAllByText(/^0,00\s€$/).length).toBeGreaterThan(0);
-    expect(screen.getByRole("alert")).toHaveTextContent(/les totaux ci-dessous sont à zéro/i);
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+    expect(screen.getByRole("alert")).toHaveTextContent(/les totaux ci-dessous ne sont pas calculés/i);
   });
 });
 

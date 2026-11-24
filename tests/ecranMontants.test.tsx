@@ -740,7 +740,7 @@ describe("DÉFAUT — une lecture en échec ressemble encore à une absence", ()
    * son invitation « Créez-en une pour l'appliquer au panier de vos clients ».
    * Les compteurs de l'en-tête mentent de la même façon : « 0 promotion ·
    * 0 active · 0,00 € de commandes générées ». */
-  it.fails("Promotions n'annonce pas « Aucune promotion » quand elle n'a rien pu lire", async () => {
+  it("Promotions n'annonce pas « Aucune promotion » quand elle n'a rien pu lire", async () => {
     render(<PromotionsAdmin />);
     await screen.findByText("Les promotions n'ont pas pu être chargées.");
 
@@ -753,12 +753,13 @@ describe("DÉFAUT — une lecture en échec ressemble encore à une absence", ()
    * `/api/daily-specials` en panne donne donc « Aucun plat du jour » sans le
    * moindre message, sur l'écran qui décide de ce qui s'affiche en haut de la
    * Carte. Les annonces et les bandeaux sont dans le même cas. */
-  it.fails("Plats du jour signale une lecture en échec au lieu de se dire vide", async () => {
+  it("Plats du jour signale une lecture en échec au lieu de se dire vide", async () => {
     lectures.push({ fragment: "/api/announcements", corps: [] });
     lectures.push({ fragment: "/api/banners", corps: [] });
     // `/api/daily-specials` n'est pas enregistrée : elle répondra 404.
     render(<MiseEnAvantAdmin />);
-    fireEvent.click(await screen.findByRole("button", { name: /Plats du jour/ }));
+    expect(await screen.findByText("Le contenu n'a pas pu être chargé.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Plats du jour/ }));
 
     expect(screen.queryByText("Aucun plat du jour")).not.toBeInTheDocument();
   });
@@ -772,7 +773,7 @@ describe("DÉFAUT — une lecture en échec ressemble encore à une absence", ()
    * proposer sur la page Formules », alors qu'elles existent peut-être toutes.
    * Créer une formule depuis cet écran l'appellerait « F1 », au risque de
    * heurter un code déjà pris. */
-  it.fails("Formules n'annonce pas « Aucune formule » quand elle n'a rien pu lire", async () => {
+  it("Formules n'annonce pas « Aucune formule » quand elle n'a rien pu lire", async () => {
     render(<FormulesAdmin />);
     await screen.findByText("Les formules n'ont pas pu être chargées.");
 
@@ -781,7 +782,7 @@ describe("DÉFAUT — une lecture en échec ressemble encore à une absence", ()
 
   /* GRAVITÉ MOYENNE — aucun des trois écrans n'offre de « Réessayer », là où
    * Horaires, Commandes, Clients et Compta en ont un. */
-  it.fails("les trois écrans proposent de relancer la lecture", async () => {
+  it("les trois écrans proposent de relancer la lecture", async () => {
     render(<PromotionsAdmin />);
     await screen.findByText("Les promotions n'ont pas pu être chargées.");
 
@@ -823,12 +824,12 @@ describe("DÉFAUT — la date d'un plat du jour se lit dans le fuseau du navigat
      * (ou une machine mal réglée) pour le déclencher. Mais alors le plat du
      * jour change de jour sans que rien ne le signale, et le simple fait de
      * rouvrir la fiche pour corriger son prix suffit à le déplacer. */
-    it.fails("montre la date enregistrée, et non la veille", async () => {
+    it("montre la date enregistrée, et non la veille", async () => {
       await ouvrirPlatDuJour({ ...platDuJour, weekday: null, date: quinzeOctobre });
       expect(screen.getByLabelText("Date précise")).toHaveValue("2026-10-15");
     });
 
-    it.fails("ne déplace pas le plat d'un jour en enregistrant un prix corrigé", async () => {
+    it("ne déplace pas le plat d'un jour en enregistrant un prix corrigé", async () => {
       const { prix, enregistrer } = await ouvrirPlatDuJour({
         ...platDuJour,
         weekday: null,

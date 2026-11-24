@@ -119,12 +119,18 @@ describe("appliquerATouteLaSemaine", () => {
     }
   });
 
-  it("propage aussi la fermeture", () => {
-    const semaine = appliquerATouteLaSemaine(
-      SEMAINE_TYPE.map((j) => (j.weekday === 2 ? { ...j, closed: true } : j)),
-      2,
+  it("ne ferme pas les autres jours et laisse fermé un jour déjà fermé", () => {
+    const avecMardiFerme = SEMAINE_TYPE.map((j) => (j.weekday === 2 ? { ...j, closed: true } : j));
+    const depuisMardi = appliquerATouteLaSemaine(avecMardiFerme, 2);
+    expect(depuisMardi.find((j) => j.weekday === 2)?.closed).toBe(true);
+    expect(depuisMardi.find((j) => j.weekday === 1)?.closed).toBe(false);
+
+    const avecDimancheFerme = SEMAINE_TYPE.map((j) =>
+      j.weekday === 0 ? { ...j, closed: true } : j,
     );
-    expect(semaine.every((j) => j.closed)).toBe(true);
+    const depuisLundi = appliquerATouteLaSemaine(avecDimancheFerme, 1);
+    expect(depuisLundi.find((j) => j.weekday === 0)?.closed).toBe(true);
+    expect(depuisLundi.find((j) => j.weekday === 3)?.lunchOpen).toBe("11:30");
   });
 
   it("ne touche à rien si le jour modèle est absent", () => {

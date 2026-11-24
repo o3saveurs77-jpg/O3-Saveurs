@@ -7,6 +7,7 @@ import { nextInvoiceNumber, makeDeliveryCode } from "@/lib/ref";
 import { sendStatusUpdate, sendInvoice, sendCancelDeclined } from "@/lib/email";
 import { STATUS_NEXT, type OrderStatus } from "@/lib/types";
 import type { OrderLine } from "@/lib/types";
+import { int } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
 
@@ -128,7 +129,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   if (body.deliveryRunId !== undefined) data.deliveryRunId = body.deliveryRunId;
-  if (body.runPosition !== undefined) data.runPosition = body.runPosition;
+  if (body.runPosition !== undefined) {
+    if (body.runPosition === null) {
+      data.runPosition = null;
+    } else {
+      const pos = int(body.runPosition, "La position d'arrêt", { min: 0, max: 999 });
+      if (!pos.ok) return badRequest(pos.error);
+      data.runPosition = pos.value;
+    }
+  }
 
   /* Une commande annulée quitte sa tournée.
    *
@@ -141,16 +150,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
    *
    * Placé après la lecture de `deliveryRunId` : si un appel envoyait les deux,
    * l'annulation tranche. */
-  const detacheDeLaTournee = data.status === "annulee";
-  const tourneeQuittee = detacheDeLaTournee ? current.deliveryRunId : null;
-  if (detacheDeLaTournee) {
+  if (data.status === "annulee") {
     data.deliveryRunId = null;
     data.runPosition = null;
   }
 
+  if (typeof data.deliveryRunId === "string") {
+    const run = await prisma.deliveryRun.findUnique({ where: { id: data.deliveryRunId } });
+    if (!run) return badRequest("Tournée introuvable");
+  }
+
+  const tourneeQuittee =
+    current.deliveryRunId &&
+    (data.deliveryRunId === null ||
+      (typeof data.deliveryRunId === "string" && data.deliveryRunId !== current.deliveryRunId))
+      ? current.deliveryRunId
+      : null;
+
   // Encaissement manuel des commandes en espèces : sans cela, tout le chiffre
   // d'affaires en espèces restait invisible dans l'écran Facturation.
   if (body.paid !== undefined) {
+    if (typeof body.paid !== "boolean") {
+      return badRequest("Le paiement doit être un booléen.");
+    }
     data.paid = body.paid;
     data.paymentStatus = body.paid ? "paye" : "en_attente";
     if (body.paid && current.invoiceNumber === null) {
@@ -170,7 +192,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   if (Object.keys(data).length === 0) {
-    return NextResponse.json(rowToOrderWithDriver({ ...current, driver: null }));
+    const driver = current.driverId
+      ? await prisma.driver.findUnique({
+          where: { id: current.driverId },
+          select: { name: true },
+        })
+      : null;
+    return NextResponse.json(rowToOrderWithDriver({ ...current, driver }));
   }
 
   const updated = await prisma.order.update({

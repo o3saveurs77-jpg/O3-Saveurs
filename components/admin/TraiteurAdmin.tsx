@@ -47,6 +47,7 @@ export function TraiteurAdmin() {
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { inquiries: CateringInquiryView[] };
       setInquiries(data.inquiries);
+      setErreur(null);
     } catch {
       setErreur("Les demandes n'ont pas pu être chargées.");
     } finally {
@@ -94,13 +95,25 @@ export function TraiteurAdmin() {
       <header>
         <h1 className="text-3xl">Traiteur</h1>
         <p className="mt-1 text-sm text-ink-2">
-          {inquiries.length} au total · {actives} en cours
+          {erreur === "Les demandes n'ont pas pu être chargées."
+            ? "Liste indisponible — les demandes n'ont pas pu être lues."
+            : `${inquiries.length} au total · ${actives} en cours`}
         </p>
       </header>
 
       {erreur && (
-        <p role="alert" className="rounded-xl border border-brick/30 bg-primary-soft p-3 text-sm text-brick">
-          {erreur}
+        <p
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brick/30 bg-primary-soft p-3 text-sm text-brick"
+        >
+          <span>{erreur}</span>
+          <button
+            type="button"
+            onClick={() => void charger()}
+            className="shrink-0 rounded-full bg-brick px-4 py-1.5 font-bold text-white transition hover:brightness-105"
+          >
+            Réessayer
+          </button>
         </p>
       )}
 
@@ -124,7 +137,7 @@ export function TraiteurAdmin() {
 
       {!ready ? (
         <p className="py-16 text-center text-ink-2">Chargement…</p>
-      ) : visibles.length === 0 ? (
+      ) : erreur === "Les demandes n'ont pas pu être chargées." ? null : visibles.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-[var(--radius-card)] border border-line bg-panel py-16 text-center text-ink-2">
           <Icon name="sparkle" size={40} className="opacity-30" />
           <p className="text-lg font-bold text-ink">

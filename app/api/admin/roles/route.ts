@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin, readJson, badRequest, conflict, serverError } from "@/lib/guard";
+import { requireAdmin, readJson, badRequest, conflict } from "@/lib/guard";
 import {
   adminMembers,
   assignRole,
@@ -110,6 +110,11 @@ export async function PATCH(req: Request) {
   });
 }
 
-export function POST() {
-  return serverError("Utilisez PATCH pour modifier un rôle.");
+export async function POST() {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard.response;
+  return NextResponse.json(
+    { error: "Utilisez PATCH pour modifier un rôle." },
+    { status: 405, headers: { Allow: "GET, PATCH" } },
+  );
 }

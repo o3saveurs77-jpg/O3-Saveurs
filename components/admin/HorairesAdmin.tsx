@@ -95,7 +95,14 @@ export function aEnvoyer(jour: DayHours): DayHours {
 export function appliquerATouteLaSemaine(semaine: DayHours[], weekday: number): DayHours[] {
   const modele = semaine.find((j) => j.weekday === weekday);
   if (!modele) return semaine;
-  return semaine.map((jour) => ({ ...modele, weekday: jour.weekday }));
+  /* On recopie les heures, pas l'ouverture. Fermer le dimanche puis appliquer
+   * le lundi ne doit jamais rouvrir le dimanche ; fermer le lundi puis
+   * appliquer ne doit jamais fermer toute la semaine. */
+  return semaine.map((jour) => {
+    if (jour.weekday === weekday) return { ...modele };
+    if (jour.closed || modele.closed) return jour;
+    return { ...modele, weekday: jour.weekday, closed: false };
+  });
 }
 
 interface EtatHoraires {
@@ -163,6 +170,7 @@ export function HorairesAdmin() {
         setMessage({ tone: "error", text: data?.error ?? "Les horaires n'ont pas pu être chargés." });
         return;
       }
+      setMessage(null);
       setEtat(data);
       setSemaine(data.hours);
     } catch {
